@@ -1,4 +1,5 @@
 const path = require('path');
+const { Movie } = require('../models/Movie');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
@@ -10,6 +11,7 @@ console.log(process.env.SUPABASE_DB_NAME)
 // console.log(process.env.DATABASE_HOST)
 console.log(process.env.SUPABASE_DATABASE_PORT)
 console.log('Database URL:', process.env.SUPABASE_DATABASE_URL);
+// console.log('Movie model: ', Movie)
 
 module.exports = {
   development: {
@@ -46,5 +48,8 @@ module.exports = {
     // host: process.env.DATABASE_HOST,
     use_env_variable: process.env.SUPABASE_DATABASE_URL,
     dialect: "postgres"
-  }
+  },
+  // models: {
+  //   Movie: Movie(sequelize, Sequelize.DataTypes)
+  // }
 }

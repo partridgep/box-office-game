@@ -10,8 +10,30 @@ export const getMovieDetails = async (imdbID: string) => {
     return response.json();
 };
 
+export const saveMovieDetails = async (movieData: Record<string, any>) => {
+    const response = await fetch('/api/movie/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(movieData),
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to save movie details');
+    }
+
+    return response.json();
+};
+
 export const fetchBoxOfficeData = async (imdbID: string) => {
     const response = await fetch(`/api/box-office?id=${imdbID}`);
     if (!response.ok) throw new Error('Failed to fetch box office data');
+    return response.json();
+};
+
+export const getSavedMovies = async () => {
+    const response = await fetch(`/api/all-movies`);
+    if (!response.ok) throw new Error('Failed to fetch movies');
     return response.json();
 };

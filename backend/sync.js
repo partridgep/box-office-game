@@ -1,5 +1,5 @@
 // sync.js
-const sequelize = require('./config/database'); // Import your sequelize instance
+const sequelize = require('./config/config'); // Import your sequelize instance
 const Movie = require('./models/Movie'); // Import the Movie model
 
 // Sync the models and create the table

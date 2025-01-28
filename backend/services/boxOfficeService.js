@@ -7,8 +7,7 @@ const fetchBoxOfficeData = async (id) => {
     }
 
     const data = await scrapeBoxOffice(id);
-    console.log(data);
-    // const data = await response.json();
+    console.log("fetched box office:", data);
 
     if (!data) {
         throw new Error('No box office data found');

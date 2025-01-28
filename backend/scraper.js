@@ -21,7 +21,7 @@ async function scrapeBoxOffice(imdbID) {
 
         // Scrape box office data
         const boxOfficeData = await page.evaluate(() => {
-            const title = document.querySelector('h1')?.textContent.trim();
+            // const title = document.querySelector('h1')?.textContent.trim();
         
             // Select the performance summary table
             const performanceTable = document.querySelector('.mojo-performance-summary-table');
@@ -63,7 +63,6 @@ async function scrapeBoxOffice(imdbID) {
                 ?.textContent.trim();
         
             return {
-                title,
                 domesticGross,
                 internationalGross,
                 worldwideGross,
