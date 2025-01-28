@@ -1,5 +1,4 @@
 import styles from './MovieResult.module.css';
-import { useNavigate } from 'react-router-dom';
 
 type MovieResultProps = {
   title: string;

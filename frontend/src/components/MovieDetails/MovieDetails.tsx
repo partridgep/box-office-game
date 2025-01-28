@@ -77,6 +77,7 @@ const MovieDetails = () => {
       {movie.boxOffice.budget &&
         <p><strong>Domestic Gross:</strong> {movie.boxOffice.budget}</p>
       }
+      <p><strong>All data:</strong> <pre>{JSON.stringify(movie, null, 2)}</pre></p>
     </div>
   );
 };

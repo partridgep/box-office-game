@@ -8,7 +8,7 @@ const getMovieSearch = async (req, res) => {
     }
 
     try {
-        const response = await fetch(`http://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(search)}&type=movie`);
+        const response = await fetch(`http://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(search)}&type=movie&y=2026`);
         const data = await response.json();
 
         if (data.Response === 'False') {
