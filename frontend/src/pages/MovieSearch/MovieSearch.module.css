@@ -16,9 +16,11 @@ ul {
   display: flex;
   gap: 1rem;
   align-items: stretch;
+  flex-wrap: wrap;
 }
 
 li {
   list-style-type: none;
-  flex: 1; /* Makes each list item take an equal amount of space */
+  display: flex;
+  flex-direction: column;
 }
