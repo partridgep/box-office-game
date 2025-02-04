@@ -26,6 +26,21 @@ export const saveMovieDetails = async (movieData: Record<string, any>) => {
     return response.json();
 };
 
+export const deleteMovie = async (imdbID: string) => {
+    const response = await fetch(`/api/movie/delete?imdbID=${imdbID}`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to delete movie');
+    }
+
+    return response.json();
+};
+
 export const fetchBoxOfficeData = async (imdbID: string) => {
     const response = await fetch(`/api/box-office?id=${imdbID}`);
     if (!response.ok) throw new Error('Failed to fetch box office data');

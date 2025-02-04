@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { getMovieDetails, saveMovieDetails } from '../../services/api';
+import { getMovieDetails, saveMovieDetails, deleteMovie } from '../../services/api';
 import { useMovieStore } from '../../store/useMovieStore';
 import { MovieData } from '../../types';
 import { useNavigate } from 'react-router-dom';
@@ -57,12 +57,14 @@ type MovieRating = {
 
 const MovieDetails = () => {
   const { id } = useParams<{ id: string }>();
-  const { movies } = useMovieStore();
+  const { movies, addMovie, removeMovie } = useMovieStore();
   const [movie, setMovie] = useState<MovieData | null>(null);
   const [movieJSON, setMovieJSON] = useState<MovieJSON | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const isInDatabase = id ? Boolean(movies[id]) : false;
+  const isInDatabase = useMemo(() => (
+    id ? Boolean(movies[id]) : false)
+  ,[id, movies]);
 
   useEffect(() => {
     const fetchMovieDetails = async () => {
@@ -100,6 +102,8 @@ const MovieDetails = () => {
           metacriticRating: result.Ratings.find(rating => rating.Source === "Metacritic")?.Value,
         };
 
+        console.log("movie details", movieDetails)
+
         setMovie(movieDetails);
       } catch (error) {
         console.error('Error fetching movie details:', error);
@@ -120,17 +124,24 @@ const MovieDetails = () => {
     navigate(`/`);
   }
 
-  const handleSaveMovie = async (movie: MovieData) => {
+  const handleMovieExistence = async (movie: MovieData) => {
     setIsSaving(true);
     try {
-      const savedMovie = await saveMovieDetails(movie);
-      console.log('Movie saved successfully:', savedMovie);
+        if (isInDatabase) {
+            await deleteMovie(movie.imdbID);
+            removeMovie(movie.imdbID);
+        } else {
+            console.log("movie to save", movie);
+            const savedMovie = await saveMovieDetails(movie);
+            console.log(savedMovie);
+            addMovie(savedMovie.movie);
+        }
     } catch (error) {
-      console.error('Error saving movie:', error);
+        console.error('Error updating movie:', error);
     } finally {
-      setIsSaving(false);
+        setIsSaving(false); // Avoids repeating this in both try blocks
     }
-  };
+};
 
   if (!movie) {
     return <div>Loading...</div>;
@@ -152,7 +163,7 @@ const MovieDetails = () => {
       }
       <img className={styles['poster']} src={movie.poster} alt={`${movie.title} Poster`} />
       <button
-        onClick={() => handleSaveMovie(movie)}
+        onClick={() => handleMovieExistence(movie)}
         disabled={isSaving}
         className={isSaving
           ? styles['btn-disabled']

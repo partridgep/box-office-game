@@ -69,41 +69,11 @@ const saveMovieDetails = async (req, res) => {
     try {
         // Extract movie data from the request body
         const movieData = req.body;
-    
-        // Map the incoming data to the Movie model fields
-        const newMovie = {
-          imdbID: movieData.imdbID,
-          title: movieData.Title,
-          year: parseInt(movieData.Year),
-          plot: movieData.Plot,
-          poster: movieData.Poster,
-          domesticGross: movieData.domesticGross,
-          internationalGross: movieData.internationalGross,
-          worldwideGross: movieData.worldwideGross,
-          domesticOpening: movieData.domesticOpening,
-          budget: movieData.budget,
-          rated: movieData.Rated,
-          released: new Date(movieData.Released),
-          runtime: movieData.Runtime,
-          genre: movieData.Genre,
-          director: movieData.Director,
-          writer: movieData.Writer,
-          actors: movieData.Actors,
-          language: movieData.Language,
-          country: movieData.Country,
-          awards: movieData.Awards !== 'N/A' ? movieData.Awards : null,
-          metascore: movieData.Metascore !== 'N/A' ? movieData.Metascore : null,
-          imdbRating: movieData.imdbRating !== 'N/A' ? parseFloat(movieData.imdbRating) : null,
-          imdbVotes: movieData.imdbVotes !== 'N/A' ? parseInt(movieData.imdbVotes.replace(/,/g, ''), 10) : null,
-          production: movieData.Production !== 'N/A' ? movieData.Production : null,
-          rottenTomatoesScore: movieData.Ratings.find(rating => rating.Source === "Rotten Tomatoes")?.Value,
-          metacriticRating: movieData.Ratings.find(rating => rating.Source === "Metacritic")?.Value,
-        };
 
-        console.log('New movie:', newMovie);
+        console.log('New movie:', movieData);
     
         // Insert the movie into the database
-        const savedMovie = await Movie.create(newMovie);
+        const savedMovie = await Movie.create(movieData);
     
         // Send a success response
         res.status(201).json({
@@ -114,6 +84,29 @@ const saveMovieDetails = async (req, res) => {
         console.error('Error saving movie:', error);
         res.status(500).json({
           message: 'Failed to save movie',
+          error: error.message,
+        });
+      }
+}
+
+const deleteMovieFromDB = async (req, res) => {
+
+    const { imdbID } = req.query;
+
+    if (!imdbID) {
+        return res.status(400).json({ error: 'imdbID parameter is required' });
+    }
+
+    try {
+        const deletedCount = await Movie.destroy({ where: { imdbID } });
+        if (deletedCount === 0) {
+            return res.status(404).json({ error: 'Movie not found' });
+        }
+        res.status(200).json({ message: 'Movie deleted successfully' });
+      } catch (error) {
+        console.error('Error removing movie:', error);
+        res.status(500).json({
+          message: 'Failed to remove movie',
           error: error.message,
         });
       }
@@ -136,5 +129,6 @@ module.exports = {
     getMovieSearch,
     getMovieDetails,
     saveMovieDetails,
+    deleteMovieFromDB,
     getSavedMovies
 };
