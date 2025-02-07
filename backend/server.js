@@ -3,6 +3,7 @@ const express = require('express');
 const routes = require('./routes');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const scheduleMovieRefresh = require("./jobs/movieRefresher");
 
 const app = express();
 
@@ -13,4 +14,6 @@ app.use('/api', routes);
 
 const PORT = 5005;
 app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT}`));
+
+scheduleMovieRefresh();
 

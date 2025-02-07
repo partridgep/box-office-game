@@ -1,4 +1,4 @@
-const scrapeBoxOffice = require('../scraper');
+const { scrapeBoxOffice } = require('../scraper');
 
 const fetchBoxOfficeData = async (id) => {
 

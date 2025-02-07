@@ -1,17 +1,17 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { getMovieDetails, saveMovieDetails, deleteMovie } from '../../services/api';
+import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/api';
 import { useMovieStore } from '../../store/useMovieStore';
 import { MovieData } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieDetails.module.css';
 
 // import ReactDOM from 'react-dom'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faLeftLong, faCircleCheck, faPlus, faTrashCan } from '@fortawesome/free-solid-svg-icons'
-import { library, IconProp } from '@fortawesome/fontawesome-svg-core'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faLeftLong, faCircleCheck, faPlus, faTrashCan, faArrowsRotate } from '@fortawesome/free-solid-svg-icons';
+import { library, IconProp } from '@fortawesome/fontawesome-svg-core';
 
-library.add({ faLeftLong, faCircleCheck, faPlus, faTrashCan })
+library.add({ faLeftLong, faCircleCheck, faPlus, faTrashCan, faArrowsRotate });
 
  // @ts-ignore
 const leftIcon : IconProp = "fa-solid fa-left-long"
@@ -21,108 +21,47 @@ const checkIcon : IconProp = "fa-solid fa-circle-check"
 const plusIcon : IconProp = "fa-solid fa-plus"
  // @ts-ignore
 const trashIcon : IconProp = "fa-solid fa-trash-can"
-
-type MovieJSON = {
-    Title: string;
-    Year: string;
-    imdbID: string;
-    Poster: string;
-    Plot: string;
-    Genre: string;
-    Director: string;
-    imdbRating: string;
-    Ratings: MovieRating[];
-    domesticGross: string;
-    internationalGross: string;
-    worldwideGross: string;
-    domesticOpening: string;
-    budget: string;
-    Rated: string;
-    Released: string;
-    Runtime: string;
-    Writer: string;
-    Actors: string;
-    Language: string;
-    Country: string;
-    Awards: string;
-    Metascore: string;
-    imdbVotes: string;
-    Production: string;
-}
-
-type MovieRating = {
-    Source: string;
-    Value: string
-}
+ // @ts-ignore
+const refreshIcon : IconProp = "fa-solid fa-arrows-rotate"
 
 const MovieDetails = () => {
   const { id } = useParams<{ id: string }>();
   const { movies, addMovie, removeMovie } = useMovieStore();
   const [movie, setMovie] = useState<MovieData | null>(null);
-  const [movieJSON, setMovieJSON] = useState<MovieJSON | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const isInDatabase = useMemo(() => (
     id ? Boolean(movies[id]) : false)
   ,[id, movies]);
 
   useEffect(() => {
-    const fetchMovieDetails = async () => {
-      try {
-        const result: MovieJSON = await getMovieDetails(id!);
-        setMovieJSON(result);
-        console.log(result)
+    if (!id || Object.keys(movies).length === 0) return; // Wait for `movies` to load
 
-        const movieDetails = {
-          imdbID: result.imdbID,
-          title: result.Title,
-          year: parseInt(result.Year),
-          plot: result.Plot,
-          poster: result.Poster,
-          domesticGross: result.domesticGross,
-          internationalGross: result.internationalGross,
-          worldwideGross: result.worldwideGross,
-          domesticOpening: result.domesticOpening,
-          budget: result.budget,
-          rated: result.Rated,
-          released: new Date(result.Released),
-          runtime: result.Runtime,
-          genre: result.Genre,
-          director: result.Director,
-          writer: result.Writer,
-          actors: result.Actors,
-          language: result.Language,
-          country: result.Country,
-          awards: result.Awards !== 'N/A' ? result.Awards : null,
-          metascore: result.Metascore !== 'N/A' ? result.Metascore : null,
-          imdbRating: result.imdbRating !== 'N/A' ? parseFloat(result.imdbRating) : null,
-          imdbVotes: result.imdbVotes !== 'N/A' ? parseInt(result.imdbVotes.replace(/,/g, ''), 10) : null,
-          production: result.Production !== 'N/A' ? result.Production : null,
-          rottenTomatoesScore: result.Ratings.find(rating => rating.Source === "Rotten Tomatoes")?.Value,
-          metacriticRating: result.Ratings.find(rating => rating.Source === "Metacritic")?.Value,
-        };
-
-        console.log("movie details", movieDetails)
-
-        setMovie(movieDetails);
-      } catch (error) {
-        console.error('Error fetching movie details:', error);
-      }
-    };
-
-    if (id && movies[id]) {
-      console.log(movies[id]);
-      setMovie(movies[id]);
+    if (movies[id]) {
+        console.log("movie already in database", movies[id]);
+        setMovie(movies[id]);
+    } else {
+        fetchMovieDetails();
     }
-    else fetchMovieDetails();
-
-  }, [id]);
+}, [id, movies]);
 
   const navigate = useNavigate();
 
   function goToHomepage() {
     navigate(`/`);
   }
+
+  const fetchMovieDetails = async () => {
+    try {
+      const result: MovieData = await getMovieDetails(id!);
+      console.log("movie details", result)
+      setMovie(result);
+      return result;
+    } catch (error) {
+      console.error('Error fetching movie details:', error);
+    }
+  };
 
   const handleMovieExistence = async (movie: MovieData) => {
     setIsSaving(true);
@@ -139,9 +78,27 @@ const MovieDetails = () => {
     } catch (error) {
         console.error('Error updating movie:', error);
     } finally {
-        setIsSaving(false); // Avoids repeating this in both try blocks
+        setIsSaving(false);
     }
-};
+  };
+
+  const handleMovieUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      const updatedMovieDetails = await fetchMovieDetails();
+      console.log("updated movie", updatedMovieDetails);
+      if (updatedMovieDetails) {
+        const updatedSavedMovie = await updateMovieDetails(updatedMovieDetails);
+        console.log(updatedSavedMovie)
+        addMovie(updatedSavedMovie.movie);
+        setMovie(updatedSavedMovie.movie)
+      }
+    } catch (error) {
+        console.error('Error updating movie:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   if (!movie) {
     return <div>Loading...</div>;
@@ -162,30 +119,47 @@ const MovieDetails = () => {
         <p>Not in database</p>
       }
       <img className={styles['poster']} src={movie.poster} alt={`${movie.title} Poster`} />
-      <button
-        onClick={() => handleMovieExistence(movie)}
-        disabled={isSaving}
-        className={isSaving
-          ? styles['btn-disabled']
-          : (isInDatabase ? styles['remove-btn'] : styles['add-btn'] )
-        }
-      >
-        {isSaving
-          ? (isInDatabase ? 'Removing...' : 'Saving...')
-          : (isInDatabase
-            ?
+      <div className={styles['movie-btns']}>
+        <button
+          onClick={() => handleMovieExistence(movie)}
+          disabled={isSaving}
+          className={isSaving
+            ? styles['disabled-btn']
+            : (isInDatabase ? styles['remove-btn'] : styles['add-btn'] )
+          }
+        >
+          {isSaving
+            ? (isInDatabase ? 'Removing...' : 'Saving...')
+            : (isInDatabase
+              ?
+                <p>
+                <FontAwesomeIcon icon={trashIcon} size="lg"/>
+                Remove from Database
+                </p>
+              : 
               <p>
-               <FontAwesomeIcon icon={trashIcon} size="lg"/>
-               Remove from Database
+                <FontAwesomeIcon icon={plusIcon} size="lg"/>
+                Add to Database
               </p>
-            : 
+            )
+          }
+        </button>
+        { isInDatabase && 
+          <button
+            onClick={() => handleMovieUpdate()}
+            disabled={isUpdating}
+            className={isUpdating
+              ? styles['disabled-btn']
+              : styles['update-btn']
+            }
+          >
             <p>
-              <FontAwesomeIcon icon={plusIcon} size="lg"/>
-              Add to Database
+              <FontAwesomeIcon icon={refreshIcon} size="lg" spin={isUpdating}/>
+              {isUpdating ? 'Updating...' : 'Update Data'}
             </p>
-          )
+          </button>
         }
-      </button>
+      </div>
       <div className={styles['movie-data']}>
         <p><strong>Year:</strong> {movie.year}</p>
         <p><strong>Genre:</strong> {movie.genre}</p>

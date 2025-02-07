@@ -28,16 +28,22 @@ h1 {
   height: auto;
 }
 
-.add-btn, .remove-btn, .disabled-btn {
+.movie-btns {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+}
+
+.add-btn, .remove-btn, .disabled-btn, .update-btn, .disabled-btn {
   width: max-content;
   color: white;
   text-transform: uppercase;
   font-weight: 800;
-  margin: 0 auto;
   padding: 0.7rem 1rem;
 }
 
-.add-btn > p, .remove-btn > p, .disabled-btn > p {
+.add-btn > p, .remove-btn > p, .disabled-btn > p, .update-btn > p, .disabled-btn > p {
   display: flex;
   gap: 0.5rem;
 }
@@ -54,6 +60,15 @@ h1 {
 .add-btn:hover {
   background-color: rgb(39, 130, 209);
 }
+.update-btn {
+  background-color: rgb(156, 44, 211);
+}
+.update-btn:hover {
+  background-color: rgb(162, 77, 205);
+}
+.disabled-btn {
+  background-color: rgb(170, 170, 170);
+}
 
 .movie-data {
   display: flex;
@@ -64,6 +79,7 @@ h1 {
 }
 
 .json-data {
+  max-width: 92vw;
   border-radius: 10px;
   overflow-x: scroll;
   border: 1px solid rgb(133, 133, 133);

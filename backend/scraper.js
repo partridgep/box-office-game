@@ -78,6 +78,35 @@ async function scrapeBoxOffice(imdbID) {
     } finally {
         await browser.close();
     }
-}
+};
 
-module.exports = scrapeBoxOffice;
+const scrapeRottenTomatoesScore = async (movieTitle, releaseYear) => {
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(movieTitle)}`;
+
+    try {
+        console.log("scraping RT")
+        await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
+        const tomatometer = null;
+
+        const score = await page.$eval('search-page-media-row', el => el.getAttribute('tomatometerscore'));
+        const year = await page.$eval('search-page-media-row', el => el.getAttribute('releaseyear'));
+        if (year == releaseYear && score != null) {
+            console.log('Tomatometer Score:', score);
+            tomatometer = score + '%';
+        }
+        return tomatometer;
+
+    } catch (error) {
+        console.error('Error scraping Rotten Tomatoes:', error);
+        await browser.close();
+        return null;
+    }
+};
+
+
+module.exports = {
+    scrapeBoxOffice,
+    scrapeRottenTomatoesScore
+};

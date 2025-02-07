@@ -26,6 +26,23 @@ export const saveMovieDetails = async (movieData: Record<string, any>) => {
     return response.json();
 };
 
+export const updateMovieDetails = async (movieData: Record<string, any>) => {
+    console.log("updateMovieDetails")
+    const response = await fetch(`/api/movie/${movieData.imdbID}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(movieData),
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to update movie details');
+    }
+
+    return response.json();
+};
+
 export const deleteMovie = async (imdbID: string) => {
     const response = await fetch(`/api/movie/delete?imdbID=${imdbID}`, {
         method: 'DELETE',
@@ -44,6 +61,12 @@ export const deleteMovie = async (imdbID: string) => {
 export const fetchBoxOfficeData = async (imdbID: string) => {
     const response = await fetch(`/api/box-office?id=${imdbID}`);
     if (!response.ok) throw new Error('Failed to fetch box office data');
+    return response.json();
+};
+
+export const fetchRottenTomatoesScore = async (title: string) => {
+    const response = await fetch(`/api/rotten-tomatoes?title=${title}`);
+    if (!response.ok) throw new Error('Failed to fetch rotten tomatoes data');
     return response.json();
 };
 

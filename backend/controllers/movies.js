@@ -1,37 +1,31 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-const { fetchBoxOfficeData } = require('../services/boxOfficeService');
-const db = require('../models')
-const { Movie } = db
+const {
+    searchMovies,
+    getMovieById,
+    saveMovie,
+    deleteMovie,
+    getAllSavedMovies,
+    updateMovieDetails
+} = require('../services/movieService');
 
+// search for movies using OMDb API
 const getMovieSearch = async (req, res) => {
     const { search } = req.query;
-    console.log("movie search")
-    console.log(process.env.OMDB_API_KEY)
 
     if (!search) {
         return res.status(400).json({ error: 'Search parameter is required' });
     }
 
     try {
-        const response = await fetch(`http://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(search)}&type=movie&y=2025`);
-        console.log(response)
-        const data = await response.json();
-        console.log(data)
-
-        if (data.Response === 'False') {
-            return res.status(404).json({ error: data.Error });
-            
-        }
-
-        const movies = data.Search;
-
+        const movies = await searchMovies(search);
         res.json(movies);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch movies from OMDb API' });
+        res.status(500).json({ error: error.message || 'Failed to fetch movies from OMDb API' });
     }
 };
 
+// get detailed movie information (OMDb + Box Office data)
 const getMovieDetails = async (req, res) => {
     const { id } = req.query;
 
@@ -40,57 +34,29 @@ const getMovieDetails = async (req, res) => {
     }
 
     try {
-        // Fetch detailed movie data from OMDb
-        const omdbResponse = await fetch(`http://www.omdbapi.com/?i=${id}&apikey=${process.env.OMDB_API_KEY}`);
-        const omdbData = await omdbResponse.json();
-
-        if (omdbData.Response === 'False') {
-            return res.status(404).json({ error: omdbData.Error });
-        }
-        console.log({ omdbData })
-
-        // Fetch box office data directly using the service
-        const boxOfficeData = await fetchBoxOfficeData(id);
-        console.log({ boxOfficeData })
-
-        // Combine the data
-        const combinedData = {
-            ...omdbData,
-            ...boxOfficeData,
-        };
-
-        res.json(combinedData);
+        const movieDetails = await getMovieById(id);
+        res.json(movieDetails);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch movie details' });
+        res.status(500).json({ error: error.message || 'Failed to fetch movie details' });
     }
 };
 
 const saveMovieDetails = async (req, res) => {
     try {
-        // Extract movie data from the request body
-        const movieData = req.body;
-
-        console.log('New movie:', movieData);
-    
-        // Insert the movie into the database
-        const savedMovie = await Movie.create(movieData);
-    
-        // Send a success response
+        const savedMovie = await saveMovie(req.body);
         res.status(201).json({
-          message: 'Movie saved successfully',
-          movie: savedMovie,
+            message: 'Movie saved successfully',
+            movie: savedMovie,
         });
-      } catch (error) {
-        console.error('Error saving movie:', error);
+    } catch (error) {
         res.status(500).json({
-          message: 'Failed to save movie',
-          error: error.message,
+            message: 'Failed to save movie',
+            error: error.message,
         });
-      }
-}
+    }
+};
 
 const deleteMovieFromDB = async (req, res) => {
-
     const { imdbID } = req.query;
 
     if (!imdbID) {
@@ -98,30 +64,37 @@ const deleteMovieFromDB = async (req, res) => {
     }
 
     try {
-        const deletedCount = await Movie.destroy({ where: { imdbID } });
-        if (deletedCount === 0) {
-            return res.status(404).json({ error: 'Movie not found' });
-        }
+        await deleteMovie(imdbID);
         res.status(200).json({ message: 'Movie deleted successfully' });
-      } catch (error) {
-        console.error('Error removing movie:', error);
-        res.status(500).json({
-          message: 'Failed to remove movie',
-          error: error.message,
-        });
-      }
-}
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Failed to remove movie' });
+    }
+};
 
 const getSavedMovies = async (req, res) => {
     try {
-        const foundMovies = await Movie.findAll({
-            order: [['released', 'ASC']], // Sort by 'released' in ascending order
-        });
-        console.log({foundMovies})
-        res.status(200).json(foundMovies.map(movie => movie.get({ plain: true })));
+        const movies = await getAllSavedMovies();
+        res.status(200).json(movies);
     } catch (error) {
-        res.status(500).send("Server error")
-        console.log(error)
+        res.status(500).json({ error: error.message || 'Failed to retrieve movies' });
+    }
+};
+
+const updateMovie = async (req, res) => {
+    console.log("update MOVIE")
+    const { imdbID } = req.params;
+    const updatedData = req.body;
+    console.log(imdbID, updatedData)
+
+    if (!imdbID || !updatedData) {
+        return res.status(400).json({ error: 'imdbID and updated data are required' });
+    }
+
+    try {
+        const updatedMovie = await updateMovieDetails(imdbID, updatedData);
+        res.status(200).json({ message: 'Movie updated successfully', movie: updatedMovie });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Failed to update movie' });
     }
 };
 
@@ -130,5 +103,6 @@ module.exports = {
     getMovieDetails,
     saveMovieDetails,
     deleteMovieFromDB,
-    getSavedMovies
+    getSavedMovies,
+    updateMovie
 };
