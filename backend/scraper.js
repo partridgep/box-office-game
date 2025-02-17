@@ -88,11 +88,11 @@ const scrapeRottenTomatoesScore = async (movieTitle, releaseYear) => {
     try {
         console.log("scraping RT")
         await page.goto(searchUrl, { waitUntil: 'domcontentloaded' });
-        const tomatometer = null;
+        let tomatometer = null;
 
         const score = await page.$eval('search-page-media-row', el => el.getAttribute('tomatometerscore'));
         const year = await page.$eval('search-page-media-row', el => el.getAttribute('releaseyear'));
-        if (year == releaseYear && score != null) {
+        if (year == releaseYear && score != null && score.length > 0) {
             console.log('Tomatometer Score:', score);
             tomatometer = score + '%';
         }

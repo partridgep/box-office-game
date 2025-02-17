@@ -44,12 +44,11 @@ const getMovieById = async (id) => {
       imdbRating: omdbData.imdbRating !== 'N/A' ? parseFloat(omdbData.imdbRating) : null,
       imdbVotes: omdbData.imdbVotes !== 'N/A' ? parseInt(omdbData.imdbVotes.replace(/,/g, ''), 10) : null,
       production: omdbData.Production !== 'N/A' ? omdbData.Production : null,
-      rottenTomatoesScore: omdbData.Ratings.find(rating => rating.Source === "Rotten Tomatoes")?.Value,
-      metacriticRating: omdbData.Ratings.find(rating => rating.Source === "Metacritic")?.Value,
+      rottenTomatoesScore: omdbData.Ratings.find(rating => rating.Source === "Rotten Tomatoes")?.Value || null,
+      metacriticRating: omdbData.Ratings.find(rating => rating.Source === "Metacritic")?.Value || null,
     };
 
     if (!movieDetails.rottenTomatoesScore) {
-      console.log("let go tomatoes");
       try {
         const rottenTomatoesData = await fetchRottenTomatoesData(movieDetails.title, movieDetails.year);
         console.log("Fetched Rotten Tomatoes Score:", rottenTomatoesData);
