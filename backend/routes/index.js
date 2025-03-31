@@ -9,6 +9,12 @@ const {
     deleteMovieFromDB,
     getSavedMovies
 } = require('../controllers/movies');
+const {
+    postGuess,
+} = require('../controllers/guesses');
+const {
+    saveUser,
+} = require('../controllers/usersController');
 
 const router = express.Router();
 
@@ -20,5 +26,7 @@ router.post('/movie/save', saveMovieDetails);
 router.put('/movie/:imdbID', updateMovie);
 router.delete('/movie/delete', deleteMovieFromDB);
 router.get('/all-movies', getSavedMovies);
+router.post('/guess', postGuess);
+router.post('/users/save', saveUser);
 
 module.exports = router;

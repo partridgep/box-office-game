@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { searchMovies } from '../../services/api';
+import { searchMovies } from '../../services/movies.service';
 import MovieResult from '../../components/MovieResult/MovieResult';
 import MovieSelectBtn from '../../components/MovieSelectBtn/MovieSelectBtn';
 import { useNavigate } from 'react-router-dom';

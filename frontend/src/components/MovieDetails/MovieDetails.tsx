@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/api';
+import GuessForm from "../MovieGuessForm/MovieGuessForm";
+import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/movies.service';
 import { useMovieStore } from '../../store/useMovieStore';
-import { MovieData } from '../../types';
+import { MovieData, SavedMovie } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieDetails.module.css';
 
@@ -27,7 +28,7 @@ const refreshIcon : IconProp = "fa-solid fa-arrows-rotate"
 const MovieDetails = () => {
   const { id } = useParams<{ id: string }>();
   const { movies, addMovie, removeMovie } = useMovieStore();
-  const [movie, setMovie] = useState<MovieData | null>(null);
+  const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -71,9 +72,10 @@ const MovieDetails = () => {
             removeMovie(movie.imdbID);
         } else {
             console.log("movie to save", movie);
-            const savedMovie = await saveMovieDetails(movie);
+            const savedMovie: SavedMovie = (await saveMovieDetails(movie))?.movie;
             console.log(savedMovie);
-            addMovie(savedMovie.movie);
+            addMovie(savedMovie);
+            setMovie(savedMovie);
         }
     } catch (error) {
         console.error('Error updating movie:', error);
@@ -119,6 +121,9 @@ const MovieDetails = () => {
         <p>Not in database</p>
       }
       <img className={styles['poster']} src={movie.poster} alt={`${movie.title} Poster`} />
+      { isInDatabase && movie && movie.id &&
+        <GuessForm movieId={movie.id} />
+      }
       <div className={styles['movie-btns']}>
         <button
           onClick={() => handleMovieExistence(movie)}

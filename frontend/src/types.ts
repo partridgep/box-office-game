@@ -25,6 +25,7 @@ export type MovieData = {
   worldwideGross: string | null,
   writer: string,
   year: number,
+  id: string | null,
 };
 
 export type SavedMovie  = {
