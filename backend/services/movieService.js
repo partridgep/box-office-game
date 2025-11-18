@@ -90,11 +90,22 @@ const updateMovieDetails = async (imdbID, updatedData) => {
     return movie;
 };
 
+const updateAllMovies = async (imdbID, updatedData) => {
+    const movie = await Movie.findOne({ where: { imdbID } });
+    if (!movie) throw new Error('Movie not found');
+
+    await movie.update(updatedData);
+    await movie.changed('updatedAt', true);
+    await movie.save();
+    return movie;
+};
+
 module.exports = {
     searchMovies,
     getMovieById,
     saveMovie,
     deleteMovie,
     getAllSavedMovies,
-    updateMovieDetails
+    updateMovieDetails,
+    updateAllMovies
 };

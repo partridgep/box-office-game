@@ -8,6 +8,7 @@ const {
     getAllSavedMovies,
     updateMovieDetails
 } = require('../services/movieService');
+const runMovieRefresh = require("../jobs/runMovieRefresh");
 
 // search for movies using OMDb API
 const getMovieSearch = async (req, res) => {
@@ -98,11 +99,24 @@ const updateMovie = async (req, res) => {
     }
 };
 
+const updateAllMovies = async (req, res) => {
+  console.log("Manual request: refreshing movies...");
+
+  const result = await runMovieRefresh();
+  console.log(result)
+  if (result.success) {
+    res.status(200).json({ message: 'Movies refreshed successfully.', data: result });
+  } else {
+    res.status(500).json({ message: "Failed to refresh movies.", error: result.error });
+  }
+};
+
 module.exports = {
     getMovieSearch,
     getMovieDetails,
     saveMovieDetails,
     deleteMovieFromDB,
     getSavedMovies,
-    updateMovie
+    updateMovie,
+    updateAllMovies
 };

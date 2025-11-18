@@ -24,3 +24,28 @@ li {
   display: flex;
   flex-direction: column;
 }
+
+.disabled-btn, .update-btn {
+  width: max-content;
+  color: white;
+  text-transform: uppercase;
+  font-weight: 800;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 2rem;
+  font-size: 0.8rem;
+}
+
+.update-btn > p, .disabled-btn > p {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.update-btn {
+  background-color: rgb(156, 44, 211);
+}
+.update-btn:hover {
+  background-color: rgb(162, 77, 205);
+}
+.disabled-btn {
+  background-color: rgb(170, 170, 170);
+}

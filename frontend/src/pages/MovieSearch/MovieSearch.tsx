@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react';
-import { searchMovies } from '../../services/movies.service';
+import { searchMovies, updateAllMovies, getSavedMovies } from '../../services/movies.service';
 import MovieResult from '../../components/MovieResult/MovieResult';
 import MovieSelectBtn from '../../components/MovieSelectBtn/MovieSelectBtn';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieSearch.module.css';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 import { useMovieStore } from '../../store/useMovieStore';
+
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons';
+import { library, IconProp } from '@fortawesome/fontawesome-svg-core';
+
+library.add({ faArrowsRotate });
+
+ // @ts-ignore
+const refreshIcon : IconProp = "fa-solid fa-arrows-rotate"
 
 import { MovieData } from '../../types';
 
@@ -20,7 +29,8 @@ const MovieSearch = () => {
     const [search, setSearch] = useState<string>('');
     const [movieResults, setMovieResults] = useState<Movie[]>([]);
     const [savedMovies, setSavedMovies] = useState<MovieData[]>([]);
-    const { movies } = useMovieStore();
+    const [isUpdating, setIsUpdating] = useState(false);
+    const { movies, setMovies } = useMovieStore();
     const [parent] = useAutoAnimate()
 
       useEffect(() => {
@@ -48,11 +58,43 @@ const MovieSearch = () => {
         navigate(`/movie/${movie.imdbID}`);
     };
 
+    const handleUpdateAllMovies = async () => {
+        setIsUpdating(true);
+        try {
+          // Step 1: trigger backend refresh
+          await updateAllMovies();
+
+          // Step 2: fetch fresh movies from backend
+          const updatedMovies = await getSavedMovies();
+          console.log("updates movies: ", updatedMovies)
+
+          // Step 3: update store (global movies)
+          setMovies(updatedMovies);
+        } catch (error) {
+            console.error('Error updating movies:', error);
+        } finally {
+          setIsUpdating(false);
+        }
+      };
+
   return (
     <div className={styles['movie-search']}>
         <h1>Box office predictions</h1>
         <h2>Movies saved to database</h2>
-          <ul ref={parent}>
+        <button
+            onClick={() => handleUpdateAllMovies()}
+            disabled={isUpdating}
+            className={isUpdating
+                ? styles['disabled-btn']
+                : styles['update-btn']
+            }
+            >
+            <p>
+                <FontAwesomeIcon icon={refreshIcon} size="lg" spin={isUpdating}/>
+                {isUpdating ? 'Updating...' : 'Update All Data'}
+            </p>
+            </button>
+        <ul ref={parent}>
             {savedMovies.map(movie => (
                 <li key={movie.imdbID}>
                     <MovieSelectBtn

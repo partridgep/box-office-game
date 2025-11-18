@@ -43,6 +43,22 @@ export const updateMovieDetails = async (movieData: Record<string, any>) => {
   return response.json();
 };
 
+export const updateAllMovies = async () => {
+  console.log("updateAllMovies")
+  const response = await fetch(`/api/refresh-movies`, {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+      },
+  });
+
+  if (!response.ok) {
+      throw new Error('Failed to update movies');
+  }
+
+  return response.json();
+};
+
 export const deleteMovie = async (imdbID: string) => {
   const response = await fetch(`/api/movie/delete?imdbID=${imdbID}`, {
       method: 'DELETE',

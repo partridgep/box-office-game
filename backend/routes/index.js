@@ -7,7 +7,8 @@ const {
     saveMovieDetails,
     updateMovie,
     deleteMovieFromDB,
-    getSavedMovies
+    getSavedMovies,
+    updateAllMovies,
 } = require('../controllers/movies');
 const {
     postGuess,
@@ -26,6 +27,7 @@ router.post('/movie/save', saveMovieDetails);
 router.put('/movie/:imdbID', updateMovie);
 router.delete('/movie/delete', deleteMovieFromDB);
 router.get('/all-movies', getSavedMovies);
+router.post('/refresh-movies', updateAllMovies);
 router.post('/guess', postGuess);
 router.post('/users/save', saveUser);
 
