@@ -1,0 +1,45 @@
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 600px;
+  margin: 0 auto 60px auto;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input {
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.fullWidth {
+  grid-column: span 2;
+}
+
+.submitBtn {
+  grid-column: span 2;
+  padding: 12px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 16px;
+  transition: background 0.2s ease;
+}
+
+.submitBtn:hover {
+  background: #1e4ec9;
+}

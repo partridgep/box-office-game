@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useUser } from "../../hooks/useUser";
+import { useUserStore } from "../../store/useUserStore";
+import styles from "./UserSignupPrompt.module.css"
 
 export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
-  const { createUser } = useUser();
+  const createUser = useUserStore((state) => state.createUser);
   const [name, setName] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -14,9 +15,9 @@ export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
   };
 
   return (
-    <div className="p-4">
-      <h2>Welcome! Enter your name to get started:</h2>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+    <div className={styles.container}>
+      <h2 className={styles.heading}>Welcome! Enter your name to get started:</h2>
+      <form onSubmit={handleSubmit} className={styles.form}>
         <input
           type="text"
           value={name}
@@ -24,7 +25,7 @@ export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
           className="border p-2"
           required
         />
-        <button type="submit" className="bg-green-500 text-white p-2 rounded">
+        <button type="submit" className={styles.button}>
           Continue
         </button>
       </form>

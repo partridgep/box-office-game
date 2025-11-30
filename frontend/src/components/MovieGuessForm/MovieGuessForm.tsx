@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { useUser } from "../../hooks/useUser";
+import { useUserStore } from '../../store/useUserStore';
 import UserSignup from "./../UserSignup/UserSignupPrompt";
+import UserConfirmation from "./../UserSignup/UserConfirmation";
+import styles from './MovieGuessForm.module.css';
 
 interface GuessFormProps {
   movieId: string;
 }
 
 export default function GuessForm({ movieId }: GuessFormProps) {
-  const { user, createUser } = useUser();
+  const user = useUserStore((state) => state.user);
   const [formData, setFormData] = useState({
     domestic_opening: "",
     international_opening: "",
@@ -17,6 +19,7 @@ export default function GuessForm({ movieId }: GuessFormProps) {
   });
 
   const [showSignup, setShowSignup] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [message, setMessage] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,65 +68,116 @@ export default function GuessForm({ movieId }: GuessFormProps) {
     }
   };
 
+  if (showSignup) {
+    return (
+      <UserSignup
+        onSignup={() => {
+          setShowSignup(false);
+          setShowConfirmation(true);
+        }}
+      />
+    );
+  }
+
+  if (showConfirmation) {
+    return (
+      <UserConfirmation
+        onDone={() => {
+          setShowConfirmation(false);
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="p-4 border rounded-lg">
+    <div>
       <h2 className="text-lg font-bold">Make Your Predictions</h2>
 
-      {showSignup ? (
-        <UserSignup />
-      ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <label>Domestic Opening ($M):</label>
-          <input
-            type="number"
-            name="domestic_opening"
-            value={formData.domestic_opening}
-            onChange={handleChange}
-            className="border p-2"
-          />
+        <form onSubmit={handleSubmit} className={styles.form}>
+          {/* Domestic Opening */}
+          <div className={styles.field}>
+            <label htmlFor="domestic_opening" className="font-medium">
+              Domestic Opening ($M)
+            </label>
+            <input
+              id="domestic_opening"
+              type="number"
+              name="domestic_opening"
+              value={formData.domestic_opening}
+              onChange={handleChange}
+              className="border rounded p-2"
+            />
+          </div>
 
-          <label>International Opening ($M):</label>
-          <input
-            type="number"
-            name="international_opening"
-            value={formData.international_opening}
-            onChange={handleChange}
-            className="border p-2"
-          />
+          {/* International Opening */}
+          <div className={styles.field}>
+            <label htmlFor="international_opening" className="font-medium">
+              International Opening ($M)
+            </label>
+            <input
+              id="international_opening"
+              type="number"
+              name="international_opening"
+              value={formData.international_opening}
+              onChange={handleChange}
+              className="border rounded p-2"
+            />
+          </div>
 
-          <label>Final Domestic ($M):</label>
-          <input
-            type="number"
-            name="final_domestic"
-            value={formData.final_domestic}
-            onChange={handleChange}
-            className="border p-2"
-          />
+          {/* Final Domestic */}
+          <div className={styles.field}>
+            <label htmlFor="final_domestic" className="font-medium">
+              Final Domestic ($M)
+            </label>
+            <input
+              id="final_domestic"
+              type="number"
+              name="final_domestic"
+              value={formData.final_domestic}
+              onChange={handleChange}
+              className="border rounded p-2"
+            />
+          </div>
 
-          <label>Final International ($M):</label>
-          <input
-            type="number"
-            name="final_international"
-            value={formData.final_international}
-            onChange={handleChange}
-            className="border p-2"
-          />
+          {/* Final International */}
+          <div className={styles.field}>
+            <label htmlFor="final_international" className="font-medium">
+              Final International ($M)
+            </label>
+            <input
+              id="final_international"
+              type="number"
+              name="final_international"
+              value={formData.final_international}
+              onChange={handleChange}
+              className="border rounded p-2"
+            />
+          </div>
 
-          <label>Rotten Tomatoes Score (%):</label>
-          <input
-            type="number"
-            name="rotten_tomatoes_score"
-            value={formData.rotten_tomatoes_score}
-            onChange={handleChange}
-            className="border p-2"
-            required
-          />
+          {/* Rotten Tomatoes Score */}
+          <div className={styles.field}>
+            <label htmlFor="rotten_tomatoes_score" className="font-medium">
+              Rotten Tomatoes Score (%)
+            </label>
+            <input
+              id="rotten_tomatoes_score"
+              type="number"
+              name="rotten_tomatoes_score"
+              value={formData.rotten_tomatoes_score}
+              onChange={handleChange}
+              className="border rounded p-2"
+              required
+            />
+          </div>
 
-          <button type="submit" className="bg-blue-500 text-white p-2 rounded">
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className={styles.submitBtn}
+          >
             Submit Guess
           </button>
         </form>
-      )}
 
       {message && <p className="text-green-500 mt-2">{message}</p>}
     </div>
