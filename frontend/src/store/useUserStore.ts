@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptText, saveEncrypted, decryptText, loadEncrypted } from '../utils/crypto/cryptoStorage';
+import { saveUser } from '../services/users.service'; // make sure path is correct
 
 interface User {
   id: string;
@@ -30,6 +31,13 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
     localStorage.setItem('user', JSON.stringify(newUser));
     await saveEncrypted('access_key', await encryptText(access_key));
+
+    try {
+        await saveUser(newUser);
+        console.log('User saved to backend successfully');
+    } catch (err) {
+        console.error('Failed to save user to backend:', err);
+    }
 
     set({ user: newUser });
   },

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useUserStore } from '../../store/useUserStore';
 import UserSignup from "./../UserSignup/UserSignupPrompt";
 import UserConfirmation from "./../UserSignup/UserConfirmation";
+import { postGuess } from '../../services/guesses.service';
 import styles from './MovieGuessForm.module.css';
 
 interface GuessFormProps {
@@ -48,13 +49,10 @@ export default function GuessForm({ movieId }: GuessFormProps) {
       rotten_tomatoes_score: parseInt(formData.rotten_tomatoes_score),
     };
 
-    const response = await fetch("/api/guesses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(guessData),
-    });
+    const response = await postGuess(guessData);
+    console.log(response)
 
-    if (response.ok) {
+    if (response.status == 201) {
       setMessage("Your guess has been submitted!");
       setFormData({
         domestic_opening: "",

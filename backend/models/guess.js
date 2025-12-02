@@ -41,7 +41,6 @@ module.exports = (sequelize, DataTypes) => {
     international_opening: DataTypes.BIGINT,
     final_domestic: DataTypes.BIGINT,
     final_international: DataTypes.BIGINT,
-    type: DataTypes.INTEGER,
     rotten_tomatoes_score: {
       type: DataTypes.INTEGER,
       allowNull: false,

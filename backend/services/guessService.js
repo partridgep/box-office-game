@@ -1,7 +1,7 @@
 const db = require('../models');
 const { Guess } = db;
 
-const createGuess = async (req, res) => {
+const createGuess = async (req) => {
   try {
     const { user_id, movie_id, domestic_opening, international_opening, final_domestic, final_international, rotten_tomatoes_score } = req.body;
 
@@ -19,9 +19,11 @@ const createGuess = async (req, res) => {
       rotten_tomatoes_score,
     });
 
-    res.status(201).json({ message: "Guess submitted successfully!", guess: newGuess });
+    console.log("newGuess", newGuess)
+
+    return newGuess;
   } catch (error) {
-    res.status(500).json({ error: "Error submitting guess" });
+    throw new Error("Error posting guess: " + error.message);
   }
 };
 

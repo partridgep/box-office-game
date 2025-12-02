@@ -1,0 +1,14 @@
+.user-greeting {
+    text-align: end;
+    width: min-content;
+    margin-left: auto;
+}
+
+.user-greeting p {
+    display: inline-block;
+    width: max-content;
+}
+
+.user-greeting button {
+    width: max-content;
+}
