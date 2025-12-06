@@ -27,6 +27,27 @@ const createGuess = async (req) => {
   }
 };
 
+const fetchGuessesForUser = async (user_id) => {
+
+  try {
+
+    console.log("user_id: ", user_id)
+
+    if (!user_id) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    const guesses = await Guess.findAll({ where: { user_id } });
+
+    const plainGuesses = guesses.map(guess => guess.get({ plain: true }));
+    return plainGuesses;
+
+   } catch (error) {
+    throw new Error("Error fetching guesses: " + error.message);
+  }
+};
+
 module.exports = {
-  createGuess
+  createGuess,
+  fetchGuessesForUser
 };

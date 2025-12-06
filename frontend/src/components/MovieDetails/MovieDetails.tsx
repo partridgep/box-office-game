@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import GuessForm from "../MovieGuessForm/MovieGuessForm";
 import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/movies.service';
 import { useMovieStore } from '../../store/useMovieStore';
+import { useGuessStore } from '../../store/useGuessStore';
 import { MovieData, SavedMovie } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieDetails.module.css';
@@ -35,6 +36,11 @@ const MovieDetails = () => {
   const isInDatabase = useMemo(() => (
     id ? Boolean(movies[id]) : false)
   ,[id, movies]);
+
+  const movieId = movie?.id;
+  const loggedGuess = useGuessStore((state) =>
+    movieId && isInDatabase ? state.guesses[movieId] : undefined
+  );
 
   useEffect(() => {
     if (!id || Object.keys(movies).length === 0) return; // Wait for `movies` to load
@@ -121,9 +127,18 @@ const MovieDetails = () => {
         <p>Not in database</p>
       }
       <img className={styles['poster']} src={movie.poster} alt={`${movie.title} Poster`} />
-      { isInDatabase && movie && movie.id &&
+
+      { loggedGuess && isInDatabase && movie && movie.id &&
+        <div className={styles['movie-data']}>
+          <p><strong>All data:</strong></p>
+          <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div>
+        </div>
+      }
+
+      { isInDatabase && movie && movie.id && !loggedGuess &&
         <GuessForm movieId={movie.id} />
       }
+
       <div className={styles['movie-btns']}>
         <button
           onClick={() => handleMovieExistence(movie)}

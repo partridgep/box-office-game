@@ -28,9 +28,22 @@ export type MovieData = {
   id: string | null,
 };
 
-export type SavedMovie  = {
+export type SavedMovie = {
   id: string,
   createdAt: string,
   updatedAt: string,
 }
 & MovieData
+
+export type Guess = {
+  id: string,
+  user_id: string,
+  movie_id: string,
+  domestic_opening: number,
+  international_opening: number,
+  final_domestic: number,
+  final_international: number,
+  rotten_tomatoes_score: number,
+  createdAt: string,
+  updatedAt: string,
+};
