@@ -23,9 +23,8 @@ module.exports = (sequelize, DataTypes) => {
       unique: true,
       allowNull: false,
     },
-    access_key: {
+    access_key_hash: {
       type: DataTypes.STRING,
-      unique: true,
       allowNull: false,
     },
     name: {

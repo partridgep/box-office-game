@@ -130,7 +130,7 @@ const MovieDetails = () => {
 
       { loggedGuess && isInDatabase && movie && movie.id &&
         <div className={styles['movie-data']}>
-          <p><strong>All data:</strong></p>
+          <p><strong>Your predictions:</strong></p>
           <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div>
         </div>
       }

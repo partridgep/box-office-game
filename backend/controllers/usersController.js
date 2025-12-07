@@ -9,8 +9,17 @@ const saveUser = async (req, res) => {
     try {
         const savedUser = await createUser(req);
         console.log("savedUser", savedUser)
-        res.status(201).json({ message: "User created successfully!", user: savedUser });
+        res.status(201).json({
+          status: 201,
+          message: "User created successfully!",
+          user: {
+            id: savedUser.id,
+            name: savedUser.name,
+            short_id: savedUser.short_id,
+          }
+        });
     } catch (error) {
+      console.log(error)
         res.status(500).json({ error: error.message });
     }
 };
