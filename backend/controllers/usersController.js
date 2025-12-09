@@ -2,6 +2,7 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const {
   createUser,
+  recoverUser
 } = require('../services/userService');
 
 const saveUser = async (req, res) => {
@@ -24,6 +25,26 @@ const saveUser = async (req, res) => {
     }
 };
 
+const recoverAccount = async (req, res) => {
+  try {
+    const { name, access_key } = req.body;
+
+    const user = await recoverUser({ name, access_key });
+
+    res.json({
+      message: "Account recovered",
+      user: {
+        id: user.id,
+        name: user.name,
+        short_id: user.short_id
+      }
+    });
+  } catch (err) {
+    res.status(401).json({ error: err.message });
+  }
+};
+
 module.exports = {
-  saveUser
+  saveUser,
+  recoverAccount
 };

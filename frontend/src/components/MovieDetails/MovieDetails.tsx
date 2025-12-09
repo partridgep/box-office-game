@@ -4,6 +4,7 @@ import GuessForm from "../MovieGuessForm/MovieGuessForm";
 import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/movies.service';
 import { useMovieStore } from '../../store/useMovieStore';
 import { useGuessStore } from '../../store/useGuessStore';
+import { useUserStore } from '../../store/useUserStore';
 import { MovieData, SavedMovie } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieDetails.module.css';
@@ -29,6 +30,7 @@ const refreshIcon : IconProp = "fa-solid fa-arrows-rotate"
 const MovieDetails = () => {
   const { id } = useParams<{ id: string }>();
   const { movies, addMovie, removeMovie } = useMovieStore();
+  const user = useUserStore((state) => state.user);
   const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -39,7 +41,7 @@ const MovieDetails = () => {
 
   const movieId = movie?.id;
   const loggedGuess = useGuessStore((state) =>
-    movieId && isInDatabase ? state.guesses[movieId] : undefined
+    movieId && user && isInDatabase ? state.guesses[movieId] : undefined
   );
 
   useEffect(() => {
@@ -128,7 +130,7 @@ const MovieDetails = () => {
       }
       <img className={styles['poster']} src={movie.poster} alt={`${movie.title} Poster`} />
 
-      { loggedGuess && isInDatabase && movie && movie.id &&
+      { loggedGuess && isInDatabase && movie && movie.id && user &&
         <div className={styles['movie-data']}>
           <p><strong>Your predictions:</strong></p>
           <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div>

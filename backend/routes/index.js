@@ -16,6 +16,7 @@ const {
 } = require('../controllers/guesses');
 const {
     saveUser,
+    recoverAccount
 } = require('../controllers/usersController');
 
 const router = express.Router();
@@ -32,5 +33,6 @@ router.post('/refresh-movies', updateAllMovies);
 router.post('/guess', postGuess);
 router.get('/guesses', getGuessesForUser);
 router.post('/users/save', saveUser);
+router.post('/users/recover', recoverAccount);
 
 module.exports = router;

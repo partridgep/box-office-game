@@ -14,3 +14,24 @@ export const saveUser = async (newUser: Record<string, any>) => {
 
   return response.json();
 };
+
+export const loginUser = async (
+    name: string,
+    access_key: string
+) => {
+  const response = await fetch('/api/users/recover', {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, access_key }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Could not find user");
+  }
+
+  return data;
+};

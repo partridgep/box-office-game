@@ -14,6 +14,7 @@ interface UserStore {
   user: User | null;
   createUser: (name: string) => Promise<void>;
   loadUser: () => Promise<void>;
+  logout: () => void; 
   setUser: (user: User) => void;
 }
 
@@ -21,6 +22,11 @@ export const useUserStore = create<UserStore>((set, get) => ({
   user: null,
   
   setUser: (user) => set({ user }),
+
+  logout: () => {
+    localStorage.removeItem("user");
+    set({ user: null });
+  },
 
   createUser: async (name) => {
     const id = uuidv4();
@@ -44,6 +50,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
         set({ user: newUser });
     } catch (err) {
         console.error('Failed to save user to backend:', err);
+        throw new Error("Error creating user: " + err);
     }
   },
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useUserStore } from '../../store/useUserStore';
+import { useGuessStore } from "../../store/useGuessStore";
 import UserSignup from "./../UserSignup/UserSignupPrompt";
 import UserConfirmation from "./../UserSignup/UserConfirmation";
 import { postGuess } from '../../services/guesses.service';
@@ -11,6 +12,8 @@ interface GuessFormProps {
 
 export default function GuessForm({ movieId }: GuessFormProps) {
   const user = useUserStore((state) => state.user);
+  const addGuess = useGuessStore((state) => state.addGuess);
+  
   const [formData, setFormData] = useState({
     domestic_opening: "",
     international_opening: "",
@@ -53,6 +56,8 @@ export default function GuessForm({ movieId }: GuessFormProps) {
     console.log(response)
 
     if (response.status == 201) {
+      const savedGuess = response.data;
+      addGuess(savedGuess);
       setMessage("Your guess has been submitted!");
       setFormData({
         domestic_opening: "",
