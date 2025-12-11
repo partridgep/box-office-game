@@ -79,7 +79,6 @@ const MovieSearch = () => {
 
   return (
     <div className={styles['movie-search']}>
-        <h1>Box office predictions</h1>
         <h2>Movies saved to database</h2>
         <button
             onClick={() => handleUpdateAllMovies()}

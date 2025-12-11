@@ -12,6 +12,7 @@ const {
 } = require('../controllers/movies');
 const {
     postGuess,
+    getGuessFromId,
     getGuessesForUser
 } = require('../controllers/guesses');
 const {
@@ -31,6 +32,7 @@ router.delete('/movie/delete', deleteMovieFromDB);
 router.get('/all-movies', getSavedMovies);
 router.post('/refresh-movies', updateAllMovies);
 router.post('/guess', postGuess);
+router.get('/guess/id/:guess_id', getGuessFromId);
 router.get('/guesses', getGuessesForUser);
 router.post('/users/save', saveUser);
 router.post('/users/recover', recoverAccount);

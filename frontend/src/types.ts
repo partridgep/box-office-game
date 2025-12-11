@@ -35,6 +35,12 @@ export type SavedMovie = {
 }
 & MovieData
 
+export interface GuessUser {
+  id: number;
+  name: string;
+  short_id: string;
+}
+
 export type Guess = {
   id: string,
   user_id: string,
@@ -46,4 +52,5 @@ export type Guess = {
   rotten_tomatoes_score: number,
   createdAt: string,
   updatedAt: string,
+  guess_user?: GuessUser; 
 };

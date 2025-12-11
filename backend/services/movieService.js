@@ -5,7 +5,7 @@ const { Movie } = db;
 
 // search for movies using OMDb API
 const searchMovies = async (search) => {
-    const response = await fetch(`http://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(search)}&type=movie&y=2025`);
+    const response = await fetch(`http://www.omdbapi.com/?apikey=${process.env.OMDB_API_KEY}&s=${encodeURIComponent(search)}&type=movie&y=2026`);
     const data = await response.json();
 
     if (data.Response === 'False') throw new Error(data.Error);

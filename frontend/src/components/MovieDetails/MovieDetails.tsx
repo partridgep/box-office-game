@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import GuessForm from "../MovieGuessForm/MovieGuessForm";
 import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/movies.service';
 import { useMovieStore } from '../../store/useMovieStore';
 import { useGuessStore } from '../../store/useGuessStore';
 import { useUserStore } from '../../store/useUserStore';
-import { MovieData, SavedMovie } from '../../types';
+import { getGuessFromId } from "../../services/guesses.service";
+import { MovieData, SavedMovie, Guess } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieDetails.module.css';
 
@@ -29,11 +30,15 @@ const refreshIcon : IconProp = "fa-solid fa-arrows-rotate"
 
 const MovieDetails = () => {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const fromGuessId = searchParams.get("fromGuess");
+
   const { movies, addMovie, removeMovie } = useMovieStore();
   const user = useUserStore((state) => state.user);
   const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [inviterGuess, setInviterGuess] = useState<Guess | undefined>(undefined);
 
   const isInDatabase = useMemo(() => (
     id ? Boolean(movies[id]) : false)
@@ -43,6 +48,7 @@ const MovieDetails = () => {
   const loggedGuess = useGuessStore((state) =>
     movieId && user && isInDatabase ? state.guesses[movieId] : undefined
   );
+  const guessId = loggedGuess ? loggedGuess.id : null
 
   useEffect(() => {
     if (!id || Object.keys(movies).length === 0) return; // Wait for `movies` to load
@@ -53,12 +59,26 @@ const MovieDetails = () => {
     } else {
         fetchMovieDetails();
     }
-}, [id, movies]);
+  }, [id, movies]);
+
+  useEffect(() => {
+    if (fromGuessId) {
+      loadInviterGuess()
+    }
+  }, [fromGuessId]);
 
   const navigate = useNavigate();
 
   function goToHomepage() {
     navigate(`/`);
+  }
+
+  async function loadInviterGuess() {
+    if (!fromGuessId) return;
+    console.log("from guess ID: ", fromGuessId)
+    const inviterGuess = await getGuessFromId(fromGuessId);
+    console.log({ inviterGuess });
+    setInviterGuess(inviterGuess.data);
   }
 
   const fetchMovieDetails = async () => {
@@ -132,6 +152,12 @@ const MovieDetails = () => {
 
       { loggedGuess && isInDatabase && movie && movie.id && user &&
         <div className={styles['movie-data']}>
+          <button onClick={() => {
+            const shareUrl = `${window.location.origin}/movie/${id}?fromGuess=${guessId}`;
+            navigator.clipboard.writeText(shareUrl);
+          }}>
+            Copy Share Link
+          </button>
           <p><strong>Your predictions:</strong></p>
           <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div>
         </div>
@@ -139,6 +165,20 @@ const MovieDetails = () => {
 
       { isInDatabase && movie && movie.id && !loggedGuess &&
         <GuessForm movieId={movie.id} />
+      }
+
+      { inviterGuess
+        && loggedGuess
+        // && (inviterGuess.user_id !== loggedGuess.user_id)
+        &&
+          <div className={styles['movie-data']}>
+            {inviterGuess?.guess_user && (
+              <p>
+                <strong>{inviterGuess.guess_user.name}'s predictions:</strong>
+              </p>
+            )}
+            <div className={styles['json-data']}><pre>{JSON.stringify(inviterGuess, null, 2)}</pre></div>
+          </div>
       }
 
       <div className={styles['movie-btns']}>

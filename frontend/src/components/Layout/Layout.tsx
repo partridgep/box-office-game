@@ -21,7 +21,8 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className={styles['layout']}>
       {/* Header */}
-      <header>
+      <header className={styles['header']}>
+        <h1>Box Office Predict</h1>
         <div className={styles['user-greeting']}>
             {user ? (
               <div>

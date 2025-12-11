@@ -1,5 +1,5 @@
 const db = require('../models');
-const { Guess } = db;
+const { Guess, User } = db;
 
 const createGuess = async (req) => {
   try {
@@ -27,6 +27,33 @@ const createGuess = async (req) => {
   }
 };
 
+const fetchGuessFromId = async (guess_id) => {
+
+  try {
+
+    console.log("guess_id: ", guess_id)
+
+    if (!guess_id) {
+      return res.status(400).json({ error: "Guess ID is required" });
+    }
+
+    const guess = await Guess.findOne({
+      where: { id: guess_id },
+      include: [
+        {
+          model: User,
+          as: "guess_user",
+          attributes: ["id", "name", "short_id"],
+        },
+      ],
+    });
+    return guess;
+
+   } catch (error) {
+    throw new Error("Error fetching guess: " + error.message);
+  }
+};
+
 const fetchGuessesForUser = async (user_id) => {
 
   try {
@@ -49,5 +76,6 @@ const fetchGuessesForUser = async (user_id) => {
 
 module.exports = {
   createGuess,
+  fetchGuessFromId,
   fetchGuessesForUser
 };
