@@ -14,7 +14,6 @@ export default function Layout({ children }: LayoutProps) {
   const logout = useUserStore((s) => s.logout);
 
   function toggleLoginDialog() {
-    console.log("show login")
     showLoginDialog(true)
   }
 

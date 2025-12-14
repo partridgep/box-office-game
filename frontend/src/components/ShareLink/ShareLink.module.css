@@ -1,0 +1,63 @@
+.dialog {
+    border-radius: 7px;
+    padding: 2rem;
+    background-color: rgb(237, 237, 237);
+}
+
+.dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.4); /* Optional: Adds a semi-transparent dark overlay */
+  backdrop-filter: blur(2px); /* Applies a 5px blur to the background behind the dialog */
+}
+
+.dialog h2 {
+    color:rgb(0, 0, 0)
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+}
+
+.form h2 {
+    margin-top: 0;
+    margin-bottom: 2.5rem;
+}
+
+.copy-link {
+    width: 100%;
+    display: flex;
+    margin-bottom: 2rem;
+    flex-wrap: nowrap;
+}
+
+.copy-link input {
+    width: 70%;
+}
+
+.copy-link button {
+    color: rgb(21, 84, 147);
+    background-color: white;
+    border: 2px solid rgb(20, 103, 185);
+    width: 20%;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    align-items: center;
+}
+
+.buttons button {
+    background-color: rgb(39, 39, 39);
+    color: white;
+}
+
+.error-msg {
+    color: red;
+    margin-bottom: 1rem;
+}

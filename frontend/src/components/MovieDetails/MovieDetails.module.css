@@ -87,3 +87,15 @@ h1 {
   font-size: 0.9rem;
   padding: 0 1rem;
 }
+
+.invitation {
+  font-size: 22px;
+  font-weight: 500;
+  color:rgb(255, 216, 118)
+}
+
+.guess-who {
+  text-transform: uppercase;
+  font-size: 26px;
+  font-weight: 800;
+}

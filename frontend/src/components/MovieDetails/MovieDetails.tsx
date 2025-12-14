@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import GuessForm from "../MovieGuessForm/MovieGuessForm";
+import ShareLink from "../ShareLink/ShareLink";
+import MoviePredictions from '../MoviePredictions/MoviePredictions';
 import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/movies.service';
 import { useMovieStore } from '../../store/useMovieStore';
 import { useGuessStore } from '../../store/useGuessStore';
@@ -39,6 +41,7 @@ const MovieDetails = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [inviterGuess, setInviterGuess] = useState<Guess | undefined>(undefined);
+  const [showingShareDialog, showShareDialog] = useState(false);
 
   const isInDatabase = useMemo(() => (
     id ? Boolean(movies[id]) : false)
@@ -130,6 +133,10 @@ const MovieDetails = () => {
     }
   };
 
+  function toggleShareLinkDialog(bool: boolean) {
+    showShareDialog(bool);
+  }
+
   if (!movie) {
     return <div>Loading...</div>;
   }
@@ -153,31 +160,46 @@ const MovieDetails = () => {
       { loggedGuess && isInDatabase && movie && movie.id && user &&
         <div className={styles['movie-data']}>
           <button onClick={() => {
-            const shareUrl = `${window.location.origin}/movie/${id}?fromGuess=${guessId}`;
-            navigator.clipboard.writeText(shareUrl);
+            toggleShareLinkDialog(true);
           }}>
             Copy Share Link
           </button>
-          <p><strong>Your predictions:</strong></p>
-          <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div>
+          <p className={styles['guess-who']}>Your predictions</p>
+          <MoviePredictions guess={loggedGuess} />
+          {/* <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div> */}
         </div>
       }
 
+      { showingShareDialog &&
+        <ShareLink
+          shareLink={`${window.location.origin}/movie/${id}?fromGuess=${guessId}`}
+          onClose={() => toggleShareLinkDialog(false)}
+         />
+      }
+
       { isInDatabase && movie && movie.id && !loggedGuess &&
-        <GuessForm movieId={movie.id} />
+        <div>
+          { inviterGuess
+            && (user ? inviterGuess.user_id !== user.id : true)
+            && 
+            <p className={styles['invitation']}>{ inviterGuess?.guess_user?.name } wants you to predict how well this movie will do!</p>
+          }
+          <GuessForm movieId={movie.id} />
+        </div>
       }
 
       { inviterGuess
         && loggedGuess
-        // && (inviterGuess.user_id !== loggedGuess.user_id)
+        && (inviterGuess.user_id !== loggedGuess.user_id)
         &&
           <div className={styles['movie-data']}>
             {inviterGuess?.guess_user && (
-              <p>
-                <strong>{inviterGuess.guess_user.name}'s predictions:</strong>
+              <p className={styles['guess-who']}>
+                {inviterGuess.guess_user.name}'s predictions
               </p>
             )}
-            <div className={styles['json-data']}><pre>{JSON.stringify(inviterGuess, null, 2)}</pre></div>
+            <MoviePredictions guess={inviterGuess} />
+            {/* <div className={styles['json-data']}><pre>{JSON.stringify(inviterGuess, null, 2)}</pre></div> */}
           </div>
       }
 
