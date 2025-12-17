@@ -81,6 +81,7 @@ const getAllSavedMovies = async () => {
 };
 
 const updateMovieDetails = async (imdbID, updatedData) => {
+  console.log("updated data", updatedData)
     const movie = await Movie.findOne({ where: { imdbID } });
     if (!movie) throw new Error('Movie not found');
 

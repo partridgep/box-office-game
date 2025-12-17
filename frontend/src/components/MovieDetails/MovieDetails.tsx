@@ -267,6 +267,23 @@ const MovieDetails = () => {
         {movie.domesticOpening &&
           <p><strong>Domestic Opening:</strong> {movie.domesticOpening}</p>
         }
+        {movie.internationalOpening &&
+          <p><strong>International Opening:</strong> {movie.internationalOpening}</p>
+        }
+        {movie.domesticOpening && movie.internationalOpening && (
+          (() => {
+            // Remove non-digit characters and parse as numbers
+            const domestic = Number(movie.domesticOpening.replace(/[^0-9.-]+/g,""));
+            const international = Number(movie.internationalOpening.replace(/[^0-9.-]+/g,""));
+            const worldwide = domestic + international;
+
+            return (
+              <p>
+                <strong>Worldwide Opening:</strong> ${worldwide.toLocaleString()}
+              </p>
+            );
+          })()
+        )}
         {movie.budget &&
           <p><strong>Budget:</strong> {movie.budget}</p>
         }

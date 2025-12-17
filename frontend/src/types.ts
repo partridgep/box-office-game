@@ -11,6 +11,7 @@ export type MovieData = {
   imdbRating: number | null,
   imdbVotes: number | null,
   internationalGross: string | null,
+  internationalOpening: string | null,
   language: string,
   metacriticRating: string | null | undefined,
   metascore: string | null | undefined,

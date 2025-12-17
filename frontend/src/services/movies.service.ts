@@ -36,6 +36,8 @@ export const updateMovieDetails = async (movieData: Record<string, any>) => {
       body: JSON.stringify(movieData),
   });
 
+  console.log(response)
+
   if (!response.ok) {
       throw new Error('Failed to update movie details');
   }

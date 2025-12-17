@@ -58,6 +58,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    internationalOpening: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     budget: {
       type: DataTypes.STRING,
       allowNull: true,
