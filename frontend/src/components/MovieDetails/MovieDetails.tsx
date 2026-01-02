@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import GuessForm from "../MovieGuessForm/MovieGuessForm";
 import ShareLink from "../ShareLink/ShareLink";
 import MoviePredictions from '../MoviePredictions/MoviePredictions';
+import GuessComparisonResults from '../GuessComparisonResults/GuessComparisonResults';
 import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/movies.service';
 import { useMovieStore } from '../../store/useMovieStore';
 import { useGuessStore } from '../../store/useGuessStore';
@@ -167,6 +168,11 @@ const MovieDetails = () => {
           <p className={styles['guess-who']}>Your predictions</p>
           <MoviePredictions guess={loggedGuess} />
           {/* <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div> */}
+          <GuessComparisonResults
+              movie={movie}
+              userGuess={loggedGuess}
+              friendGuess={inviterGuess}
+            />
         </div>
       }
 

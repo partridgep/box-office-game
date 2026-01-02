@@ -55,3 +55,31 @@ export type Guess = {
   updatedAt: string,
   guess_user?: GuessUser; 
 };
+
+export type MovieActuals = {
+  domesticOpening: number | null;
+  internationalOpening: number | null;
+  worldwideOpening: number | null;
+  finalDomestic: number | null;
+  finalInternational: number | null;
+  worldwideFinal: number | null;
+  rottenTomatoesScore: number | null;
+};
+
+export type GuessComparison = {
+  field: string;
+  guess: number;
+  actual: number;
+  delta: number;
+  percentError: number;
+};
+
+export type GuessVsGuess = {
+  field: string;
+  guessA: number;
+  guessB: number;
+  actual: number;
+  winner: "A" | "B" | "tie";
+};
+
+
