@@ -167,6 +167,18 @@ const MovieDetails = () => {
           </button>
           <p className={styles['guess-who']}>Your predictions</p>
           <MoviePredictions guess={loggedGuess} />
+          { inviterGuess
+            && (inviterGuess.user_id !== loggedGuess.user_id)
+            &&
+              <div className={styles['movie-data']}>
+                {inviterGuess?.guess_user && (
+                  <p className={styles['guess-who']}>
+                    {inviterGuess.guess_user.name}'s predictions
+                  </p>
+                )}
+                <MoviePredictions guess={inviterGuess} />
+              </div>
+          }
           {/* <div className={styles['json-data']}><pre>{JSON.stringify(loggedGuess, null, 2)}</pre></div> */}
           <GuessComparisonResults
               movie={movie}
@@ -175,6 +187,7 @@ const MovieDetails = () => {
             />
         </div>
       }
+
 
       { showingShareDialog &&
         <ShareLink
@@ -192,21 +205,6 @@ const MovieDetails = () => {
           }
           <GuessForm movieId={movie.id} />
         </div>
-      }
-
-      { inviterGuess
-        && loggedGuess
-        && (inviterGuess.user_id !== loggedGuess.user_id)
-        &&
-          <div className={styles['movie-data']}>
-            {inviterGuess?.guess_user && (
-              <p className={styles['guess-who']}>
-                {inviterGuess.guess_user.name}'s predictions
-              </p>
-            )}
-            <MoviePredictions guess={inviterGuess} />
-            {/* <div className={styles['json-data']}><pre>{JSON.stringify(inviterGuess, null, 2)}</pre></div> */}
-          </div>
       }
 
       <div className={styles['movie-btns']}>

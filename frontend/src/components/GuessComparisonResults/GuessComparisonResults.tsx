@@ -17,6 +17,7 @@ function getMovieActuals(movie: MovieData) {
 
   const finalDomestic = parseMoney(movie.domesticGross);
   const finalInternational = parseMoney(movie.internationalGross);
+  console.log(movie, movie.rottenTomatoesScore, Number(movie.rottenTomatoesScore))
 
   return {
     domesticOpening,
@@ -33,8 +34,9 @@ function getMovieActuals(movie: MovieData) {
         ? finalDomestic + finalInternational
         : null,
 
+
     rottenTomatoesScore: movie.rottenTomatoesScore
-      ? Number(movie.rottenTomatoesScore)
+      ? Number(movie.rottenTomatoesScore.split("%")?.[0])
       : null,
   };
 }
@@ -96,6 +98,7 @@ function compareTwoGuesses(
     b: number,
     actual: number | null
   ): GuessVsGuess | null {
+    console.log({field, actual})
     if (actual == null) return null;
 
     const deltaA = Math.abs(a - actual);
@@ -115,10 +118,34 @@ function compareTwoGuesses(
 
   return [
     compare(
+      "Domestic Opening",
+      millionsToDollars(Number(guessA.domestic_opening))!,
+      millionsToDollars(Number(guessB.domestic_opening))!,
+      actuals.domesticOpening
+    ),
+    compare(
+      "International Opening",
+      millionsToDollars(Number(guessA.international_opening))!,
+      millionsToDollars(Number(guessB.international_opening))!,
+      actuals.internationalOpening
+    ),
+    compare(
       "Worldwide Opening",
       millionsToDollars(Number(guessA.domestic_opening) + Number(guessA.international_opening))!,
       millionsToDollars(Number(guessB.domestic_opening) + Number(guessB.international_opening))!,
       actuals.worldwideOpening
+    ),
+    compare(
+      "Domestic Final",
+      millionsToDollars(Number(guessA.final_domestic))!,
+      millionsToDollars(Number(guessB.final_domestic))!,
+      actuals.finalDomestic
+    ),
+    compare(
+      "International Final",
+      millionsToDollars(Number(guessA.final_international))!,
+      millionsToDollars(Number(guessB.final_international))!,
+      actuals.finalInternational
     ),
     compare(
       "Worldwide Final",
@@ -163,10 +190,9 @@ export default function GuessComparisonResults({
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Metric</th>
+              <th>Category</th>
               <th>Your Guess</th>
               <th>Actual</th>
-              <th>Error</th>
               <th>% Off</th>
             </tr>
           </thead>
@@ -174,13 +200,9 @@ export default function GuessComparisonResults({
             {userResults.map((row) => (
               <tr key={row.field}>
                 <td>{row.field}</td>
-                <td>{formatMillions(row.guess)}</td>
-                <td>{formatMillions(row.actual)}</td>
-                <td className={row.delta > 0 ? styles.over : styles.under}>
-                  {row.delta > 0 ? "+" : ""}
-                  {row.delta}
-                </td>
-                <td>{row.percentError.toFixed(1)}%</td>
+                <td>{row.field == 'Rotten Tomatoes' ? row.guess + "%" : formatMillions(row.guess)}</td>
+                <td>{row.field == 'Rotten Tomatoes' ? row.actual + "%" : formatMillions(row.actual)}</td>
+                <td>{row.delta > 0 ? "+" : "-"}{row.percentError.toFixed(1)}%</td>
               </tr>
             ))}
           </tbody>
@@ -194,9 +216,10 @@ export default function GuessComparisonResults({
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Metric</th>
+                <th>Category</th>
                 <th>You</th>
-                <th>Them</th>
+                <th>{friendGuess.guess_user?.name ?? "Them"}</th>
+                <th>Actual</th>
                 <th>Winner</th>
               </tr>
             </thead>
@@ -204,8 +227,9 @@ export default function GuessComparisonResults({
               {vsResults.map((row) => (
                 <tr key={row.field}>
                   <td>{row.field}</td>
-                  <td>{formatMillions(row.guessA)}</td>
-                  <td>{formatMillions(row.guessB)}</td>
+                  <td>{row.field == 'Rotten Tomatoes' ? row.guessA + "%" : formatMillions(row.guessA)}</td>
+                  <td>{row.field == 'Rotten Tomatoes' ? row.guessB + "%" : formatMillions(row.guessB)}</td>
+                  <td>{row.field == 'Rotten Tomatoes' ? row.actual + "%" : formatMillions(row.actual)}</td>
                   <td>
                     {row.winner === "tie"
                       ? "Tie"
