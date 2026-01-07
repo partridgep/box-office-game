@@ -3,7 +3,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const {
   createGuess,
   fetchGuessFromId,
-  fetchGuessesForUser
+  fetchGuessesForUser,
+  fetchAllGuessesForMovie
 } = require('../services/guessService');
 
 const postGuess = async (req, res) => {
@@ -60,8 +61,29 @@ const getGuessesForUser = async (req, res) => {
   }
 };
 
+const getAllGuessesForMovie = async (req, res) => {
+  const { movie_id } = req.params;
+  console.log("movie_id: ", movie_id)
+
+  if (!movie_id) {
+      return res.status(400).json({ error: 'movie_id parameter is required' });
+  }
+
+  try {
+    const guesses = await fetchAllGuessesForMovie(movie_id);
+    res.status(200).json({
+        status: 200,
+        message: "Fetched guesses for movie",
+        data: guesses
+      });
+  } catch (error) {
+      res.status(500).json({ error: error.message || 'Failed to fetch all guesses for movie' });
+  }
+};
+
 module.exports = {
   postGuess,
   getGuessFromId,
-  getGuessesForUser
+  getGuessesForUser,
+  getAllGuessesForMovie
 };

@@ -10,3 +10,16 @@
     border: 1px solid;
     padding: 8px 25px;
 }
+
+.percentile {
+  color: #666;
+  font-size: 0.85em;
+}
+
+.overall {
+  margin-bottom: 1.5rem;
+}
+
+.json-data {
+    font-size: 10px;
+}

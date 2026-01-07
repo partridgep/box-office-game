@@ -8,7 +8,7 @@ import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } fr
 import { useMovieStore } from '../../store/useMovieStore';
 import { useGuessStore } from '../../store/useGuessStore';
 import { useUserStore } from '../../store/useUserStore';
-import { getGuessFromId } from "../../services/guesses.service";
+import { getGuessFromId, getAllGuessesForMovie } from "../../services/guesses.service";
 import { MovieData, SavedMovie, Guess } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieDetails.module.css';
@@ -42,6 +42,7 @@ const MovieDetails = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [inviterGuess, setInviterGuess] = useState<Guess | undefined>(undefined);
+  const [allMovieGuesses, setAllMovieGuesses] = useState<Guess[]>([]);
   const [showingShareDialog, showShareDialog] = useState(false);
 
   const isInDatabase = useMemo(() => (
@@ -60,6 +61,7 @@ const MovieDetails = () => {
     if (movies[id]) {
         console.log("movie already in database", movies[id]);
         setMovie(movies[id]);
+        loadAllMovieGuesses()
     } else {
         fetchMovieDetails();
     }
@@ -79,10 +81,14 @@ const MovieDetails = () => {
 
   async function loadInviterGuess() {
     if (!fromGuessId) return;
-    console.log("from guess ID: ", fromGuessId)
     const inviterGuess = await getGuessFromId(fromGuessId);
-    console.log({ inviterGuess });
     setInviterGuess(inviterGuess.data);
+  }
+
+  async function loadAllMovieGuesses() {
+    if (!movieId || !isInDatabase) return;
+    const allGuesses = await getAllGuessesForMovie(movieId);
+    setAllMovieGuesses(allGuesses.data);
   }
 
   const fetchMovieDetails = async () => {
@@ -184,6 +190,7 @@ const MovieDetails = () => {
               movie={movie}
               userGuess={loggedGuess}
               friendGuess={inviterGuess}
+              allMovieGuesses={allMovieGuesses}
             />
         </div>
       }

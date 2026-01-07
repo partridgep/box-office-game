@@ -82,4 +82,23 @@ export type GuessVsGuess = {
   winner: "A" | "B" | "tie";
 };
 
+export type CategoryLeaderboard = {
+  field: string;
+  totalGuesses: number;
+  userRank: number; 
+  percentile: number;
+  bestError: number;
+  medianError: number;
+};
+
+export type OverallPerformance = {
+  overallRank: number;
+  totalGuesses: number;
+  percentile: number;
+};
+
+
+
+
+
 

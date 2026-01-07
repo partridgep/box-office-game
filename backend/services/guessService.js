@@ -74,8 +74,36 @@ const fetchGuessesForUser = async (user_id) => {
   }
 };
 
+const fetchAllGuessesForMovie = async (movie_id) => {
+
+  try {
+
+    console.log("movie_id: ", movie_id)
+
+    if (!movie_id) {
+      return res.status(400).json({ error: "Movie ID is required" });
+    }
+
+    const guess = await Guess.findAll({
+      where: { movie_id: movie_id },
+      include: [
+        {
+          model: User,
+          as: "guess_user",
+          attributes: ["id", "name", "short_id"],
+        },
+      ],
+    });
+    return guess;
+
+   } catch (error) {
+    throw new Error("Error fetching guess: " + error.message);
+  }
+};
+
 module.exports = {
   createGuess,
   fetchGuessFromId,
-  fetchGuessesForUser
+  fetchGuessesForUser,
+  fetchAllGuessesForMovie
 };
