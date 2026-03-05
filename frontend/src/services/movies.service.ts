@@ -4,8 +4,8 @@ export const searchMovies = async (search: string) => {
   return response.json();
 };
 
-export const getMovieDetails = async (imdbID: string) => {
-  const response = await fetch(`/api/movie?id=${imdbID}`);
+export const getMovieDetails = async (tmdbID: string) => {
+  const response = await fetch(`/api/movie?id=${tmdbID}`);
   if (!response.ok) throw new Error('Failed to fetch movie');
   return response.json();
 };
@@ -27,8 +27,8 @@ export const saveMovieDetails = async (movieData: Record<string, any>) => {
 };
 
 export const updateMovieDetails = async (movieData: Record<string, any>) => {
-  console.log("updateMovieDetails")
-  const response = await fetch(`/api/movie/${movieData.imdbID}`, {
+  console.log("updateMovieDetails", movieData)
+  const response = await fetch(`/api/movie/${movieData.tmdbID}`, {
       method: 'PUT',
       headers: {
           'Content-Type': 'application/json',

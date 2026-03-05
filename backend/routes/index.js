@@ -28,7 +28,7 @@ router.get('/rotten-tomatoes', getRottenTomatoesScore);
 router.get('/search-movies', getMovieSearch);
 router.get('/movie', getMovieDetails);
 router.post('/movie/save', saveMovieDetails);
-router.put('/movie/:imdbID', updateMovie);
+router.put('/movie/:tmdbID', updateMovie);
 router.delete('/movie/delete', deleteMovieFromDB);
 router.get('/all-movies', getSavedMovies);
 router.post('/refresh-movies', updateAllMovies);

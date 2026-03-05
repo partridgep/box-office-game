@@ -17,7 +17,7 @@ const MovieResult = ({
       className={styles['movie-btn']}
       onClick={onSelect}
     >
-      <img src={movie.poster} alt={`${movie.title} Poster`} style={{ width: '100px', height: '150px' }} />
+      <img src={`https://image.tmdb.org/t/p/w500${movie.poster}`} alt={`${movie.title} Poster`} style={{ width: '100px', height: '150px' }} />
       <div>
         <h3>{movie.title}</h3>
         <p>{new Date(movie.released).toDateString()}</p>

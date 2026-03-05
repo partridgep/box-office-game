@@ -162,7 +162,7 @@ const MovieDetails = () => {
         : 
         <p>Not in database</p>
       }
-      <img className={styles['poster']} src={movie.poster} alt={`${movie.title} Poster`} />
+      <img className={styles['poster']} src={`https://image.tmdb.org/t/p/original${movie.poster}`} alt={`${movie.title} Poster`} />
 
       { loggedGuess && isInDatabase && movie && movie.id && user &&
         <div className={styles['movie-data']}>

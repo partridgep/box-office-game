@@ -3,32 +3,59 @@ const db = require('../models');
 const { Movie } = db;
 
 async function runMovieRefresh() {
+
   console.log("Running movie refresh...");
 
+  const BATCH_SIZE = 5;
+
   try {
+
     const movies = await Movie.findAll();
 
-    const updatePromises = movies.map(async (movie) => {
-      try {
-        const updatedMovieData = await getMovieById(movie.imdbID);
+    for (let i = 0; i < movies.length; i += BATCH_SIZE) {
 
-        if (updatedMovieData) {
-          await updateMovieDetails(movie.imdbID, updatedMovieData);
-          console.log(`Updated: ${movie.title}`);
-        }
-      } catch (err) {
-        console.error(`Failed to update movie ${movie.title}:`, err);
-      }
-    });
+      const batch = movies.slice(i, i + BATCH_SIZE);
 
-    await Promise.all(updatePromises);
+      console.log(`Processing batch ${i / BATCH_SIZE + 1}`);
+
+      await Promise.all(
+        batch.map(async (movie) => {
+
+          try {
+
+            const updatedMovieData = await getMovieById(movie.tmdbID);
+
+            if (updatedMovieData) {
+
+              await updateMovieDetails(movie.tmdbID, updatedMovieData);
+
+              console.log(`Updated: ${movie.title}`);
+
+            }
+
+          } catch (err) {
+
+            console.error(`Failed to update movie ${movie.title}:`, err);
+
+          }
+
+        })
+      );
+
+    }
 
     console.log("Movie refresh completed.");
+
     return { success: true };
+
   } catch (err) {
+
     console.error("Error during movie refresh:", err);
+
     return { success: false, error: err };
+
   }
+
 }
 
 module.exports = runMovieRefresh;

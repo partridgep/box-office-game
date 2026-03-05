@@ -8,6 +8,7 @@ export type MovieData = {
   domesticOpening: string | null,
   genre: string,
   imdbID: string,
+  tmdbID: string,
   imdbRating: number | null,
   imdbVotes: number | null,
   internationalGross: string | null,

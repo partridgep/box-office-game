@@ -22,7 +22,7 @@ type Movie = {
     Title: string;
     Year: string;
     Poster: string;
-    imdbID: string;
+    tmdbID: string;
   }
 
 const MovieSearch = () => {
@@ -33,9 +33,9 @@ const MovieSearch = () => {
     const { movies, setMovies } = useMovieStore();
     const [parent] = useAutoAnimate()
 
-      useEffect(() => {
+    useEffect(() => {
         setSavedMovies(Object.values(movies)); // Convert object to array and update state
-      }, [movies]); // Runs when `movies` changes
+    }, [movies]); // Runs when `movies` changes
 
     const handleSearch = async () => {
         try {
@@ -48,14 +48,14 @@ const MovieSearch = () => {
 
     const navigate = useNavigate();
 
-    const onMovieSelect = (imdbID: string) => {
-        console.log('Selected Movie ID:', imdbID);
-        navigate(`/movie/${imdbID}`);
+    const onMovieSelect = (tmdbID: string) => {
+        console.log('Selected Movie ID:', tmdbID);
+        navigate(`/movie/${tmdbID}`);
     };
 
     const onSavedMovieSelect = (movie: MovieData) => {
         console.log('Saved movie:', movie);
-        navigate(`/movie/${movie.imdbID}`);
+        navigate(`/movie/${movie.tmdbID}`);
     };
 
     const handleUpdateAllMovies = async () => {
@@ -126,12 +126,12 @@ const MovieSearch = () => {
             {movieResults &&
                 movieResults.map(movie => (
                 <MovieResult
-                    key={movie.imdbID}
+                    key={movie.tmdbID}
                     title={movie.Title}
                     year={movie.Year}
                     poster={movie.Poster}
-                    id={movie.imdbID}
-                    onSelect={() => onMovieSelect(movie.imdbID)}
+                    id={movie.tmdbID}
+                    onSelect={() => onMovieSelect(movie.tmdbID)}
                 />
                 ))
             }

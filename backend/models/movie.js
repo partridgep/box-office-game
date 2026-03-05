@@ -23,6 +23,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       unique: true,
     },
+    tmdbID: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      unique: true,
+    },
     title: {
       type: DataTypes.STRING,
       allowNull: false,

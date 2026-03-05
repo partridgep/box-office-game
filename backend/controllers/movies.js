@@ -10,7 +10,7 @@ const {
 } = require('../services/movieService');
 const runMovieRefresh = require("../jobs/runMovieRefresh");
 
-// search for movies using OMDb API
+// search for movies
 const getMovieSearch = async (req, res) => {
     const { search } = req.query;
 
@@ -20,6 +20,7 @@ const getMovieSearch = async (req, res) => {
 
     try {
         const movies = await searchMovies(search);
+        console.log("controller response", movies)
         res.json(movies);
     } catch (error) {
         res.status(500).json({ error: error.message || 'Failed to fetch movies from OMDb API' });
@@ -83,16 +84,17 @@ const getSavedMovies = async (req, res) => {
 
 const updateMovie = async (req, res) => {
     console.log("update MOVIE")
-    const { imdbID } = req.params;
+    console.log(req.params)
+    const { tmdbID } = req.params;
     const updatedData = req.body;
-    console.log(imdbID, updatedData)
+    console.log(tmdbID, updatedData)
 
-    if (!imdbID || !updatedData) {
-        return res.status(400).json({ error: 'imdbID and updated data are required' });
+    if (!tmdbID || !updatedData) {
+        return res.status(400).json({ error: 'tmdbID and updated data are required' });
     }
 
     try {
-        const updatedMovie = await updateMovieDetails(imdbID, updatedData);
+        const updatedMovie = await updateMovieDetails(tmdbID, updatedData);
         res.status(200).json({ message: 'Movie updated successfully', movie: updatedMovie });
     } catch (error) {
         res.status(500).json({ error: error.message || 'Failed to update movie' });

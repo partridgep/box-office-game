@@ -13,7 +13,7 @@ export const useMovieStore = create<MovieStore>((set) => ({
 
   setMovies: (movies) => {
     const movieObject = movies.reduce<Record<string, MovieData>>((acc, movie) => {
-      acc[movie.imdbID] = movie;
+      acc[movie.tmdbID] = movie;
       return acc;
     }, {});
     set({ movies: movieObject })
@@ -21,14 +21,14 @@ export const useMovieStore = create<MovieStore>((set) => ({
 
   addMovie: (movie) =>
     set((state) => ({
-      movies: { ...state.movies, [movie.imdbID]: movie },
+      movies: { ...state.movies, [movie.tmdbID]: movie },
     })
   ),
 
-  removeMovie: (imdbID) =>
+  removeMovie: (tmdbID) =>
     set((state) => {
       const updatedMovies = { ...state.movies };
-      delete updatedMovies[imdbID]; // Remove movie from object
+      delete updatedMovies[tmdbID]; // Remove movie from object
       return { movies: updatedMovies };
     }
   ),

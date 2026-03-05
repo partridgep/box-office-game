@@ -252,10 +252,12 @@ function compareUserToAllGuesses(
         .filter(Boolean) as { guess: Guess; error: number }[];
 
       scored.sort((a, b) => a.error - b.error);
+      console.log("scored: ", scored)
 
       const userIndex = scored.findIndex(
         s => s.guess.id === userGuess.id
       );
+      console.log("user index: ", userIndex)
 
       if (userIndex === -1) return null;
 
@@ -267,7 +269,7 @@ function compareUserToAllGuesses(
         totalGuesses: scored.length,
         userRank: userIndex + 1,
         percentile: Math.round(
-          ((scored.length - userIndex) / scored.length) * 100
+          ((scored.length - (userIndex + 1)) / scored.length) * 100
         ),
         bestError: errors[0],
         medianError,
@@ -331,11 +333,14 @@ function overallRanking(
   const index = scores.findIndex(s => s.guess.id === userGuess.id);
   if (index === -1) return null;
 
+  console.log("overall scores: ", scores, scores.length)
+  console.log("index: ", index)
+
   return {
     overallRank: index + 1,
     totalGuesses: scores.length,
     percentile: Math.round(
-      ((scores.length - index) / scores.length) * 100
+      ((scores.length - (index + 1)) / scores.length) * 100
     ),
   };
 }

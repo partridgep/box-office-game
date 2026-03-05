@@ -1,10 +1,11 @@
 const path = require('path');
-const { Movie } = require('../models/Movie');
+const { Movie } = require('../models/movie');
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-// console.log(process.env)
-// console.log(process.env.OMDB_API_KEY)
+console.log(process.env)
+console.log(process.env.OMDB_API_KEY)
+console.log(process.env.TMDB_API_KEY)
 console.log(process.env.SUPABASE_DB_USER)
 console.log(process.env.SUPABASE_DB_PASSWORD)
 console.log(process.env.SUPABASE_DB_NAME)
