@@ -27,19 +27,29 @@ const createUser = async (req) => {
 };
 
 const recoverUser = async ({ name, access_key }) => {
-  const name_normalized = name.trim().toLowerCase().replace(/\s+/g, '');
+  const name_normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '');
 
-  const user = await User.findOne({
+  // Get all users with this normalized name
+  const users = await User.findAll({
     where: { name_normalized }
   });
 
-  if (!user) throw new Error("User not found");
+  if (!users.length) {
+    throw new Error("User not found");
+  }
 
-  const isMatch = await bcrypt.compare(access_key, user.access_key_hash);
+  // Check each user's access key
+  for (const user of users) {
+    const isMatch = await bcrypt.compare(access_key, user.access_key_hash);
+    if (isMatch) {
+      return user;
+    }
+  }
 
-  if (!isMatch) throw new Error("Invalid access key");
-
-  return user;
+  throw new Error("Invalid access key");
 };
 
 module.exports = {

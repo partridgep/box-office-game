@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { searchMovies, updateAllMovies, getSavedMovies } from '../../services/movies.service';
 import MovieResult from '../../components/MovieResult/MovieResult';
 import MovieSelectBtn from '../../components/MovieSelectBtn/MovieSelectBtn';
@@ -28,14 +28,17 @@ type Movie = {
 const MovieSearch = () => {
     const [search, setSearch] = useState<string>('');
     const [movieResults, setMovieResults] = useState<Movie[]>([]);
-    const [savedMovies, setSavedMovies] = useState<MovieData[]>([]);
     const [isUpdating, setIsUpdating] = useState(false);
     const { movies, setMovies } = useMovieStore();
     const [parent] = useAutoAnimate()
 
-    useEffect(() => {
-        setSavedMovies(Object.values(movies)); // Convert object to array and update state
-    }, [movies]); // Runs when `movies` changes
+    const savedMovies = useMemo(() => {
+        return Object.values(movies).sort((a, b) => {
+            const aTime = a.released ? new Date(a.released).getTime() : 0;
+            const bTime = b.released ? new Date(b.released).getTime() : 0;
+            return aTime - bTime; // oldest first
+        });
+    }, [movies]);
 
     const handleSearch = async () => {
         try {

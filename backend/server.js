@@ -22,8 +22,8 @@ app.listen(PORT, async () => {
   console.log(`Backend running on http://localhost:${PORT}`);
 
   // Run once on startup
-  console.log("Starting initial movie refresh...");
-  await runMovieRefresh();
+  // console.log("Starting initial movie refresh...");
+  // await runMovieRefresh();
 
   // Start CRON job
   scheduleMovieRefresh();
