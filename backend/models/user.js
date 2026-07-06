@@ -13,6 +13,20 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "user_id",
         as: "guesses" 
       });
+      // Users I follow
+      User.belongsToMany(models.User, {
+        through: models.Follow,
+        as: "following",
+        foreignKey: "follower_id",
+        otherKey: "following_id"
+      });
+      // Users I follow
+      User.belongsToMany(models.User, {
+        through: models.Follow,
+        as: 'followers',
+        foreignKey: 'following_id',
+        otherKey: 'follower_id'
+      });
     }
   }
   User.init({
@@ -37,6 +51,16 @@ module.exports = (sequelize, DataTypes) => {
     name_normalized: {
       type: DataTypes.STRING,
       allowNull: false,
+    },
+    followers_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    following_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
   }, {
     sequelize,

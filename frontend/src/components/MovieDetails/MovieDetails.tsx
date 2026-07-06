@@ -8,6 +8,7 @@ import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } fr
 import { useMovieStore } from '../../store/useMovieStore';
 import { useGuessStore } from '../../store/useGuessStore';
 import { useUserStore } from '../../store/useUserStore';
+import { useSetInviterId } from "../../store/useInviteStore";
 import { getGuessFromId, getAllGuessesForMovie } from "../../services/guesses.service";
 import { MovieData, SavedMovie, Guess } from '../../types';
 import { useNavigate } from 'react-router-dom';
@@ -38,6 +39,7 @@ const MovieDetails = () => {
 
   const { movies, addMovie, removeMovie } = useMovieStore();
   const user = useUserStore((state) => state.user);
+  const setInviterId = useSetInviterId();
   const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -83,6 +85,10 @@ const MovieDetails = () => {
     if (!fromGuessId) return;
     const inviterGuess = await getGuessFromId(fromGuessId);
     setInviterGuess(inviterGuess.data);
+    console.log("inviter guess ID", inviterGuess.data?.user_id)
+    if (inviterGuess.data?.user_id) {
+      setInviterId(inviterGuess.data.user_id);
+    }
   }
 
   async function loadAllMovieGuesses() {

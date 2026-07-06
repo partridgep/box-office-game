@@ -1,4 +1,5 @@
 const express = require('express');
+const authenticateUser = require("../middleware/authenticateUser")
 const { getBoxOfficeData } = require('../controllers/boxOfficeController');
 const { getRottenTomatoesScore } = require('../controllers/rottenTomatoesController');
 const {
@@ -18,7 +19,12 @@ const {
 } = require('../controllers/guesses');
 const {
     saveUser,
-    recoverAccount
+    recoverAccount,
+    getUserProfile,
+    postFollowUser,
+    deleteUnfollowUser,
+    getIsFollowing,
+    postConnectUsers
 } = require('../controllers/usersController');
 
 const router = express.Router();
@@ -38,5 +44,10 @@ router.get('/guesses/movie_id/:movie_id', getAllGuessesForMovie);
 router.get('/guesses', getGuessesForUser);
 router.post('/users/save', saveUser);
 router.post('/users/recover', recoverAccount);
+router.get('/users/:id', getUserProfile);
+router.post('/users/:id/follow', authenticateUser, postFollowUser);
+router.delete('/users/:id/follow', authenticateUser, deleteUnfollowUser);
+router.get('/users/:id/is-following', authenticateUser, getIsFollowing);
+router.post('/users/connect', authenticateUser, postConnectUsers);
 
 module.exports = router;

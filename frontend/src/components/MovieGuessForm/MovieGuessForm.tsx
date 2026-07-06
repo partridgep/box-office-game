@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUserStore } from '../../store/useUserStore';
 import { useGuessStore } from "../../store/useGuessStore";
+import { useInviteStore } from "../../store/useInviteStore";
+import { connectUsers } from '../../services/users.service';
 import UserSignup from "./../UserSignup/UserSignupPrompt";
 import UserConfirmation from "./../UserSignup/UserConfirmation";
 import { postGuess } from '../../services/guesses.service';
@@ -13,6 +15,8 @@ interface GuessFormProps {
 export default function GuessForm({ movieId }: GuessFormProps) {
   const user = useUserStore((state) => state.user);
   const addGuess = useGuessStore((state) => state.addGuess);
+  const inviterId = useInviteStore((s) => s.inviterId);
+  const clearInvite = useInviteStore((s) => s.clearInvite);
   
   const [formData, setFormData] = useState({
     domestic_opening: "",
@@ -25,6 +29,23 @@ export default function GuessForm({ movieId }: GuessFormProps) {
   const [showSignup, setShowSignup] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    async function triggerMutualFollow() {
+      if (!user || !inviterId) return;
+
+      try {
+        console.log("connecting users?")
+        const response = await connectUsers(inviterId);
+        console.log(response)
+        clearInvite();
+      } catch (err) {
+        console.error("Failed to connect users", err);
+      }
+    }
+
+    triggerMutualFollow();
+  }, [user, inviterId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });

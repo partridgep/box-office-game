@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { encryptText, saveEncrypted, decryptText, loadEncrypted } from '../utils/crypto/cryptoStorage';
+import { persistUser } from '../utils/userPersistence';
 import { saveUser } from '../services/users.service';
 
 interface User {
@@ -25,13 +26,13 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem("user");
+    localStorage.removeItem("access_key");
     set({ user: null });
   },
 
   createUser: async (name) => {
     const id = uuidv4();
     const short_id = name.toUpperCase().replace(/\s/g, "") + Math.floor(Math.random() * 1000);
-    // const access_key = Math.random().toString(36).substr(2, 8).toUpperCase();
     const access_key = Array.from(
       crypto.getRandomValues(new Uint8Array(6))
     )
@@ -41,11 +42,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
     const newUser: User = { id, short_id, name, access_key };
 
-    localStorage.setItem('user', JSON.stringify(newUser));
-    await saveEncrypted('access_key', await encryptText(access_key));
-
     try {
         await saveUser(newUser);
+        await persistUser(newUser);
         console.log('User saved to backend successfully');
         set({ user: newUser });
     } catch (err) {
@@ -61,6 +60,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const parsed: User = JSON.parse(stored);
 
     const enc = await loadEncrypted('access_key');
+    if (!enc) return;
     if (enc) {
       parsed.access_key = await decryptText(enc);
       console.log("loading parsed user: ", parsed)

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useUserStore } from "../../store/useUserStore";
 import { loginUser } from "../../services/users.service";
-import { encryptText, saveEncrypted } from '../../utils/crypto/cryptoStorage';
+// import { encryptText, saveEncrypted } from '../../utils/crypto/cryptoStorage';
+import { persistUser } from "../../utils/userPersistence";
 import styles from './RecoverAccount.module.css';
 
 export default function RecoverAccount({ onClose }: { onClose: () => void }) {
@@ -29,9 +30,7 @@ export default function RecoverAccount({ onClose }: { onClose: () => void }) {
         access_key: accessKey,
       };
 
-      // same persistence as signup
-      localStorage.setItem("user", JSON.stringify(recoveredUser));
-      await saveEncrypted("access_key", await encryptText(accessKey));
+      await persistUser(recoveredUser);
 
       setUser(recoveredUser);
 
