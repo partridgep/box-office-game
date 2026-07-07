@@ -5,11 +5,11 @@ interface LoginResponse {
   user: GuessUser;
   token: string;
 }
-interface SignupResponse {
-  message: String,
-  user: GuessUser,
-  token: string
-}
+// interface SignupResponse {
+//   message: String,
+//   user: GuessUser,
+//   token: string
+// }
 
 
 // export const saveUser = async (newUser: Record<string, any>): Promise<SignupResponse>=> {
@@ -70,9 +70,9 @@ export const loginUser = async (name: string, access_key: string) => {
   return data;
 };
 
-export const connectUsers = async (inviter_id: string) => {
+export const connectUsers = async (inviterId: string) => {
   return apiClient('/api/users/connect', {
     method: 'POST',
-    body: { inviter_id },
+    body: { inviterId },
   });
 };
