@@ -4,6 +4,7 @@ import GuessForm from "../MovieGuessForm/MovieGuessForm";
 import ShareLink from "../ShareLink/ShareLink";
 import MoviePredictions from '../MoviePredictions/MoviePredictions';
 import GuessComparisonResults from '../GuessComparisonResults/GuessComparisonResults';
+import { getPredictionAvailability } from "../../utils/predictionWindows";
 import { getMovieDetails, saveMovieDetails, updateMovieDetails, deleteMovie } from '../../services/movies.service';
 import { useMovieStore } from '../../store/useMovieStore';
 import { useGuessStore } from '../../store/useGuessStore';
@@ -50,6 +51,11 @@ const MovieDetails = () => {
   const isInDatabase = useMemo(() => (
     id ? Boolean(movies[id]) : false)
   ,[id, movies]);
+
+  const predictionAvailability = useMemo(() => {
+    if (!movie) return null;
+    return getPredictionAvailability(movie);
+  }, [movie]);
 
   const movieId = movie?.id;
   const loggedGuess = useGuessStore((state) =>
@@ -209,16 +215,25 @@ const MovieDetails = () => {
          />
       }
 
-      { isInDatabase && movie && movie.id && !loggedGuess &&
+      { isInDatabase
+        && movie
+        && movie.id
+        && !loggedGuess
+        && predictionAvailability?.anyOpen
+        &&
         <div>
           { inviterGuess
             && (user ? inviterGuess.user_id !== user.id : true)
             && 
             <p className={styles['invitation']}>{ inviterGuess?.guess_user?.name } wants you to predict how well this movie will do!</p>
           }
-          <GuessForm movieId={movie.id} />
+          <GuessForm movieId={movie.id} availability={predictionAvailability} />
         </div>
       }
+
+      {!predictionAvailability?.anyOpen && (
+        <p>Predictions for this movie have closed.</p>
+      )}
 
       <div className={styles['movie-btns']}>
         <button

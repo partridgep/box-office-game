@@ -6,13 +6,15 @@ import { connectUsers } from '../../services/users.service';
 import UserSignup from "./../UserSignup/UserSignupPrompt";
 import UserConfirmation from "./../UserSignup/UserConfirmation";
 import { postGuess } from '../../services/guesses.service';
+import { getPredictionAvailability } from "../../utils/predictionWindows";
 import styles from './MovieGuessForm.module.css';
 
 interface GuessFormProps {
   movieId: string;
+  availability: ReturnType<typeof getPredictionAvailability>;
 }
 
-export default function GuessForm({ movieId }: GuessFormProps) {
+export default function GuessForm({ movieId, availability }: GuessFormProps) {
   const user = useUserStore((state) => state.user);
   const addGuess = useGuessStore((state) => state.addGuess);
   const inviterId = useInviteStore((s) => s.inviterId);
@@ -129,6 +131,7 @@ export default function GuessForm({ movieId }: GuessFormProps) {
               name="domestic_opening"
               value={formData.domestic_opening}
               onChange={handleChange}
+              disabled={!availability.domesticOpening}
               className="border rounded p-2"
             />
           </div>
@@ -144,6 +147,7 @@ export default function GuessForm({ movieId }: GuessFormProps) {
               name="international_opening"
               value={formData.international_opening}
               onChange={handleChange}
+              disabled={!availability.internationalOpening}
               className="border rounded p-2"
             />
           </div>
@@ -159,6 +163,7 @@ export default function GuessForm({ movieId }: GuessFormProps) {
               name="final_domestic"
               value={formData.final_domestic}
               onChange={handleChange}
+              disabled={!availability.finalDomestic}
               className="border rounded p-2"
             />
           </div>
@@ -174,6 +179,7 @@ export default function GuessForm({ movieId }: GuessFormProps) {
               name="final_international"
               value={formData.final_international}
               onChange={handleChange}
+              disabled={!availability.finalInternational}
               className="border rounded p-2"
             />
           </div>
@@ -189,6 +195,7 @@ export default function GuessForm({ movieId }: GuessFormProps) {
               name="rotten_tomatoes_score"
               value={formData.rotten_tomatoes_score}
               onChange={handleChange}
+              disabled={!availability.rottenTomatoes}
               className="border rounded p-2"
               required
             />
