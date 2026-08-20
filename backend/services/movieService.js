@@ -39,7 +39,7 @@ const getMovieById = async (tmdbID, isBatch) => {
   console.log("tmdbID", tmdbID);
 
   const response = await fetch(
-    `https://api.themoviedb.org/3/movie/${tmdbID}?append_to_response=credits`,
+    `https://api.themoviedb.org/3/movie/${tmdbID}?append_to_response=credits,release_dates`,
     {
       headers: {
         Authorization: `Bearer ${process.env.TMDB_API_KEY}`
@@ -52,6 +52,8 @@ const getMovieById = async (tmdbID, isBatch) => {
   }
 
   const data = await response.json();
+
+  console.log("TMDB data", data);
 
   const imdbID = data.imdb_id;
 
@@ -94,7 +96,7 @@ const getMovieById = async (tmdbID, isBatch) => {
 
     budget: data.budget || null,
 
-    rated: null,
+    rated: data.rated || null,
 
     released: data.release_date
       ? new Date(data.release_date)

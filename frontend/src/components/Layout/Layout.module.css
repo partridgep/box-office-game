@@ -16,7 +16,6 @@
     background-color: #8585853f;
     backdrop-filter: blur(20px);
     z-index: 10;
-    border-bottom: 1px solid rgba(24, 24, 24, 0.582);
 }
 
 .header h1 {

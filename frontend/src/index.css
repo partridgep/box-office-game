@@ -1,4 +1,30 @@
-:root {
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Satoshi", "sans-serif";
+  --breakpoint-3xl: 120rem;
+  --color-cinema-50: #ffe5e7;
+  --color-cinema-100: #ffb3b8;
+  --color-cinema-200: #ff8088;
+  --color-cinema-300: #ff4d5a;
+  --color-cinema-400: #fa1a2a;
+  --color-cinema-500: #b92b3c;
+  --color-cinema-600: #8a1c29;
+  --color-cinema-700: #4a1219;
+  --color-cinema-800: #2a0a0f;
+  --color-cinema-900: #180507;
+  --color-cinema-950: #0d0203;
+  --color-theater-gold: #e6c567;
+  --ease-fluid: cubic-bezier(0.3, 0, 0, 1);
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
+  /* ... */
+}
+
+body {
+  font-family: "Outfit", sans-serif;
+}
+
+/* :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -25,7 +51,6 @@ a:hover {
 body {
   margin: 0;
   display: flex;
-  /* place-items: center; */
   min-width: 320px;
   min-height: 100vh;
 }
@@ -52,7 +77,7 @@ button:hover {
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
-}
+} */
 
 @media (prefers-color-scheme: light) {
   :root {
