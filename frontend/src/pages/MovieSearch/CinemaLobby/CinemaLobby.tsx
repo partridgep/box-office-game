@@ -10,6 +10,8 @@ import {
 import { MovieData } from '../../../types';
 import { getPredictionAvailability } from "../../../utils/predictionWindows";
 
+import PredictButton from '../../../components/PredictButton';
+
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons';
 import { library, IconProp } from '@fortawesome/fontawesome-svg-core';
@@ -104,6 +106,8 @@ export function CinemaLobby() {
   return (
     <div className="min-h-screen bg-cinema-950 text-stone-100 flex flex-col">
 
+      <PredictButton />
+
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-12">
         
         {/* Hero Banner Section */}
@@ -113,9 +117,9 @@ export function CinemaLobby() {
               <img 
                 src={`https://image.tmdb.org/t/p/w92${activeMovie.poster}`}
                 alt={activeMovie.title} 
-                className="w-full h-full object-cover object-center filter blur-2xl opacity-25 scale-110 transform"
+                className="w-full h-full object-cover object-center filter blur-2xl opacity-30 scale-110 transform"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-theater-gold/10 to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-t from-stone-950 via-theater-gold/10 to-transparent" />
             </div>
 
             <div className="relative z-5 grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 sm:p-10 lg:p-12 items-center">
@@ -140,13 +144,19 @@ export function CinemaLobby() {
                   <span className="text-xs font-semibold uppercase tracking-wider text-theater-gold">Coming Soon</span>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
                     {activeMovie.title}
                   </h1>
-                  <p className="text-stone-400 text-sm sm:text-base line-clamp-2 max-w-xl">
-                    {activeMovie.plot}
+                  <p className="text-stone-400 text-sm sm:text-base line-clamp-2 max-w-xl mt-2 mb-0">
+                    {activeMovie.director ? `Directed by ${activeMovie.director}` : 'Director information not available.'}
                   </p>
+                  <p className="text-stone-400 text-sm sm:text-base line-clamp-2 max-w-xl mt-1">
+                    {activeMovie.actors ? `Starring ${activeMovie.actors}` : 'Cast information not available.'}
+                  </p>
+                  {/* <p className="text-stone-400 text-sm sm:text-base line-clamp-2 max-w-xl">
+                    {activeMovie.plot}
+                  </p> */}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 text-xs sm:text-sm text-slate-300">
@@ -154,16 +164,25 @@ export function CinemaLobby() {
                     Release <span className="font-semibold text-white">{activeMovie.released ? new Date(activeMovie.released).toLocaleDateString() : 'N/A'}</span>
                   </div>
                   <div className="bg-cinema-900/80 border border-cinema-800/50 px-3 py-1.5 rounded-xl">
-                    Budget <span className="font-semibold text-white">{activeMovie.budget || 'N/A'}</span>
+                    Budget <span className="font-semibold text-white">{activeMovie.budget || 'Information not available'}</span>
                   </div>
                 </div>
+
+                <PredictButton />
 
                 <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
                   <button
                     onClick={() => activeMovie.tmdbID && navigate(`/movie/${activeMovie.tmdbID}`)}
-                    className="w-full sm:w-auto bg-cinema-500/40 backdrop-blur text-white uppercase font-bold px-6 py-2 rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all"
+                    className="w-full text-lg sm:w-auto border border-cinema-600/50 bg-cinema-400/40 hover:bg-cinema-500/70 backdrop-blur text-white uppercase font-medium px-6 py-2 rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all"
                   >
-                    {activeMovie.id && hasGuessed(activeMovie.id) ? 'Edit Predictions' : 'Predict Box Office Performance'}
+                    {activeMovie.id && hasGuessed(activeMovie.id)
+                      ? 'Edit Predictions'
+                      : (
+                        <>
+                          <span className='font-extrabold'>Predict</span> Box Office Performance
+                        </>
+                      )
+                    }
                   </button>
                 </div>
               </div>
@@ -227,7 +246,7 @@ export function CinemaLobby() {
                         alt={movie.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-cinema-950 via-transparent opacity-60" />
+                      <div className="absolute inset-0 bg-linear-to-t from-cinema-950 via-transparent opacity-60" />
 
                       {guessed ? (
                         <div className="absolute top-3 right-3 bg-emerald-500/90 backdrop-blur-md text-emerald-950 text-xs font-bold px-2 py-0.5 rounded-full shadow border border-emerald-400/30">
