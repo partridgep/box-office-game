@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import { encryptText, saveEncrypted, decryptText, loadEncrypted } from '../utils/crypto/cryptoStorage';
+import { decryptText, loadEncrypted } from '../utils/crypto/cryptoStorage';
 import { persistUser } from '../utils/userPersistence';
 import { saveUser } from '../services/users.service';
 
@@ -19,7 +19,7 @@ interface UserStore {
   setUser: (user: User) => void;
 }
 
-export const useUserStore = create<UserStore>((set, get) => ({
+export const useUserStore = create<UserStore>((set) => ({
   user: null,
   
   setUser: (user) => set({ user }),

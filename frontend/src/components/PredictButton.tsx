@@ -9,7 +9,7 @@ export default function PredictBoxOfficeButton({ onClick }: PredictBoxOfficeButt
     <button
       onClick={onClick}
       type="button"
-      className="w-full group relative inline-flex items-center justify-center px-5 py-3 bg-linear-to-b from-[#1a0818] via-[#0f040f] to-[#050105] rounded-2xl border border-[#f5d77f]/30 shadow-[0_0_35px_rgba(245,215,127,0.2)] hover:shadow-[0_0_60px_rgba(245,215,127,0.4)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer overflow-hidden select-none"
+      className="w-full group relative inline-flex items-center justify-center px-5 py-2 bg-linear-to-b from-[#1a0818] via-[#0f040f] to-[#050105] rounded-2xl border-1 border-[#f5d77f]/40 shadow-[0_0_35px_rgba(245,215,127,0.2)] hover:shadow-[0_0_60px_rgba(245,215,127,0.4)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer overflow-hidden select-none"
     >
       {/* Background Ambient Glow */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-amber-500/20 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500" />

@@ -106,7 +106,7 @@ export function CinemaLobby() {
   return (
     <div className="min-h-screen bg-cinema-950 text-stone-100 flex flex-col">
 
-      <PredictButton />
+      {/* <PredictButton /> */}
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-12">
         
@@ -168,23 +168,10 @@ export function CinemaLobby() {
                   </div>
                 </div>
 
-                <PredictButton />
-
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
-                  <button
-                    onClick={() => activeMovie.tmdbID && navigate(`/movie/${activeMovie.tmdbID}`)}
-                    className="w-full text-lg sm:w-auto border border-cinema-600/50 bg-cinema-400/40 hover:bg-cinema-500/70 backdrop-blur text-white uppercase font-medium px-6 py-2 rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all"
-                  >
-                    {activeMovie.id && hasGuessed(activeMovie.id)
-                      ? 'Edit Predictions'
-                      : (
-                        <>
-                          <span className='font-extrabold'>Predict</span> Box Office Performance
-                        </>
-                      )
-                    }
-                  </button>
-                </div>
+                <PredictButton
+                  onClick={() => activeMovie.tmdbID && navigate(`/movie/${activeMovie.tmdbID}`)}
+                />
+                
               </div>
             </div>
 

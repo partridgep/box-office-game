@@ -27,6 +27,7 @@ export default function RecoverAccount({ onClose }: { onClose: () => void }) {
 
       const recoveredUser = {
         ...response.user,
+        id: String(response.user.id),
         access_key: accessKey,
       };
 
