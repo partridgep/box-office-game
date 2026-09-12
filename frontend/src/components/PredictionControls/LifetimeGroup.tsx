@@ -37,7 +37,7 @@ export default function LifetimeGroup({
 
   return (
     <div>
-      <h2 className="text-lg font-bold text-stone-100 mb-1">Lifetime Totals</h2>
+      <h2 className="text-2xl font-bold font-ticketing text-stone-100 mb-1">Lifetime Totals</h2>
       <p className="text-xs text-stone-500 mb-4">
         Most films earn 2.5–3.5× their opening domestically.
       </p>

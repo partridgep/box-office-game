@@ -19,14 +19,14 @@
   gap: 16px;
 }
 
-.input {
+/* .input {
   padding: 10px 12px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
   font-size: 16px;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
+} */
 
 .input:focus {
   border-color: #2563eb;

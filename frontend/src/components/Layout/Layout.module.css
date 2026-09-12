@@ -2,7 +2,7 @@
     position: relative;
 }
 
-.header {
+/* .header {
     width: 100vw;
     display: flex;
     justify-content: space-between;
@@ -16,7 +16,7 @@
     background-color: #8585853f;
     backdrop-filter: blur(20px);
     z-index: 10;
-}
+} */
 
 .header h1 {
     font-size: 2rem;
@@ -45,8 +45,8 @@
     width: max-content;
 }
 
-main {
+/* main {
     padding: 2rem;
     max-width: 1280px;
     margin: 0 auto;
-}
+} */

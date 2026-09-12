@@ -141,7 +141,7 @@ export default function PredictionControls({
       )}
 
       <div>
-        <h2 className="text-lg font-bold text-stone-100 mb-1">Opening Weekend</h2>
+        <h2 className="text-2xl font-bold font-ticketing text-stone-100 mb-1">Opening Weekend</h2>
         <p className="text-xs text-stone-500 mb-4">Required before the box office deadline.</p>
         <div className="space-y-5">
           <LogMoneySlider
@@ -183,7 +183,7 @@ export default function PredictionControls({
       />
 
       <div>
-        <h2 className="text-lg font-bold text-stone-100 mb-4">Critical Reception</h2>
+        <h2 className="text-2xl font-bold font-ticketing text-stone-100 mb-4">Critical Reception</h2>
         <RTScoreSlider
           value={rtScore}
           onChange={setRtScore}

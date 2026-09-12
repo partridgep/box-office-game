@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { Lock } from "lucide-react";
 import {
@@ -36,9 +36,29 @@ export default function LogMoneySlider({
 }: LogMoneySliderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [inputText, setInputText] = useState("");
+  const [inputWidth, setInputWidth] = useState<number | undefined>();
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const displayValue = value ?? min;
   const position = valueToPosition(displayValue, min, max);
+
+  const numberStr = inputText || (value != null ? value.toFixed(1) : "");
+  const sizerStr = numberStr || min.toFixed(1);
+
+  useLayoutEffect(() => {
+    const el = measureRef.current;
+    if (!el) return;
+
+    const updateWidth = () => {
+      setInputWidth(el.getBoundingClientRect().width);
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [sizerStr]);
 
   const handleSliderChange = (positions: number[]) => {
     const raw = positionToValue(positions[0], min, max);
@@ -66,6 +86,10 @@ export default function LogMoneySlider({
     onChange(snapToDetent(compValue));
   };
 
+  const goldTextClass = isDragging
+    ? "text-theater-gold drop-shadow-[0_0_8px_rgba(230,197,103,0.6)]"
+    : "text-theater-gold/90";
+
   return (
     <div className={`space-y-2 ${disabled ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-4">
@@ -73,19 +97,56 @@ export default function LogMoneySlider({
           {disabled && <Lock size={12} />}
           {label}
         </label>
-        <span
-          className={`text-lg font-bold tabular-nums transition-all duration-150 ${
-            isDragging
-              ? "text-theater-gold drop-shadow-[0_0_8px_rgba(230,197,103,0.6)]"
-              : "text-theater-gold/90"
-          }`}
+        <div
+          className={`relative inline-flex items-center rounded-lg border border-cinema-700 bg-cinema-900 px-2 py-1 text-lg font-bold tabular-nums transition-all duration-150 focus-within:border-theater-gold/50 focus-within:ring-2 focus-within:ring-theater-gold/50 ${
+            disabled ? "cursor-not-allowed" : "cursor-text"
+          } ${goldTextClass}`}
+          onMouseDown={(e) => {
+            if (disabled || e.target === inputRef.current) return;
+            e.preventDefault();
+            inputRef.current?.focus();
+          }}
         >
-          {formatMillions(value)}
-        </span>
+          <span className="font-ticketing pointer-events-none absolute left-2 top-1/2 -translate-y-1/2" aria-hidden>
+            $
+          </span>
+          <span className="font-ticketing invisible select-none" aria-hidden>
+            $
+          </span>
+          <span
+            ref={measureRef}
+            className="font-ticketing invisible absolute whitespace-pre text-lg font-bold tabular-nums"
+            aria-hidden
+          >
+            {sizerStr}
+          </span>
+          <input
+            ref={inputRef}
+            id={id}
+            type="number"
+            min={min}
+            max={max}
+            step={0.1}
+            disabled={disabled}
+            placeholder={min.toFixed(1)}
+            value={numberStr}
+            onChange={(e) => setInputText(e.target.value)}
+            onBlur={handleInputBlur}
+            onFocus={() => setInputText(value != null ? value.toFixed(1) : "")}
+            style={inputWidth != null ? { width: inputWidth } : undefined}
+            className="font-ticketing bg-transparent border-0 p-0 text-left text-lg font-bold tabular-nums text-inherit focus:outline-none disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            aria-label={`${label} in millions`}
+          />
+          <span className="font-ticketing invisible select-none" aria-hidden>
+            M
+          </span>
+          <span className="font-ticketing pointer-events-none absolute right-2 top-1/2 -translate-y-1/2" aria-hidden>
+            M
+          </span>
+        </div>
       </div>
 
       <Slider.Root
-        id={id}
         className="relative flex items-center select-none touch-none w-full h-5"
         value={[position]}
         onValueChange={handleSliderChange}
@@ -129,21 +190,6 @@ export default function LogMoneySlider({
           })}
         </div>
       )}
-
-      <input
-        type="number"
-        min={min}
-        max={max}
-        step={0.1}
-        disabled={disabled}
-        placeholder={String(min)}
-        value={inputText || (value != null ? String(value) : "")}
-        onChange={(e) => setInputText(e.target.value)}
-        onBlur={handleInputBlur}
-        onFocus={() => setInputText(value != null ? String(value) : "")}
-        className="w-full bg-cinema-900 border border-cinema-700 rounded-lg px-3 py-1.5 text-sm text-stone-200 focus:border-theater-gold/50 focus:outline-none disabled:cursor-not-allowed"
-        aria-label={`${label} numeric input`}
-      />
     </div>
   );
 }

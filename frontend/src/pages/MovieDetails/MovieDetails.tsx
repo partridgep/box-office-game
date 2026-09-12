@@ -90,7 +90,7 @@ export default function MovieDetails() {
 
   const titleBlock = (
     <>
-      <h1 className="text-2xl md:text-4xl font-bold text-stone-100 drop-shadow-md">
+      <h1 className="text-2xl text-left md:text-4xl font-bold font-ticketing text-stone-100 drop-shadow-md">
         {movie.title}
       </h1>
       <p className="text-sm text-left text-stone-200 mt-0 drop-shadow-sm">
@@ -126,7 +126,7 @@ export default function MovieDetails() {
         className="hidden lg:block fixed inset-y-0 left-0 z-0 w-1/2"
       />
 
-      <div className="relative z-10 space-y-6">
+      <div className="relative z-10 space-y-6 pt-5">
         {/* Mobile: title above the fold */}
         <div className="flex items-start gap-4 lg:hidden">
           {backButton}

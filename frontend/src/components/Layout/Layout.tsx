@@ -23,7 +23,7 @@ export default function Layout({ children }: LayoutProps) {
     <div className={`min-h-screen bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles['layout']}`}>
       
       {/* Top Navigation Bar */}
-      <header className={`sticky top-0 z-50 backdrop-blur-md bg-cinema-950/80 px-6 py-4 flex items-center justify-between ${styles['header']}`}>
+      <header className={`fixed top-0 left-0 w-full z-50 backdrop-blur-md bg-cinema-950/80 px-6 py-4 flex items-center justify-between ${styles['header']}`}>
         <div className="flex items-center space-x-3 cursor-pointer" onClick={() => navigate('/')}>
           <div className="w-9 h-9 rounded-xl bg-linear-to-tr from-indigo-500 to-rose-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <span className="text-lg font-black text-white">🎬</span>
@@ -98,7 +98,7 @@ export default function Layout({ children }: LayoutProps) {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+      <main className="pt-18 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pb-8">
         {children}
       </main>
 
