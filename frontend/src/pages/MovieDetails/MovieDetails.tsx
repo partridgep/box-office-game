@@ -12,6 +12,7 @@ import GuessComparisonCards from "../../components/GuessComparisonCards/GuessCom
 import BoxOfficeJourneyChart from "../../components/BoxOfficeJourney/BoxOfficeJourneyChart";
 import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
+import TicketStub from "../../components/TicketStub/TicketStub";
 import { getWeeklyGrossData } from "../../data/mockWeeklyGross";
 import { parseMoney } from "../../utils/guessComparison";
 
@@ -87,27 +88,110 @@ export default function MovieDetails() {
   }
 
   const posterUrl = `https://image.tmdb.org/t/p/original${movie.poster}`;
+  const useTicketShell = mode !== "results";
+
+  const releaseDate = movie.released
+    ? new Date(movie.released).toLocaleDateString(undefined, {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "TBA";
 
   const titleBlock = (
-    <>
-      <h1 className="text-2xl text-left md:text-4xl font-bold font-ticketing text-stone-100 drop-shadow-md">
-        {movie.title}
-      </h1>
-      <p className="text-sm text-left text-stone-200 mt-0 drop-shadow-sm">
-        {movie.year} · {movie.genre}
-      </p>
-    </>
+    <TicketStub compact className="max-w-md">
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="shrink-0 -ml-1 -mt-0.5 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
+          aria-label="Back to lobby"
+        >
+          <ArrowLeft size={22} strokeWidth={2.5} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-ticket-ink/70">
+            Box Office Arena
+          </p>
+          <h1 className="text-2xl md:text-4xl font-bold uppercase leading-none mt-1">
+            {movie.title}
+          </h1>
+          <p className="text-xs uppercase tracking-wide mt-2 text-ticket-ink/80">
+            {releaseDate}
+          </p>
+          <p className="text-xs uppercase tracking-wide mt-0.5 text-ticket-ink/80">
+            {movie.genre}
+          </p>
+        </div>
+      </div>
+    </TicketStub>
   );
 
-  const backButton = (
-    <button
-      type="button"
-      onClick={() => navigate("/")}
-      className="mt-1 p-2 rounded-lg text-stone-200 hover:text-white bg-cinema-950/40 hover:bg-cinema-950/60 backdrop-blur-sm border border-white/10 transition-colors"
-      aria-label="Back to lobby"
-    >
-      <ArrowLeft size={30} />
-    </button>
+  const panelContent = (
+    <>
+      {mode === "predict" && movie.id && (
+        <PredictionControls
+          movieId={movie.id}
+          availability={predictionAvailability}
+          compMarkers={compMarkers}
+          inviterName={inviterName}
+          domesticOpeningSeed={domesticOpeningSeed}
+        />
+      )}
+
+      {mode === "waiting" && loggedGuess && (
+        <LockedPredictionSummary
+          guess={loggedGuess}
+          friendGuess={
+            inviterGuess?.user_id !== loggedGuess.user_id
+              ? inviterGuess
+              : undefined
+          }
+          onShareClick={() => setShowingShareDialog(true)}
+        />
+      )}
+
+      {mode === "results" && loggedGuess && (
+        <div className="space-y-6">
+          <GuessComparisonCards
+            movie={movie}
+            userGuess={loggedGuess}
+            friendGuess={
+              inviterGuess?.user_id !== loggedGuess.user_id
+                ? inviterGuess
+                : undefined
+            }
+            allMovieGuesses={allMovieGuesses}
+          />
+          <BoxOfficeJourneyChart
+            weeklyData={weeklyData}
+            userFinalDomesticPrediction={loggedGuess.final_domestic}
+          />
+        </div>
+      )}
+
+      {mode === "closed" && (
+        <div className="min-h-50 flex flex-col items-center justify-center text-center gap-2 text-ticket-ink">
+          <p className="font-bold uppercase tracking-wide text-lg">
+            Predictions for this movie have closed.
+          </p>
+          <p className="text-sm text-ticket-ink/65 font-[Outfit,sans-serif]">
+            Check back on another title in the lobby.
+          </p>
+        </div>
+      )}
+
+      {mode === "notInArena" && (
+        <div className="min-h-50 flex flex-col items-center justify-center text-center gap-2 text-ticket-ink">
+          <p className="font-bold uppercase tracking-wide text-lg">
+            This movie is not in the Arena yet.
+          </p>
+          <p className="text-sm text-ticket-ink/65 font-[Outfit,sans-serif]">
+            Browse upcoming titles from the lobby to make predictions.
+          </p>
+        </div>
+      )}
+    </>
   );
 
   return (
@@ -128,10 +212,7 @@ export default function MovieDetails() {
 
       <div className="relative z-10 space-y-6 pt-5">
         {/* Mobile: title above the fold */}
-        <div className="flex items-start gap-4 lg:hidden">
-          {backButton}
-          <div>{titleBlock}</div>
-        </div>
+        <div className="lg:hidden">{titleBlock}</div>
 
         {/* Countdown visible first on mobile */}
         <div className="lg:hidden">
@@ -144,77 +225,21 @@ export default function MovieDetails() {
             <div className="hidden lg:block">
               <CountdownStrip movie={movie} availability={predictionAvailability} />
             </div>
-            <div className="rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
-              {mode === "predict" && movie.id && (
-                <PredictionControls
-                  movieId={movie.id}
-                  availability={predictionAvailability}
-                  compMarkers={compMarkers}
-                  inviterName={inviterName}
-                  domesticOpeningSeed={domesticOpeningSeed}
-                />
-              )}
-
-              {mode === "waiting" && loggedGuess && (
-                <LockedPredictionSummary
-                  guess={loggedGuess}
-                  friendGuess={
-                    inviterGuess?.user_id !== loggedGuess.user_id
-                      ? inviterGuess
-                      : undefined
-                  }
-                  onShareClick={() => setShowingShareDialog(true)}
-                />
-              )}
-
-              {mode === "results" && loggedGuess && (
-                <div className="space-y-6">
-                  <GuessComparisonCards
-                    movie={movie}
-                    userGuess={loggedGuess}
-                    friendGuess={
-                      inviterGuess?.user_id !== loggedGuess.user_id
-                        ? inviterGuess
-                        : undefined
-                    }
-                    allMovieGuesses={allMovieGuesses}
-                  />
-                  <BoxOfficeJourneyChart
-                    weeklyData={weeklyData}
-                    userFinalDomesticPrediction={loggedGuess.final_domestic}
-                  />
-                </div>
-              )}
-
-              {mode === "closed" && (
-                <div className="min-h-[200px] flex flex-col items-center justify-center text-center gap-2">
-                  <p className="text-stone-300 font-medium">
-                    Predictions for this movie have closed.
-                  </p>
-                  <p className="text-sm text-stone-500">
-                    Check back on another title in the lobby.
-                  </p>
-                </div>
-              )}
-
-              {mode === "notInArena" && (
-                <div className="min-h-[200px] flex flex-col items-center justify-center text-center gap-2">
-                  <p className="text-stone-300 font-medium">
-                    This movie is not in the Arena yet.
-                  </p>
-                  <p className="text-sm text-stone-500">
-                    Browse upcoming titles from the lobby to make predictions.
-                  </p>
-                </div>
-              )}
-            </div>
+            {useTicketShell ? (
+              <TicketStub
+                footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE ARENA`}
+              >
+                {panelContent}
+              </TicketStub>
+            ) : (
+              <div className="rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
+                {panelContent}
+              </div>
+            )}
           </div>
 
           <div className="order-2 lg:order-1 space-y-6">
-            <div className="hidden lg:flex items-start gap-4">
-              {backButton}
-              <div>{titleBlock}</div>
-            </div>
+            <div className="hidden lg:block">{titleBlock}</div>
 
             <MovieContextPanel
               movie={movie}

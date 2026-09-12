@@ -22,6 +22,7 @@ interface LogMoneySliderProps {
   disabled?: boolean;
   compMarkers?: CompMarker[];
   id?: string;
+  variant?: "default" | "ticket";
 }
 
 export default function LogMoneySlider({
@@ -33,12 +34,14 @@ export default function LogMoneySlider({
   disabled = false,
   compMarkers = [],
   id,
+  variant = "default",
 }: LogMoneySliderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [inputText, setInputText] = useState("");
   const [inputWidth, setInputWidth] = useState<number | undefined>();
   const measureRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isTicket = variant === "ticket";
 
   const displayValue = value ?? min;
   const position = valueToPosition(displayValue, min, max);
@@ -86,21 +89,34 @@ export default function LogMoneySlider({
     onChange(snapToDetent(compValue));
   };
 
-  const goldTextClass = isDragging
-    ? "text-theater-gold drop-shadow-[0_0_8px_rgba(230,197,103,0.6)]"
-    : "text-theater-gold/90";
+  const valueTextClass = isTicket
+    ? isDragging
+      ? "text-ticket-ink"
+      : "text-ticket-ink/90"
+    : isDragging
+      ? "text-theater-gold drop-shadow-[0_0_8px_rgba(230,197,103,0.6)]"
+      : "text-theater-gold/90";
 
   return (
     <div className={`space-y-2 ${disabled ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-4">
-        <label htmlFor={id} className="text-sm font-medium text-stone-300 flex items-center gap-1.5">
+        <label
+          htmlFor={id}
+          className={`text-sm font-medium flex items-center gap-1.5 ${
+            isTicket ? "text-ticket-ink font-[Outfit,sans-serif]" : "text-stone-300"
+          }`}
+        >
           {disabled && <Lock size={12} />}
           {label}
         </label>
         <div
-          className={`relative inline-flex items-center rounded-lg border border-cinema-700 bg-cinema-900 px-2 py-1 text-lg font-bold tabular-nums transition-all duration-150 focus-within:border-theater-gold/50 focus-within:ring-2 focus-within:ring-theater-gold/50 ${
+          className={`relative inline-flex items-center px-2 py-1 text-lg font-bold tabular-nums transition-all duration-150 ${
             disabled ? "cursor-not-allowed" : "cursor-text"
-          } ${goldTextClass}`}
+          } ${valueTextClass} ${
+            isTicket
+              ? "border border-ticket-ink/40 bg-ticket/40 focus-within:border-ticket-ink focus-within:ring-2 focus-within:ring-ticket-ink/30"
+              : "rounded-lg border border-cinema-700 bg-cinema-900 focus-within:border-theater-gold/50 focus-within:ring-2 focus-within:ring-theater-gold/50"
+          }`}
           onMouseDown={(e) => {
             if (disabled || e.target === inputRef.current) return;
             e.preventDefault();
@@ -158,11 +174,23 @@ export default function LogMoneySlider({
         disabled={disabled}
         aria-valuetext={formatMillions(value)}
       >
-        <Slider.Track className="bg-cinema-800 relative grow rounded-full h-2">
-          <Slider.Range className="absolute bg-theater-gold/60 rounded-full h-full" />
+        <Slider.Track
+          className={`relative grow rounded-full h-2 ${
+            isTicket ? "bg-ticket-ink/20" : "bg-cinema-800"
+          }`}
+        >
+          <Slider.Range
+            className={`absolute rounded-full h-full ${
+              isTicket ? "bg-ticket-ink/70" : "bg-theater-gold/60"
+            }`}
+          />
         </Slider.Track>
         <Slider.Thumb
-          className="block w-5 h-5 bg-theater-gold rounded-full shadow-[0_0_12px_rgba(230,197,103,0.5)] hover:bg-[#f0d080] focus:outline-none focus:ring-2 focus:ring-theater-gold/50"
+          className={
+            isTicket
+              ? "block w-5 h-5 bg-ticket-ink rounded-full hover:bg-black focus:outline-none focus:ring-2 focus:ring-ticket-ink/40"
+              : "block w-5 h-5 bg-theater-gold rounded-full shadow-[0_0_12px_rgba(230,197,103,0.5)] hover:bg-[#f0d080] focus:outline-none focus:ring-2 focus:ring-theater-gold/50"
+          }
           aria-label={label}
         />
       </Slider.Root>
@@ -181,8 +209,20 @@ export default function LogMoneySlider({
                 style={{ left: `${compPos}%` }}
                 title={`${comp.label}: ${formatMillions(comp.value)}`}
               >
-                <span className="w-0.5 h-2 bg-stone-500 group-hover:bg-theater-gold transition-colors" />
-                <span className="text-[9px] text-stone-500 group-hover:text-theater-gold truncate max-w-[60px] transition-colors">
+                <span
+                  className={`w-0.5 h-2 transition-colors ${
+                    isTicket
+                      ? "bg-ticket-ink/40 group-hover:bg-ticket-ink"
+                      : "bg-stone-500 group-hover:bg-theater-gold"
+                  }`}
+                />
+                <span
+                  className={`text-[9px] truncate max-w-[60px] transition-colors ${
+                    isTicket
+                      ? "text-ticket-ink/50 group-hover:text-ticket-ink"
+                      : "text-stone-500 group-hover:text-theater-gold"
+                  }`}
+                >
                   {comp.label}
                 </span>
               </button>

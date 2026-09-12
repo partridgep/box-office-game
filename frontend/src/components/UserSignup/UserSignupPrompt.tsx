@@ -41,7 +41,7 @@ export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="border p-2"
+          className="border border-black/40 bg-transparent p-2 text-black focus:outline-none focus:ring-2 focus:ring-black/30"
           required
         />
         <button type="submit" className={styles.button}>

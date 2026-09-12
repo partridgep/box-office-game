@@ -9,6 +9,7 @@ interface LifetimeGroupProps {
   onFinalDomesticChange: (v: number) => void;
   onFinalInternationalChange: (v: number) => void;
   disabled: boolean;
+  variant?: "default" | "ticket";
 }
 
 export default function LifetimeGroup({
@@ -19,7 +20,10 @@ export default function LifetimeGroup({
   onFinalDomesticChange,
   onFinalInternationalChange,
   disabled,
+  variant = "default",
 }: LifetimeGroupProps) {
+  const isTicket = variant === "ticket";
+
   const worldwideFinal =
     finalDomestic != null && finalInternational != null
       ? finalDomestic + finalInternational
@@ -37,8 +41,22 @@ export default function LifetimeGroup({
 
   return (
     <div>
-      <h2 className="text-2xl font-bold font-ticketing text-stone-100 mb-1">Lifetime Totals</h2>
-      <p className="text-xs text-stone-500 mb-4">
+      <h2
+        className={
+          isTicket
+            ? "text-2xl font-bold uppercase tracking-wide mb-1"
+            : "text-2xl font-bold font-ticketing text-stone-100 mb-1"
+        }
+      >
+        Lifetime Totals
+      </h2>
+      <p
+        className={
+          isTicket
+            ? "text-xs text-ticket-ink/65 mb-4 font-[Outfit,sans-serif]"
+            : "text-xs text-stone-500 mb-4"
+        }
+      >
         Most films earn 2.5–3.5× their opening domestically.
       </p>
 
@@ -51,9 +69,16 @@ export default function LifetimeGroup({
           min={1}
           max={500}
           disabled={disabled}
+          variant={variant}
         />
         {showDomesticWarning && (
-          <p className="text-xs text-amber-400/90 -mt-2">
+          <p
+            className={
+              isTicket
+                ? "text-xs text-ticket-ink/80 -mt-2 font-[Outfit,sans-serif]"
+                : "text-xs text-amber-400/90 -mt-2"
+            }
+          >
             Final domestic is below your opening prediction — unusual but allowed.
           </p>
         )}
@@ -66,16 +91,41 @@ export default function LifetimeGroup({
           min={1}
           max={500}
           disabled={disabled}
+          variant={variant}
         />
         {showIntlWarning && (
-          <p className="text-xs text-amber-400/90 -mt-2">
+          <p
+            className={
+              isTicket
+                ? "text-xs text-ticket-ink/80 -mt-2 font-[Outfit,sans-serif]"
+                : "text-xs text-amber-400/90 -mt-2"
+            }
+          >
             Final international is below your opening prediction — unusual but allowed.
           </p>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t border-cinema-800">
-          <span className="text-sm text-stone-400">Worldwide Final</span>
-          <span className="text-base font-bold text-theater-gold">
+        <div
+          className={`flex items-center justify-between pt-2 border-t ${
+            isTicket ? "border-ticket-ink/30" : "border-cinema-800"
+          }`}
+        >
+          <span
+            className={
+              isTicket
+                ? "text-sm uppercase tracking-wide text-ticket-ink/70"
+                : "text-sm text-stone-400"
+            }
+          >
+            Worldwide Final
+          </span>
+          <span
+            className={
+              isTicket
+                ? "text-base font-bold tabular-nums"
+                : "text-base font-bold text-theater-gold"
+            }
+          >
             {formatMillions(worldwideFinal)}
           </span>
         </div>

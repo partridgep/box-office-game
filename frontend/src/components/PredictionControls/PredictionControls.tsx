@@ -133,16 +133,18 @@ export default function PredictionControls({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 text-ticket-ink">
       {inviterName && (
-        <div className="p-3 bg-cinema-800/80 text-theater-gold rounded-lg border border-theater-gold/20 text-sm font-medium">
+        <div className="border-y border-ticket-ink/30 py-2 text-sm font-medium uppercase tracking-wide">
           {inviterName} wants you to predict how well this movie will do!
         </div>
       )}
 
       <div>
-        <h2 className="text-2xl font-bold font-ticketing text-stone-100 mb-1">Opening Weekend</h2>
-        <p className="text-xs text-stone-500 mb-4">Required before the box office deadline.</p>
+        <h2 className="text-2xl font-bold uppercase tracking-wide mb-1">Opening Weekend</h2>
+        <p className="text-xs text-ticket-ink/65 mb-4 font-[Outfit,sans-serif]">
+          Required before the box office deadline.
+        </p>
         <div className="space-y-5">
           <LogMoneySlider
             id="domestic_opening"
@@ -153,6 +155,7 @@ export default function PredictionControls({
             max={250}
             disabled={!availability.domesticOpening}
             compMarkers={compMarkers}
+            variant="ticket"
           />
           <LogMoneySlider
             id="international_opening"
@@ -162,10 +165,11 @@ export default function PredictionControls({
             min={1}
             max={250}
             disabled={!availability.internationalOpening}
+            variant="ticket"
           />
-          <div className="flex items-center justify-between pt-2 border-t border-cinema-800">
-            <span className="text-sm text-stone-400">Worldwide Opening</span>
-            <span className="text-base font-bold text-theater-gold">
+          <div className="flex items-center justify-between pt-2 border-t border-ticket-ink/30">
+            <span className="text-sm uppercase tracking-wide text-ticket-ink/70">Worldwide Opening</span>
+            <span className="text-base font-bold tabular-nums">
               {formatMillions(worldwideOpening)}
             </span>
           </div>
@@ -180,31 +184,46 @@ export default function PredictionControls({
         onFinalDomesticChange={setFinalDomestic}
         onFinalInternationalChange={setFinalInternational}
         disabled={!availability.finalDomestic}
+        variant="ticket"
       />
 
       <div>
-        <h2 className="text-2xl font-bold font-ticketing text-stone-100 mb-4">Critical Reception</h2>
+        <h2 className="text-2xl font-bold uppercase tracking-wide mb-4">Critical Reception</h2>
         <RTScoreSlider
           value={rtScore}
           onChange={setRtScore}
           disabled={!availability.rottenTomatoes}
+          variant="ticket"
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={!isFormValid || isSubmitting}
-        className={`w-full relative py-3 px-5 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all duration-300 overflow-hidden ${
-          isFormValid
-            ? "bg-linear-to-b from-[#1a0818] via-[#0f040f] to-[#050105] border border-theater-gold/40 text-theater-gold shadow-[0_0_35px_rgba(230,197,103,0.2)] hover:shadow-[0_0_60px_rgba(230,197,103,0.4)] hover:scale-[1.02] active:scale-[0.98]"
-            : "bg-cinema-900 border border-cinema-700 text-stone-500 cursor-not-allowed"
-        }`}
-      >
-        {isSubmitting ? "Locking in..." : "Lock In Prediction"}
-      </button>
+      <div className="flex items-end justify-between gap-4 pt-2">
+        <span className="text-6xl font-bold leading-none select-none" aria-hidden>
+          1
+        </span>
+        <button
+          type="submit"
+          disabled={!isFormValid || isSubmitting}
+          className={`flex-1 py-3 px-5 font-bold text-sm uppercase tracking-[0.15em] transition-opacity ${
+            isFormValid
+              ? "bg-ticket-ink text-ticket hover:opacity-90 active:opacity-80"
+              : "bg-ticket-ink/25 text-ticket-ink/50 cursor-not-allowed"
+          }`}
+        >
+          {isSubmitting ? "Locking in..." : "Lock In Prediction"}
+        </button>
+        <div
+          className="shrink-0 w-12 h-12 bg-ticket-ink text-ticket flex items-center justify-center text-sm font-bold uppercase"
+          aria-hidden
+        >
+          NR
+        </div>
+      </div>
 
       {message && (
-        <p className="text-sm text-green-400 text-center">{message}</p>
+        <p className="text-sm text-center font-medium border border-ticket-ink/40 py-2">
+          {message}
+        </p>
       )}
     </form>
   );
