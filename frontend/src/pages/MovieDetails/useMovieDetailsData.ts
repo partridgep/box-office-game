@@ -2,12 +2,13 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { getMovieDetails } from "../../services/movies.service";
 import { getGuessFromId, getAllGuessesForMovie } from "../../services/guesses.service";
+import { getCompGroups } from "../../services/categories.service";
 import { useMovieStore } from "../../store/useMovieStore";
 import { useGuessStore } from "../../store/useGuessStore";
 import { useUserStore } from "../../store/useUserStore";
 import { useSetInviterId } from "../../store/useInviteStore";
 import { getPredictionAvailability } from "../../utils/predictionWindows";
-import { MovieData, SavedMovie, Guess } from "../../types";
+import { MovieData, SavedMovie, Guess, CompGroup } from "../../types";
 
 export function useMovieDetailsData() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ export function useMovieDetailsData() {
   const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
   const [inviterGuess, setInviterGuess] = useState<Guess | undefined>();
   const [allMovieGuesses, setAllMovieGuesses] = useState<Guess[]>([]);
+  const [compGroups, setCompGroups] = useState<CompGroup[]>([]);
 
   const isInDatabase = useMemo(
     () => (id ? Boolean(movies[id]) : false),
@@ -50,6 +52,9 @@ export function useMovieDetailsData() {
   useEffect(() => {
     if (movieId && isInDatabase) {
       loadAllMovieGuesses();
+      loadCompGroups(movieId);
+    } else {
+      setCompGroups([]);
     }
   }, [movieId, isInDatabase]);
 
@@ -74,6 +79,16 @@ export function useMovieDetailsData() {
     setAllMovieGuesses(allGuesses.data ?? []);
   }
 
+  async function loadCompGroups(subjectMovieId: string) {
+    try {
+      const groups = await getCompGroups(subjectMovieId);
+      setCompGroups(groups);
+    } catch (error) {
+      console.error("Error fetching comp groups:", error);
+      setCompGroups([]);
+    }
+  }
+
   async function fetchMovieDetails() {
     try {
       const result: MovieData = await getMovieDetails(id!);
@@ -92,6 +107,7 @@ export function useMovieDetailsData() {
     loggedGuess,
     inviterGuess,
     allMovieGuesses,
+    compGroups,
     refreshGuesses: loadAllMovieGuesses,
   };
 }

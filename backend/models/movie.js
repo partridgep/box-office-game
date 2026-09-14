@@ -4,7 +4,24 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Movie extends Model {
     static associate(models) {
-    // define association here
+      Movie.belongsToMany(models.Category, {
+        through: models.MovieCategory,
+        foreignKey: 'movie_id',
+        otherKey: 'category_id',
+        as: 'categories',
+      });
+      Movie.hasMany(models.MovieCategory, {
+        foreignKey: 'movie_id',
+        as: 'categoryMemberships',
+      });
+      Movie.hasMany(models.MovieCompGroup, {
+        foreignKey: 'subject_movie_id',
+        as: 'compGroups',
+      });
+      Movie.hasMany(models.MovieCompItem, {
+        foreignKey: 'movie_id',
+        as: 'compAppearances',
+      });
     }
   }
   Movie.init({

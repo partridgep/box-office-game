@@ -26,6 +26,17 @@ const {
     getIsFollowing,
     postConnectUsers
 } = require('../controllers/usersController');
+const {
+    getCategories,
+    getCategory,
+    postCategory,
+    putCategory,
+    removeCategory,
+    putCategoryMovies,
+    getLobby,
+    getMovieCompGroups,
+    putMovieCompGroups,
+} = require('../controllers/categories');
 
 const router = express.Router();
 
@@ -38,6 +49,15 @@ router.put('/movie/:tmdbID', updateMovie);
 router.delete('/movie/delete', deleteMovieFromDB);
 router.get('/all-movies', getSavedMovies);
 router.post('/refresh-movies', updateAllMovies);
+router.get('/lobby', getLobby);
+router.get('/categories', getCategories);
+router.post('/categories', postCategory);
+router.get('/categories/:id', getCategory);
+router.put('/categories/:id', putCategory);
+router.delete('/categories/:id', removeCategory);
+router.put('/categories/:id/movies', putCategoryMovies);
+router.get('/movies/:movieId/comp-groups', getMovieCompGroups);
+router.put('/movies/:movieId/comp-groups', putMovieCompGroups);
 router.post('/guess', postGuess);
 router.get('/guess/id/:guess_id', getGuessFromId);
 router.get('/guesses/movie_id/:movie_id', getAllGuessesForMovie);

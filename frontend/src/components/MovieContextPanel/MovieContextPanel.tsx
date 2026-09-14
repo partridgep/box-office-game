@@ -1,12 +1,11 @@
-import { useMemo } from "react";
-import { MovieData, Guess } from "../../types";
+import { MovieData, Guess, CompGroup } from "../../types";
 import SocialProof from "../SocialProof/SocialProof";
 import HistoricalComps from "../HistoricalComps/HistoricalComps";
-import { getMockComps, compsToMarkers } from "../../data/mockComps";
 
 interface MovieContextPanelProps {
   movie: MovieData;
   allMovieGuesses: Guess[];
+  compGroups?: CompGroup[];
   onCompSelect?: (domesticOpening: number) => void;
 }
 
@@ -16,9 +15,9 @@ const frosted =
 export default function MovieContextPanel({
   movie,
   allMovieGuesses,
+  compGroups = [],
   onCompSelect,
 }: MovieContextPanelProps) {
-  const comps = useMemo(() => getMockComps(movie.genre), [movie.genre]);
   const releaseDate = movie.released
     ? new Date(movie.released).toLocaleDateString(undefined, {
         month: "long",
@@ -61,10 +60,8 @@ export default function MovieContextPanel({
       </div>
 
       <div className={`${frosted} p-4`}>
-        <HistoricalComps comps={comps} onCompSelect={onCompSelect} />
+        <HistoricalComps groups={compGroups} onCompSelect={onCompSelect} />
       </div>
     </div>
   );
 }
-
-export { compsToMarkers, getMockComps };

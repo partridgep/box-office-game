@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { useMovieDetailsData } from "./useMovieDetailsData";
 import { usePageMode } from "../../hooks/usePageMode";
 import MovieContextPanel from "../../components/MovieContextPanel/MovieContextPanel";
-import { getMockComps, compsToMarkers } from "../../data/mockComps";
+import { compsToMarkers } from "../../components/HistoricalComps/HistoricalComps";
 import PredictionControls from "../../components/PredictionControls/PredictionControls";
 import LockedPredictionSummary from "../../components/LockedPredictionSummary/LockedPredictionSummary";
 import GuessComparisonCards from "../../components/GuessComparisonCards/GuessComparisonCards";
@@ -55,6 +55,7 @@ export default function MovieDetails() {
     loggedGuess,
     inviterGuess,
     allMovieGuesses,
+    compGroups,
   } = useMovieDetailsData();
 
   const [showingShareDialog, setShowingShareDialog] = useState(false);
@@ -63,9 +64,8 @@ export default function MovieDetails() {
   const mode = usePageMode(movie, loggedGuess, isInDatabase);
 
   const compMarkers = useMemo(() => {
-    if (!movie) return [];
-    return compsToMarkers(getMockComps(movie.genre));
-  }, [movie]);
+    return compsToMarkers(compGroups);
+  }, [compGroups]);
 
   const hasOpeningData = movie?.domesticOpening
     ? parseMoney(movie.domesticOpening) != null
@@ -104,7 +104,7 @@ export default function MovieDetails() {
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="shrink-0 -ml-1 mt-0 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
+          className="shrink-0 -ml-1 mt-0.5 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
           aria-label="Back to lobby"
         >
           {/* Pixel-stepped arrow to match Ticketing’s bitmap look */}
@@ -281,6 +281,7 @@ export default function MovieDetails() {
             <MovieContextPanel
               movie={movie}
               allMovieGuesses={allMovieGuesses}
+              compGroups={compGroups}
               onCompSelect={(value) => setDomesticOpeningSeed(value)}
             />
           </div>

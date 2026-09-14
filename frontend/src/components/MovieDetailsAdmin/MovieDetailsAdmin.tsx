@@ -275,6 +275,14 @@ const MovieDetails = () => {
             </p>
           </button>
         }
+        { isInDatabase && id && (
+          <button
+            onClick={() => navigate(`/admin/movies/${id}/comps`)}
+            className={styles['update-btn']}
+          >
+            <p>Manage comps</p>
+          </button>
+        )}
       </div>
       <div className={styles['movie-data']}>
         <p><strong>Year:</strong> {movie.year}</p>

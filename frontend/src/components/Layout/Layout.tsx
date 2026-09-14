@@ -52,6 +52,16 @@ export default function Layout({ children }: LayoutProps) {
           >
             Challenges
           </button>
+          <button
+            onClick={() => navigate('/admin/categories')}
+            className={`transition-colors ${
+              location.pathname.startsWith('/admin')
+                ? 'text-rose-400'
+                : 'text-stone-500 hover:text-stone-300'
+            }`}
+          >
+            Admin
+          </button>
         </nav>
 
         <div className="flex items-center space-x-4">

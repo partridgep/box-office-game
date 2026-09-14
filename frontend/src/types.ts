@@ -98,8 +98,77 @@ export type OverallPerformance = {
   percentile: number;
 };
 
+export type Category = {
+  id: string;
+  slug: string;
+  lobby_label: string | null;
+  comp_label: string | null;
+  sort_order: number;
+  is_active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  membershipCount?: number;
+  movies?: LobbyMovie[];
+};
 
+export type LobbyMovie = {
+  id: string;
+  tmdbID: string | number;
+  imdbID: string;
+  title: string;
+  year: number;
+  poster: string;
+  plot?: string;
+  rated?: string;
+  released?: Date | string | null;
+  budget?: string | null;
+  director?: string | null;
+  actors?: string | null;
+  genre?: string | null;
+  sortOrder?: number;
+};
 
+export type LobbySection = {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+  movies: LobbyMovie[];
+};
 
+export type CompMovie = {
+  id: string;
+  tmdbID: string | number;
+  imdbID: string;
+  title: string;
+  year: number;
+  poster: string;
+  domesticOpening: string | null;
+  internationalOpening: string | null;
+  domesticGross: string | null;
+  internationalGross: string | null;
+  rottenTomatoesScore: string | null;
+  reason: string | null;
+  sortOrder: number;
+};
 
+export type CompGroup = {
+  id: string;
+  label: string | null;
+  categoryId: string | null;
+  sortOrder: number;
+  source?: "category" | "manual";
+  movies: CompMovie[];
+};
+
+export type CompGroupInput = {
+  categoryId?: string | null;
+  label?: string | null;
+  sortOrder?: number;
+  items: Array<{
+    movieId: string;
+    sortOrder?: number;
+    reason?: string | null;
+  }>;
+};
 
