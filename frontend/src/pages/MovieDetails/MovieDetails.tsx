@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { useMovieDetailsData } from "./useMovieDetailsData";
 import { usePageMode } from "../../hooks/usePageMode";
@@ -99,27 +99,63 @@ export default function MovieDetails() {
     : "TBA";
 
   const titleBlock = (
-    <TicketStub compact className="max-w-md">
+    <TicketStub compact className="max-w-md rounded-r">
       <div className="flex items-start gap-3">
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="shrink-0 -ml-1 -mt-0.5 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
+          className="shrink-0 -ml-1 mt-0 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
           aria-label="Back to lobby"
         >
-          <ArrowLeft size={22} strokeWidth={2.5} />
+          {/* Pixel-stepped arrow to match Ticketing’s bitmap look */}
+          <svg
+            width="56"
+            height="30"
+            viewBox="0 0 28 28"
+            fill="currentColor"
+            shapeRendering="crispEdges"
+            aria-hidden
+          >
+            <rect x="12" y="1" width="2" height="1" />
+            <rect x="11" y="2" width="3" height="1" />
+            <rect x="10" y="3" width="4" height="1" />
+            <rect x="9" y="4" width="5" height="1" />
+            <rect x="8" y="5" width="6" height="1" />
+            <rect x="7" y="6" width="7" height="1" />
+            <rect x="6" y="7" width="8" height="1" />
+            <rect x="5" y="8" width="9" height="1" />
+            <rect x="4" y="9" width="10" height="1" />
+            <rect x="3" y="10" width="11" height="1" />
+            <rect x="2" y="11" width="12" height="1" />
+            <rect x="1" y="12" width="13" height="1" />
+
+            <rect x="0" y="13" width="14" height="2" />
+
+            <rect x="1" y="15" width="13" height="1" />
+            <rect x="2" y="16" width="12" height="1" />
+            <rect x="3" y="17" width="11" height="1" />
+            <rect x="4" y="18" width="10" height="1" />
+            <rect x="5" y="19" width="9" height="1" />
+            <rect x="6" y="20" width="8" height="1" />
+            <rect x="7" y="21" width="7" height="1" />
+            <rect x="8" y="22" width="6" height="1" />
+            <rect x="9" y="23" width="5" height="1" />
+            <rect x="10" y="24" width="4" height="1" />
+            <rect x="11" y="25" width="3" height="1" />
+            <rect x="12" y="26" width="2" height="1" />
+
+            <rect x="14" y="10" width="14" height="8" />
+          </svg>
+
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-ticket-ink/70">
-            Box Office Arena
-          </p>
-          <h1 className="text-2xl md:text-4xl font-bold uppercase leading-none mt-1">
+          <h1 className="text-left text-2xl md:text-4xl font-bold uppercase leading-none mt-1">
             {movie.title}
           </h1>
-          <p className="text-xs uppercase tracking-wide mt-2 text-ticket-ink/80">
+          <p className="text-xs text-left uppercase tracking-wide mt-2 text-ticket-ink/80">
             {releaseDate}
           </p>
-          <p className="text-xs uppercase tracking-wide mt-0.5 text-ticket-ink/80">
+          <p className="text-xs text-left uppercase tracking-wide mt-0.5 text-ticket-ink/80">
             {movie.genre}
           </p>
         </div>
@@ -227,7 +263,8 @@ export default function MovieDetails() {
             </div>
             {useTicketShell ? (
               <TicketStub
-                footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE ARENA`}
+                footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
+                className="rounded-r"
               >
                 {panelContent}
               </TicketStub>

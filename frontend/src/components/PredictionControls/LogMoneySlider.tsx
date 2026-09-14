@@ -3,8 +3,11 @@ import * as Slider from "@radix-ui/react-slider";
 import { Lock } from "lucide-react";
 import {
   valueToPosition,
-  positionToValue,
   snapToDetent,
+  snapToWholeMagnet,
+  roundToTenth,
+  FAST_SLIDE_SPEED,
+  SLOW_SLIDE_SPEED,
 } from "../../utils/logScale";
 import { formatMillions } from "../../utils/formatMoney";
 
@@ -41,10 +44,11 @@ export default function LogMoneySlider({
   const [inputWidth, setInputWidth] = useState<number | undefined>();
   const measureRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const lastWholeRef = useRef<number | null>(null);
+  const velocityRef = useRef({ lastValue: 0, lastTime: 0, speed: 0 });
   const isTicket = variant === "ticket";
 
   const displayValue = value ?? min;
-  const position = valueToPosition(displayValue, min, max);
 
   const numberStr = inputText || (value != null ? value.toFixed(1) : "");
   const sizerStr = numberStr || min.toFixed(1);
@@ -63,23 +67,81 @@ export default function LogMoneySlider({
     return () => observer.disconnect();
   }, [sizerStr]);
 
-  const handleSliderChange = (positions: number[]) => {
-    const raw = positionToValue(positions[0], min, max);
-    onChange(Math.round(raw * 10) / 10);
+  const sampleVelocity = (raw: number) => {
+    const now = performance.now();
+    const { lastValue, lastTime, speed } = velocityRef.current;
+    const dt = now - lastTime;
+
+    if (lastTime > 0 && dt > 0 && dt < 80) {
+      const instant = (Math.abs(raw - lastValue) / dt) * 1000;
+      velocityRef.current.speed = speed * 0.35 + instant * 0.65;
+    } else if (dt >= 80) {
+      // Pause between moves — decay so a slow nudge after a fling counts as slow.
+      velocityRef.current.speed *= 0.2;
+    }
+
+    velocityRef.current.lastValue = raw;
+    velocityRef.current.lastTime = now;
+    return velocityRef.current.speed;
   };
 
-  const handleSliderCommit = (positions: number[]) => {
+  const resetVelocity = () => {
+    velocityRef.current = { lastValue: 0, lastTime: 0, speed: 0 };
+  };
+
+  const handleSliderChange = (values: number[]) => {
+    const raw = values[0];
+    const speed = sampleVelocity(raw);
+    let next = roundToTenth(raw);
+
+    // Only magnetize when the user is moving slowly enough to aim.
+    if (speed <= SLOW_SLIDE_SPEED) {
+      next = snapToWholeMagnet(raw);
+    }
+
+    const clamped = Math.max(min, Math.min(max, next));
+
+    if (
+      speed <= SLOW_SLIDE_SPEED &&
+      Number.isInteger(clamped) &&
+      clamped !== lastWholeRef.current
+    ) {
+      lastWholeRef.current = clamped;
+      navigator.vibrate?.(8);
+    } else if (!Number.isInteger(clamped)) {
+      lastWholeRef.current = null;
+    }
+
+    onChange(clamped);
+  };
+
+  const handleSliderCommit = (values: number[]) => {
     setIsDragging(false);
-    const raw = positionToValue(positions[0], min, max);
-    const snapped = snapToDetent(Math.round(raw * 10) / 10);
-    onChange(snapped);
+    lastWholeRef.current = null;
+
+    const raw = values[0];
+    const speed = velocityRef.current.speed;
+    resetVelocity();
+
+    let next: number;
+    if (speed >= FAST_SLIDE_SPEED) {
+      // Fast fling: land where released (nearest whole), no milestone pull.
+      next = Math.round(raw);
+    } else if (speed <= SLOW_SLIDE_SPEED) {
+      // Fine adjustment: whole magnet + nearby milestone only within ~$1.25M.
+      next = snapToDetent(snapToWholeMagnet(raw));
+    } else {
+      next = roundToTenth(raw);
+    }
+
+    onChange(Math.max(min, Math.min(max, next)));
     navigator.vibrate?.(5);
   };
 
   const handleInputBlur = () => {
     const parsed = parseFloat(inputText);
     if (!isNaN(parsed) && parsed >= min && parsed <= max) {
-      onChange(snapToDetent(parsed));
+      onChange(snapToDetent(roundToTenth(parsed)));
     }
     setInputText("");
   };
@@ -164,12 +226,15 @@ export default function LogMoneySlider({
 
       <Slider.Root
         className="relative flex items-center select-none touch-none w-full h-5"
-        value={[position]}
+        value={[displayValue]}
         onValueChange={handleSliderChange}
         onValueCommit={handleSliderCommit}
-        onPointerDown={() => setIsDragging(true)}
-        min={0}
-        max={100}
+        onPointerDown={() => {
+          setIsDragging(true);
+          resetVelocity();
+        }}
+        min={min}
+        max={max}
         step={0.1}
         disabled={disabled}
         aria-valuetext={formatMillions(value)}

@@ -198,9 +198,9 @@ export default function PredictionControls({
       </div>
 
       <div className="flex items-end justify-between gap-4 pt-2">
-        <span className="text-6xl font-bold leading-none select-none" aria-hidden>
+        {/* <span className="text-6xl font-bold leading-none select-none" aria-hidden>
           1
-        </span>
+        </span> */}
         <button
           type="submit"
           disabled={!isFormValid || isSubmitting}
@@ -212,12 +212,12 @@ export default function PredictionControls({
         >
           {isSubmitting ? "Locking in..." : "Lock In Prediction"}
         </button>
-        <div
+        {/* <div
           className="shrink-0 w-12 h-12 bg-ticket-ink text-ticket flex items-center justify-center text-sm font-bold uppercase"
           aria-hidden
         >
           NR
-        </div>
+        </div> */}
       </div>
 
       {message && (

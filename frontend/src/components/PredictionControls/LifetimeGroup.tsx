@@ -48,7 +48,7 @@ export default function LifetimeGroup({
             : "text-2xl font-bold font-ticketing text-stone-100 mb-1"
         }
       >
-        Lifetime Totals
+        Lifetime Gross
       </h2>
       <p
         className={

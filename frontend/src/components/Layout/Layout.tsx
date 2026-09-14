@@ -98,7 +98,7 @@ export default function Layout({ children }: LayoutProps) {
       )}
 
       {/* Main Content */}
-      <main className="pt-18 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pb-8">
+      <main className="pt-18 flex-1 max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pb-8">
         {children}
       </main>
 
