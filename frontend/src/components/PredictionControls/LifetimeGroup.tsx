@@ -1,4 +1,5 @@
 import LogMoneySlider from "./LogMoneySlider";
+import type { CompMarker } from "./CompMarkers";
 import { formatMillions } from "../../utils/formatMoney";
 
 interface LifetimeGroupProps {
@@ -10,6 +11,8 @@ interface LifetimeGroupProps {
   onFinalInternationalChange: (v: number) => void;
   disabled: boolean;
   variant?: "default" | "ticket";
+  finalDomesticMarkers?: CompMarker[];
+  finalInternationalMarkers?: CompMarker[];
 }
 
 export default function LifetimeGroup({
@@ -21,6 +24,8 @@ export default function LifetimeGroup({
   onFinalInternationalChange,
   disabled,
   variant = "default",
+  finalDomesticMarkers = [],
+  finalInternationalMarkers = [],
 }: LifetimeGroupProps) {
   const isTicket = variant === "ticket";
 
@@ -70,6 +75,7 @@ export default function LifetimeGroup({
           max={500}
           disabled={disabled}
           variant={variant}
+          compMarkers={finalDomesticMarkers}
         />
         {showDomesticWarning && (
           <p
@@ -92,6 +98,7 @@ export default function LifetimeGroup({
           max={500}
           disabled={disabled}
           variant={variant}
+          compMarkers={finalInternationalMarkers}
         />
         {showIntlWarning && (
           <p

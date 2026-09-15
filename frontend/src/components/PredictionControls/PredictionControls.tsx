@@ -7,25 +7,34 @@ import UserSignup from "../UserSignup/UserSignupPrompt";
 import UserConfirmation from "../UserSignup/UserConfirmation";
 import { postGuess } from "../../services/guesses.service";
 import { getPredictionAvailability } from "../../utils/predictionWindows";
-import LogMoneySlider, { CompMarker } from "./LogMoneySlider";
+import LogMoneySlider from "./LogMoneySlider";
 import RTScoreSlider from "./RTScoreSlider";
 import LifetimeGroup from "./LifetimeGroup";
 import { formatMillions } from "../../utils/formatMoney";
+import {
+  CompMarkersByField,
+} from "../HistoricalComps/HistoricalComps";
 
 interface PredictionControlsProps {
   movieId: string;
   availability: ReturnType<typeof getPredictionAvailability>;
-  compMarkers?: CompMarker[];
+  compMarkersByField?: CompMarkersByField;
   inviterName?: string;
-  domesticOpeningSeed?: number;
 }
+
+const emptyMarkers: CompMarkersByField = {
+  domesticOpening: [],
+  internationalOpening: [],
+  finalDomestic: [],
+  finalInternational: [],
+  rottenTomatoesScore: [],
+};
 
 export default function PredictionControls({
   movieId,
   availability,
-  compMarkers = [],
+  compMarkersByField = emptyMarkers,
   inviterName,
-  domesticOpeningSeed,
 }: PredictionControlsProps) {
   const user = useUserStore((state) => state.user);
   const addGuess = useGuessStore((state) => state.addGuess);
@@ -55,12 +64,6 @@ export default function PredictionControls({
     }
     triggerMutualFollow();
   }, [user, inviterId, clearInvite]);
-
-  useEffect(() => {
-    if (domesticOpeningSeed != null) {
-      setDomesticOpening(domesticOpeningSeed);
-    }
-  }, [domesticOpeningSeed]);
 
   const worldwideOpening =
     domesticOpening != null && internationalOpening != null
@@ -154,7 +157,7 @@ export default function PredictionControls({
             min={1}
             max={250}
             disabled={!availability.domesticOpening}
-            compMarkers={compMarkers}
+            compMarkers={compMarkersByField.domesticOpening}
             variant="ticket"
           />
           <LogMoneySlider
@@ -165,6 +168,7 @@ export default function PredictionControls({
             min={1}
             max={250}
             disabled={!availability.internationalOpening}
+            compMarkers={compMarkersByField.internationalOpening}
             variant="ticket"
           />
           <div className="flex items-center justify-between pt-2 border-t border-ticket-ink/30">
@@ -185,6 +189,8 @@ export default function PredictionControls({
         onFinalInternationalChange={setFinalInternational}
         disabled={!availability.finalDomestic}
         variant="ticket"
+        finalDomesticMarkers={compMarkersByField.finalDomestic}
+        finalInternationalMarkers={compMarkersByField.finalInternational}
       />
 
       <div>
@@ -194,13 +200,11 @@ export default function PredictionControls({
           onChange={setRtScore}
           disabled={!availability.rottenTomatoes}
           variant="ticket"
+          compMarkers={compMarkersByField.rottenTomatoesScore}
         />
       </div>
 
       <div className="flex items-end justify-between gap-4 pt-2">
-        {/* <span className="text-6xl font-bold leading-none select-none" aria-hidden>
-          1
-        </span> */}
         <button
           type="submit"
           disabled={!isFormValid || isSubmitting}
@@ -212,12 +216,6 @@ export default function PredictionControls({
         >
           {isSubmitting ? "Locking in..." : "Lock In Prediction"}
         </button>
-        {/* <div
-          className="shrink-0 w-12 h-12 bg-ticket-ink text-ticket flex items-center justify-center text-sm font-bold uppercase"
-          aria-hidden
-        >
-          NR
-        </div> */}
       </div>
 
       {message && (

@@ -10,11 +10,9 @@ import {
   SLOW_SLIDE_SPEED,
 } from "../../utils/logScale";
 import { formatMillions } from "../../utils/formatMoney";
+import CompMarkers, { type CompMarker } from "./CompMarkers";
 
-export interface CompMarker {
-  label: string;
-  value: number;
-}
+export type { CompMarker };
 
 interface LogMoneySliderProps {
   label: string;
@@ -146,11 +144,6 @@ export default function LogMoneySlider({
     setInputText("");
   };
 
-  const handleCompClick = (compValue: number) => {
-    if (disabled) return;
-    onChange(snapToDetent(compValue));
-  };
-
   const valueTextClass = isTicket
     ? isDragging
       ? "text-ticket-ink"
@@ -260,41 +253,17 @@ export default function LogMoneySlider({
         />
       </Slider.Root>
 
-      {compMarkers.length > 0 && (
-        <div className="relative h-6 mt-1">
-          {compMarkers.map((comp) => {
-            const compPos = valueToPosition(comp.value, min, max);
-            return (
-              <button
-                key={comp.label}
-                type="button"
-                disabled={disabled}
-                onClick={() => handleCompClick(comp.value)}
-                className="absolute -translate-x-1/2 flex flex-col items-center group"
-                style={{ left: `${compPos}%` }}
-                title={`${comp.label}: ${formatMillions(comp.value)}`}
-              >
-                <span
-                  className={`w-0.5 h-2 transition-colors ${
-                    isTicket
-                      ? "bg-ticket-ink/40 group-hover:bg-ticket-ink"
-                      : "bg-stone-500 group-hover:bg-theater-gold"
-                  }`}
-                />
-                <span
-                  className={`text-[9px] truncate max-w-[60px] transition-colors ${
-                    isTicket
-                      ? "text-ticket-ink/50 group-hover:text-ticket-ink"
-                      : "text-stone-500 group-hover:text-theater-gold"
-                  }`}
-                >
-                  {comp.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <CompMarkers
+        markers={compMarkers}
+        getPos={(v) => valueToPosition(v, min, max)}
+        formatValue={formatMillions}
+        onSelect={(v) => {
+          if (disabled) return;
+          onChange(snapToDetent(v));
+        }}
+        disabled={disabled}
+        variant={variant}
+      />
     </div>
   );
 }

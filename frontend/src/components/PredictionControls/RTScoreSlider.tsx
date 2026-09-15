@@ -1,12 +1,14 @@
 import { useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { Lock } from "lucide-react";
+import CompMarkers, { type CompMarker } from "./CompMarkers";
 
 interface RTScoreSliderProps {
   value: number | null;
   onChange: (v: number) => void;
   disabled?: boolean;
   variant?: "default" | "ticket";
+  compMarkers?: CompMarker[];
 }
 
 export default function RTScoreSlider({
@@ -14,6 +16,7 @@ export default function RTScoreSlider({
   onChange,
   disabled = false,
   variant = "default",
+  compMarkers = [],
 }: RTScoreSliderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const displayValue = value ?? 50;
@@ -78,6 +81,18 @@ export default function RTScoreSlider({
           aria-label="Rotten Tomatoes score"
         />
       </Slider.Root>
+
+      <CompMarkers
+        markers={compMarkers}
+        getPos={(v) => Math.min(100, Math.max(0, v))}
+        formatValue={(v) => `${Math.round(v)}%`}
+        onSelect={(v) => {
+          if (disabled) return;
+          onChange(Math.round(v));
+        }}
+        disabled={disabled}
+        variant={variant}
+      />
 
       <input
         type="number"

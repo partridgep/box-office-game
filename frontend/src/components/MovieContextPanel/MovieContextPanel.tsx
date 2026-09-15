@@ -6,7 +6,6 @@ interface MovieContextPanelProps {
   movie: MovieData;
   allMovieGuesses: Guess[];
   compGroups?: CompGroup[];
-  onCompSelect?: (domesticOpening: number) => void;
 }
 
 const frosted =
@@ -16,7 +15,6 @@ export default function MovieContextPanel({
   movie,
   allMovieGuesses,
   compGroups = [],
-  onCompSelect,
 }: MovieContextPanelProps) {
   const releaseDate = movie.released
     ? new Date(movie.released).toLocaleDateString(undefined, {
@@ -60,7 +58,7 @@ export default function MovieContextPanel({
       </div>
 
       <div className={`${frosted} p-4`}>
-        <HistoricalComps groups={compGroups} onCompSelect={onCompSelect} />
+        <HistoricalComps groups={compGroups} />
       </div>
     </div>
   );

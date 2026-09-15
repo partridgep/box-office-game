@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { useMovieDetailsData } from "./useMovieDetailsData";
 import { usePageMode } from "../../hooks/usePageMode";
 import MovieContextPanel from "../../components/MovieContextPanel/MovieContextPanel";
-import { compsToMarkers } from "../../components/HistoricalComps/HistoricalComps";
+import { compsToMarkersByField } from "../../components/HistoricalComps/HistoricalComps";
 import PredictionControls from "../../components/PredictionControls/PredictionControls";
 import LockedPredictionSummary from "../../components/LockedPredictionSummary/LockedPredictionSummary";
 import GuessComparisonCards from "../../components/GuessComparisonCards/GuessComparisonCards";
@@ -59,12 +59,11 @@ export default function MovieDetails() {
   } = useMovieDetailsData();
 
   const [showingShareDialog, setShowingShareDialog] = useState(false);
-  const [domesticOpeningSeed, setDomesticOpeningSeed] = useState<number | undefined>();
 
   const mode = usePageMode(movie, loggedGuess, isInDatabase);
 
-  const compMarkers = useMemo(() => {
-    return compsToMarkers(compGroups);
+  const compMarkersByField = useMemo(() => {
+    return compsToMarkersByField(compGroups);
   }, [compGroups]);
 
   const hasOpeningData = movie?.domesticOpening
@@ -169,9 +168,8 @@ export default function MovieDetails() {
         <PredictionControls
           movieId={movie.id}
           availability={predictionAvailability}
-          compMarkers={compMarkers}
+          compMarkersByField={compMarkersByField}
           inviterName={inviterName}
-          domesticOpeningSeed={domesticOpeningSeed}
         />
       )}
 
@@ -282,7 +280,6 @@ export default function MovieDetails() {
               movie={movie}
               allMovieGuesses={allMovieGuesses}
               compGroups={compGroups}
-              onCompSelect={(value) => setDomesticOpeningSeed(value)}
             />
           </div>
         </div>
