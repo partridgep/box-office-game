@@ -1,6 +1,7 @@
 import LogMoneySlider from "./LogMoneySlider";
 import type { CompMarker } from "./CompMarkers";
 import { formatMillions } from "../../utils/formatMoney";
+import { ABSOLUTE_MAX_LIFETIME } from "../../utils/logScale";
 
 interface LifetimeGroupProps {
   finalDomestic: number | null;
@@ -11,6 +12,9 @@ interface LifetimeGroupProps {
   onFinalInternationalChange: (v: number) => void;
   disabled: boolean;
   variant?: "default" | "ticket";
+  scaleKey?: string;
+  finalDomesticFallback?: number;
+  finalInternationalFallback?: number;
   finalDomesticMarkers?: CompMarker[];
   finalInternationalMarkers?: CompMarker[];
 }
@@ -24,6 +28,9 @@ export default function LifetimeGroup({
   onFinalInternationalChange,
   disabled,
   variant = "default",
+  scaleKey,
+  finalDomesticFallback = 1500,
+  finalInternationalFallback = 1500,
   finalDomesticMarkers = [],
   finalInternationalMarkers = [],
 }: LifetimeGroupProps) {
@@ -71,8 +78,9 @@ export default function LifetimeGroup({
           label="Final Domestic ($M)"
           value={finalDomestic}
           onChange={onFinalDomesticChange}
-          min={1}
-          max={1500}
+          fallbackMax={finalDomesticFallback}
+          absoluteMax={ABSOLUTE_MAX_LIFETIME}
+          scaleKey={scaleKey}
           disabled={disabled}
           variant={variant}
           compMarkers={finalDomesticMarkers}
@@ -94,8 +102,9 @@ export default function LifetimeGroup({
           label="Final International ($M)"
           value={finalInternational}
           onChange={onFinalInternationalChange}
-          min={1}
-          max={1500}
+          fallbackMax={finalInternationalFallback}
+          absoluteMax={ABSOLUTE_MAX_LIFETIME}
+          scaleKey={scaleKey}
           disabled={disabled}
           variant={variant}
           compMarkers={finalInternationalMarkers}
