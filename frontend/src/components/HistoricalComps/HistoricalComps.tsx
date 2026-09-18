@@ -1,6 +1,7 @@
 import { CompGroup, CompMovie } from "../../types";
 import { formatMillions } from "../../utils/formatMoney";
 import { parseMoney } from "../../utils/guessComparison";
+import { generateAcronym } from "../../utils/acronym";
 import type { CompMarker } from "../PredictionControls/CompMarkers";
 
 export type CompMarkersByField = {
@@ -15,8 +16,8 @@ interface HistoricalCompsProps {
   groups: CompGroup[];
 }
 
-function shortLabel(title: string) {
-  return title.split(":")[0].split(" ")[0];
+function compLabel(movie: CompMovie) {
+  return movie.acronym?.trim() || generateAcronym(movie.title) || movie.title;
 }
 
 function dollarsToMillions(dollars: number | null): number | null {
@@ -142,13 +143,15 @@ export function compsToMarkersByField(groups: CompGroup[]): CompMarkersByField {
   for (const group of groups) {
     for (const movie of group.movies) {
       const metrics = getCompMetrics(movie);
-      const label = shortLabel(movie.title);
+      const label = compLabel(movie);
+      const title = movie.title;
       const id = movie.id;
 
       if (metrics.domesticOpening != null) {
         result.domesticOpening.push({
           id: `${id}-dom-open`,
           label,
+          title,
           value: metrics.domesticOpening,
         });
       }
@@ -156,6 +159,7 @@ export function compsToMarkersByField(groups: CompGroup[]): CompMarkersByField {
         result.internationalOpening.push({
           id: `${id}-int-open`,
           label,
+          title,
           value: metrics.internationalOpening,
         });
       }
@@ -163,6 +167,7 @@ export function compsToMarkersByField(groups: CompGroup[]): CompMarkersByField {
         result.finalDomestic.push({
           id: `${id}-dom-final`,
           label,
+          title,
           value: metrics.finalDomestic,
         });
       }
@@ -170,6 +175,7 @@ export function compsToMarkersByField(groups: CompGroup[]): CompMarkersByField {
         result.finalInternational.push({
           id: `${id}-int-final`,
           label,
+          title,
           value: metrics.finalInternational,
         });
       }
@@ -177,6 +183,7 @@ export function compsToMarkersByField(groups: CompGroup[]): CompMarkersByField {
         result.rottenTomatoesScore.push({
           id: `${id}-rt`,
           label,
+          title,
           value: metrics.rottenTomatoesScore,
         });
       }

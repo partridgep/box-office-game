@@ -82,17 +82,20 @@ export default function RTScoreSlider({
         />
       </Slider.Root>
 
-      <CompMarkers
-        markers={compMarkers}
-        getPos={(v) => Math.min(100, Math.max(0, v))}
-        formatValue={(v) => `${Math.round(v)}%`}
-        onSelect={(v) => {
-          if (disabled) return;
-          onChange(Math.round(v));
-        }}
-        disabled={disabled}
-        variant={variant}
-      />
+      {/* Radix keeps the thumb in-bounds, so 0–100% is inset by half of w-5. */}
+      <div className="mx-2.5">
+        <CompMarkers
+          markers={compMarkers}
+          getPos={(v) => Math.min(100, Math.max(0, v))}
+          formatValue={(v) => `${Math.round(v)}%`}
+          onSelect={(v) => {
+            if (disabled) return;
+            onChange(Math.round(v));
+          }}
+          disabled={disabled}
+          variant={variant}
+        />
+      </div>
 
       <input
         type="number"

@@ -1,6 +1,7 @@
 const db = require('../models');
 const { fetchBoxOfficeData } = require('./boxOfficeService');
 const { fetchRottenTomatoesData } = require('./rottenTomatoesService');
+const { generateAcronym } = require('../utils/acronym');
 const { Movie } = db;
 
 // search for movies using TMDB
@@ -197,7 +198,11 @@ const getMoviesByIdsBatch = async (ids) => {
 };
 
 const saveMovie = async (movieData) => {
-    return await Movie.create(movieData);
+    const data = { ...movieData };
+    if (!data.acronym) {
+      data.acronym = generateAcronym(data.title);
+    }
+    return await Movie.create(data);
 };
 
 const deleteMovie = async (imdbID) => {
@@ -218,7 +223,16 @@ const updateMovieDetails = async (tmdbID, updatedData) => {
       throw new Error('Movie not found');
     }
 
-    await movie.update(updatedData);
+    // Refresh payloads from TMDB omit acronym — preserve the stored value.
+    const data = { ...updatedData };
+    if (!Object.prototype.hasOwnProperty.call(data, 'acronym') || data.acronym == null || data.acronym === '') {
+      delete data.acronym;
+      if (!movie.acronym && data.title) {
+        data.acronym = generateAcronym(data.title);
+      }
+    }
+
+    await movie.update(data);
     await movie.changed('updatedAt', true);
     await movie.save();
     return movie;

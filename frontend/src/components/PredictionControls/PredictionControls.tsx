@@ -155,7 +155,7 @@ export default function PredictionControls({
             value={domesticOpening}
             onChange={setDomesticOpening}
             min={1}
-            max={250}
+            max={400}
             disabled={!availability.domesticOpening}
             compMarkers={compMarkersByField.domesticOpening}
             variant="ticket"
@@ -166,7 +166,7 @@ export default function PredictionControls({
             value={internationalOpening}
             onChange={setInternationalOpening}
             min={1}
-            max={250}
+            max={500}
             disabled={!availability.internationalOpening}
             compMarkers={compMarkersByField.internationalOpening}
             variant="ticket"

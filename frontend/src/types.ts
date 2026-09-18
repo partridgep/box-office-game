@@ -24,6 +24,7 @@ export type MovieData = {
   rottenTomatoesScore: string | null | undefined,
   runtime: string,
   title: string,
+  acronym?: string | null,
   worldwideGross: string | null,
   writer: string,
   year: number,
@@ -141,6 +142,7 @@ export type CompMovie = {
   tmdbID: string | number;
   imdbID: string;
   title: string;
+  acronym?: string | null;
   year: number;
   poster: string;
   domesticOpening: string | null;

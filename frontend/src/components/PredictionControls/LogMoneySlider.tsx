@@ -31,7 +31,7 @@ export default function LogMoneySlider({
   value,
   onChange,
   min = 1,
-  max = 300,
+  max = 400,
   disabled = false,
   compMarkers = [],
   id,
@@ -253,17 +253,20 @@ export default function LogMoneySlider({
         />
       </Slider.Root>
 
-      <CompMarkers
-        markers={compMarkers}
-        getPos={(v) => valueToPosition(v, min, max)}
-        formatValue={formatMillions}
-        onSelect={(v) => {
-          if (disabled) return;
-          onChange(snapToDetent(v));
-        }}
-        disabled={disabled}
-        variant={variant}
-      />
+      {/* Radix keeps the thumb in-bounds, so 0–100% is inset by half of w-5. */}
+      <div className="mx-2.5">
+        <CompMarkers
+          markers={compMarkers}
+          getPos={(v) => valueToPosition(v, min, max)}
+          formatValue={formatMillions}
+          onSelect={(v) => {
+            if (disabled) return;
+            onChange(snapToDetent(v));
+          }}
+          disabled={disabled}
+          variant={variant}
+        />
+      </div>
     </div>
   );
 }

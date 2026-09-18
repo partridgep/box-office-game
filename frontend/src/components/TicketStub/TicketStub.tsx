@@ -19,7 +19,7 @@ export default function TicketStub({
   return (
     <div
       className={[
-        "ticket-stub relative overflow-hidden font-ticketing text-ticket-ink",
+        "ticket-stub relative overflow-visible font-ticketing text-ticket-ink",
         compact ? "ticket-stub--compact px-4 py-3" : "px-5 py-6 pl-7",
         className,
       ]

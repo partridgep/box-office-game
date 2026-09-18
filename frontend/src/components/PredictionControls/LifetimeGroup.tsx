@@ -72,7 +72,7 @@ export default function LifetimeGroup({
           value={finalDomestic}
           onChange={onFinalDomesticChange}
           min={1}
-          max={500}
+          max={1500}
           disabled={disabled}
           variant={variant}
           compMarkers={finalDomesticMarkers}
@@ -95,7 +95,7 @@ export default function LifetimeGroup({
           value={finalInternational}
           onChange={onFinalInternationalChange}
           min={1}
-          max={500}
+          max={1500}
           disabled={disabled}
           variant={variant}
           compMarkers={finalInternationalMarkers}

@@ -12,6 +12,7 @@ import { useUserStore } from '../../store/useUserStore';
 import { useSetInviterId } from "../../store/useInviteStore";
 import { getGuessFromId, getAllGuessesForMovie } from "../../services/guesses.service";
 import { MovieData, SavedMovie, Guess } from '../../types';
+import { generateAcronym } from '../../utils/acronym';
 import { useNavigate } from 'react-router-dom';
 import styles from './MovieDetails.module.css';
 
@@ -44,6 +45,8 @@ const MovieDetails = () => {
   const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSavingAcronym, setIsSavingAcronym] = useState(false);
+  const [acronymDraft, setAcronymDraft] = useState('');
   const [inviterGuess, setInviterGuess] = useState<Guess | undefined>(undefined);
   const [allMovieGuesses, setAllMovieGuesses] = useState<Guess[]>([]);
   const [showingShareDialog, showShareDialog] = useState(false);
@@ -80,6 +83,13 @@ const MovieDetails = () => {
       loadInviterGuess()
     }
   }, [fromGuessId]);
+
+  useEffect(() => {
+    if (!movie) return;
+    setAcronymDraft(
+      movie.acronym?.trim() || generateAcronym(movie.title) || '',
+    );
+  }, [movie?.id, movie?.acronym, movie?.title]);
 
   const navigate = useNavigate();
 
@@ -149,6 +159,26 @@ const MovieDetails = () => {
         console.error('Error updating movie:', error);
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleSaveAcronym = async () => {
+    if (!movie?.tmdbID || !isInDatabase) return;
+    setIsSavingAcronym(true);
+    try {
+      const next =
+        acronymDraft.trim() || generateAcronym(movie.title) || movie.title;
+      const result = await updateMovieDetails({
+        tmdbID: movie.tmdbID,
+        acronym: next,
+      });
+      const updated = result.movie ?? { ...movie, acronym: next };
+      addMovie(updated);
+      setMovie(updated);
+    } catch (error) {
+      console.error('Error saving acronym:', error);
+    } finally {
+      setIsSavingAcronym(false);
     }
   };
 
@@ -285,6 +315,37 @@ const MovieDetails = () => {
         )}
       </div>
       <div className={styles['movie-data']}>
+        {isInDatabase && (
+          <div className={styles['acronym-row']}>
+            <label htmlFor="movie-acronym">
+              <strong>Acronym:</strong>
+            </label>
+            <input
+              id="movie-acronym"
+              type="text"
+              value={acronymDraft}
+              onChange={(e) => setAcronymDraft(e.target.value)}
+              placeholder={generateAcronym(movie.title) || movie.title}
+            />
+            <button
+              type="button"
+              onClick={handleSaveAcronym}
+              disabled={isSavingAcronym}
+              className={isSavingAcronym ? styles['disabled-btn'] : styles['update-btn']}
+            >
+              {isSavingAcronym ? 'Saving...' : 'Save acronym'}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setAcronymDraft(generateAcronym(movie.title) || movie.title)
+              }
+              className={styles['update-btn']}
+            >
+              Reset default
+            </button>
+          </div>
+        )}
         <p><strong>Year:</strong> {movie.year}</p>
         <p><strong>Genre:</strong> {movie.genre}</p>
         <p><strong>Director:</strong> {movie.director}</p>

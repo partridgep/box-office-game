@@ -20,7 +20,7 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className={`min-h-screen bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles['layout']}`}>
+    <div className={`min-h-screen overflow-x-hidden bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles['layout']}`}>
       
       {/* Top Navigation Bar */}
       <header className={`fixed top-0 left-0 w-full z-50 backdrop-blur-md bg-cinema-950/80 px-6 py-4 flex items-center justify-between ${styles['header']}`}>
