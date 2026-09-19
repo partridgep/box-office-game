@@ -106,6 +106,7 @@ export type Category = {
   comp_label: string | null;
   sort_order: number;
   is_active: boolean;
+  display_in_lobby: boolean;
   createdAt?: string;
   updatedAt?: string;
   membershipCount?: number;

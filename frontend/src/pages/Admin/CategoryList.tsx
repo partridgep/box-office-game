@@ -16,6 +16,7 @@ export default function CategoryList() {
   const [lobbyLabel, setLobbyLabel] = useState("");
   const [compLabel, setCompLabel] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
+  const [displayInLobby, setDisplayInLobby] = useState(true);
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -48,10 +49,12 @@ export default function CategoryList() {
         lobby_label: lobbyLabel.trim() || null,
         comp_label: compLabel.trim() || null,
         sort_order: sortOrder,
+        display_in_lobby: displayInLobby,
       });
       setLobbyLabel("");
       setCompLabel("");
       setSortOrder(0);
+      setDisplayInLobby(true);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create category");
@@ -63,6 +66,17 @@ export default function CategoryList() {
   async function toggleActive(category: Category) {
     try {
       await updateCategory(category.id, { is_active: !category.is_active });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update category");
+    }
+  }
+
+  async function toggleDisplayInLobby(category: Category) {
+    try {
+      await updateCategory(category.id, {
+        display_in_lobby: !category.display_in_lobby,
+      });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update category");
@@ -88,13 +102,22 @@ export default function CategoryList() {
             Manage lobby sections and reusable comp labels.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          className="text-sm text-stone-400 hover:text-white transition-colors"
-        >
-          Back to lobby
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/admin")}
+            className="text-sm text-stone-400 hover:text-white transition-colors"
+          >
+            Admin home
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="text-sm text-stone-400 hover:text-white transition-colors"
+          >
+            Lobby
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -139,6 +162,20 @@ export default function CategoryList() {
             className="w-full rounded-xl bg-cinema-950 border border-cinema-800 px-3 py-2 text-stone-100 outline-none focus:border-cinema-500"
           />
         </label>
+        <label className="inline-flex items-start gap-2 text-sm text-stone-300">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={displayInLobby}
+            onChange={(e) => setDisplayInLobby(e.target.checked)}
+          />
+          <span>
+            Display in Lobby
+            <span className="block text-xs text-stone-500 font-normal">
+              Off hides this section in the lobby; comps stay active.
+            </span>
+          </span>
+        </label>
         <button
           type="submit"
           disabled={saving}
@@ -174,13 +211,23 @@ export default function CategoryList() {
                     slug: {category.slug} · order: {category.sort_order} ·{" "}
                     {category.membershipCount ?? 0} movies
                     {!category.is_active && " · inactive"}
+                    {category.display_in_lobby === false && " · hidden from lobby"}
                   </p>
                   <p className="text-xs text-stone-400 mt-1">
                     Lobby: {category.lobby_label || "—"} · Comp:{" "}
                     {category.comp_label || "—"}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => toggleDisplayInLobby(category)}
+                    className="text-xs rounded-lg border border-cinema-700 px-3 py-1.5 text-stone-300 hover:text-white hover:border-cinema-500"
+                  >
+                    {category.display_in_lobby === false
+                      ? "Show in lobby"
+                      : "Hide from lobby"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => toggleActive(category)}

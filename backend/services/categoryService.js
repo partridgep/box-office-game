@@ -86,6 +86,7 @@ async function listCategories() {
       comp_label: plain.comp_label,
       sort_order: plain.sort_order,
       is_active: plain.is_active,
+      display_in_lobby: plain.display_in_lobby,
       createdAt: plain.createdAt,
       updatedAt: plain.updatedAt,
       membershipCount: plain.memberships?.length ?? 0,
@@ -121,6 +122,7 @@ async function getCategoryById(id) {
     comp_label: plain.comp_label,
     sort_order: plain.sort_order,
     is_active: plain.is_active,
+    display_in_lobby: plain.display_in_lobby,
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt,
     movies,
@@ -144,6 +146,10 @@ async function createCategory(data) {
     comp_label: compLabel,
     sort_order: data.sort_order ?? 0,
     is_active: data.is_active !== undefined ? Boolean(data.is_active) : true,
+    display_in_lobby:
+      data.display_in_lobby !== undefined
+        ? Boolean(data.display_in_lobby)
+        : true,
   });
 }
 
@@ -156,6 +162,10 @@ async function updateCategory(id, data) {
     comp_label: data.comp_label !== undefined ? data.comp_label : category.comp_label,
     sort_order: data.sort_order !== undefined ? data.sort_order : category.sort_order,
     is_active: data.is_active !== undefined ? Boolean(data.is_active) : category.is_active,
+    display_in_lobby:
+      data.display_in_lobby !== undefined
+        ? Boolean(data.display_in_lobby)
+        : category.display_in_lobby,
   };
 
   if (!next.lobby_label && !next.comp_label) {
@@ -220,6 +230,7 @@ async function getLobbySections() {
   const categories = await Category.findAll({
     where: {
       is_active: true,
+      display_in_lobby: true,
       lobby_label: { [Op.ne]: null },
     },
     order: [['sort_order', 'ASC'], ['createdAt', 'ASC']],

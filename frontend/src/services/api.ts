@@ -1,5 +1,9 @@
-export const searchMovies = async (search: string) => {
-    const response = await fetch(`/api/search-movies?search=${search}`);
+export const searchMovies = async (search: string, year?: string | number) => {
+    const params = new URLSearchParams({ search });
+    if (year !== undefined && year !== null && String(year).trim() !== '') {
+        params.set('year', String(year).trim());
+    }
+    const response = await fetch(`/api/search-movies?${params}`);
     if (!response.ok) throw new Error('Failed to fetch movies');
     return response.json();
 };

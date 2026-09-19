@@ -53,7 +53,7 @@ export default function Layout({ children }: LayoutProps) {
             Challenges
           </button>
           <button
-            onClick={() => navigate('/admin/categories')}
+            onClick={() => navigate('/admin')}
             className={`transition-colors ${
               location.pathname.startsWith('/admin')
                 ? 'text-rose-400'

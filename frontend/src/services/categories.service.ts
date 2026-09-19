@@ -23,6 +23,7 @@ export const createCategory = async (data: {
   comp_label?: string | null;
   sort_order?: number;
   is_active?: boolean;
+  display_in_lobby?: boolean;
 }): Promise<Category> => {
   const response = await fetch("/api/categories", {
     method: "POST",
@@ -44,6 +45,7 @@ export const updateCategory = async (
     comp_label: string | null;
     sort_order: number;
     is_active: boolean;
+    display_in_lobby: boolean;
   }>
 ): Promise<Category> => {
   const response = await fetch(`/api/categories/${id}`, {

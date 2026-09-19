@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import AdminMovieSearch from "../../components/AdminMovieSearch/AdminMovieSearch";
 import {
   getCategory,
   setCategoryMovies,
   updateCategory,
 } from "../../services/categories.service";
-import { getSavedMovies } from "../../services/movies.service";
-import { Category, MovieData } from "../../types";
+import {
+  getMovieDetails,
+  getSavedMovies,
+  saveMovieDetails,
+} from "../../services/movies.service";
+import { useMovieStore } from "../../store/useMovieStore";
+import { Category, MovieData, SavedMovie } from "../../types";
 
 export default function CategoryDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const addMovie = useMovieStore((state) => state.addMovie);
   const [category, setCategory] = useState<Category | null>(null);
   const [allMovies, setAllMovies] = useState<MovieData[]>([]);
   const [memberIds, setMemberIds] = useState<string[]>([]);
@@ -19,9 +26,11 @@ export default function CategoryDetail() {
   const [slug, setSlug] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [displayInLobby, setDisplayInLobby] = useState(true);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [addingTmdbId, setAddingTmdbId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -42,6 +51,7 @@ export default function CategoryDetail() {
         setSlug(cat.slug);
         setSortOrder(cat.sort_order);
         setIsActive(cat.is_active);
+        setDisplayInLobby(cat.display_in_lobby !== false);
         setMemberIds((cat.movies || []).map((m) => m.id));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load category");
@@ -81,6 +91,44 @@ export default function CategoryDetail() {
     );
   }
 
+  async function handleApiMovieSelect(tmdbID: string) {
+    setAddingTmdbId(tmdbID);
+    setError(null);
+    setMessage(null);
+    try {
+      let saved =
+        allMovies.find((m) => String(m.tmdbID) === String(tmdbID)) || null;
+
+      if (!saved) {
+        const details = await getMovieDetails(tmdbID);
+        const result = await saveMovieDetails(details);
+        const savedMovie: SavedMovie = result?.movie;
+        if (!savedMovie?.id) {
+          throw new Error("Movie saved but missing id");
+        }
+        addMovie(savedMovie);
+        saved = savedMovie;
+        setAllMovies((prev) => {
+          if (prev.some((m) => m.id === savedMovie.id)) return prev;
+          return [...prev, savedMovie];
+        });
+      }
+
+      if (saved.id && !memberIds.includes(saved.id)) {
+        setMemberIds((prev) => [...prev, saved!.id!]);
+        setMessage(`Added "${saved.title}" to members (save to persist)`);
+      } else if (saved.id) {
+        setMessage(`"${saved.title}" is already a member`);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to add movie to category"
+      );
+    } finally {
+      setAddingTmdbId(null);
+    }
+  }
+
   function moveMember(movieId: string, direction: -1 | 1) {
     setMemberIds((prev) => {
       const index = prev.indexOf(movieId);
@@ -107,12 +155,15 @@ export default function CategoryDetail() {
         comp_label: compLabel.trim() || null,
         sort_order: sortOrder,
         is_active: isActive,
+        display_in_lobby: displayInLobby,
       });
       const withMovies = await setCategoryMovies(id, memberIds);
       setCategory(withMovies);
       setLobbyLabel(updated.lobby_label || "");
       setCompLabel(updated.comp_label || "");
       setSlug(updated.slug);
+      setIsActive(updated.is_active);
+      setDisplayInLobby(updated.display_in_lobby !== false);
       setMessage("Saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -132,6 +183,9 @@ export default function CategoryDetail() {
         <Link to="/admin/categories" className="text-sm text-cinema-400 hover:underline">
           Back to categories
         </Link>
+        <Link to="/admin" className="text-sm text-stone-400 hover:text-white ml-4">
+          Admin home
+        </Link>
       </div>
     );
   }
@@ -140,12 +194,20 @@ export default function CategoryDetail() {
     <div className="max-w-5xl mx-auto space-y-8 text-left">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <Link
-            to="/admin/categories"
-            className="text-xs text-stone-400 hover:text-white"
-          >
-            ← Categories
-          </Link>
+          <div className="flex items-center gap-3 text-xs">
+            <Link
+              to="/admin"
+              className="text-stone-400 hover:text-white"
+            >
+              ← Admin
+            </Link>
+            <Link
+              to="/admin/categories"
+              className="text-stone-400 hover:text-white"
+            >
+              Categories
+            </Link>
+          </div>
           <h1 className="text-2xl font-bold text-white mt-2">{category.slug}</h1>
         </div>
         <button
@@ -208,14 +270,30 @@ export default function CategoryDetail() {
               />
             </label>
           </div>
-          <label className="inline-flex items-center gap-2 text-sm text-stone-300">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-            />
-            Active
-          </label>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-stone-300">
+              <input
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              Active
+            </label>
+            <label className="inline-flex items-start gap-2 text-sm text-stone-300">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={displayInLobby}
+                onChange={(e) => setDisplayInLobby(e.target.checked)}
+              />
+              <span>
+                Display in Lobby
+                <span className="block text-xs text-stone-500 font-normal">
+                  Off hides this section in the lobby; comps for member movies stay active.
+                </span>
+              </span>
+            </label>
+          </div>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -304,6 +382,17 @@ export default function CategoryDetail() {
               })}
             </ul>
           </div>
+        </section>
+
+        <section className="rounded-2xl border border-cinema-800 bg-cinema-900/60 p-5">
+          <AdminMovieSearch
+            title="Search TMDB — save & add to category"
+            selectingId={addingTmdbId}
+            onSelect={(tmdbID) => handleApiMovieSelect(tmdbID)}
+          />
+          {addingTmdbId && (
+            <p className="text-sm text-stone-400 mt-3">Saving movie...</p>
+          )}
         </section>
 
         <button

@@ -5,10 +5,19 @@ const { generateAcronym } = require('../utils/acronym');
 const { Movie } = db;
 
 // search for movies using TMDB
-const searchMovies = async (search) => {
+const searchMovies = async (search, year) => {
+  const params = new URLSearchParams({
+    query: search,
+    include_adult: 'false',
+    language: 'en-US',
+    page: '1',
+  });
+  if (year) {
+    params.set('primary_release_year', String(year));
+  }
 
   const response = await fetch(
-    `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(search)}&include_adult=false&language=en-US&primary_release_year=2026&page=1`,
+    `https://api.themoviedb.org/3/search/movie?${params}`,
     {
       headers: {
         Authorization: `Bearer ${process.env.TMDB_API_KEY}`

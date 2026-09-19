@@ -219,8 +219,8 @@ export default function MovieCompsAdmin() {
         <p className="text-rose-300">
           Movie with TMDB id {tmdbID} is not in the database.
         </p>
-        <Link to="/old" className="text-sm text-cinema-400 hover:underline">
-          Back to old search
+        <Link to="/admin" className="text-sm text-cinema-400 hover:underline">
+          Back to admin
         </Link>
       </div>
     );
@@ -231,7 +231,7 @@ export default function MovieCompsAdmin() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link
-            to={`/old/movie/${tmdbID}`}
+            to={`/admin/movie/${tmdbID}`}
             className="text-xs text-stone-400 hover:text-white"
           >
             ← Movie admin
@@ -247,10 +247,10 @@ export default function MovieCompsAdmin() {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/admin/categories")}
+          onClick={() => navigate("/admin")}
           className="text-sm text-stone-400 hover:text-white"
         >
-          Categories
+          Admin
         </button>
       </div>
 

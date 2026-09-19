@@ -12,14 +12,14 @@ const runMovieRefresh = require("../jobs/runMovieRefresh");
 
 // search for movies
 const getMovieSearch = async (req, res) => {
-    const { search } = req.query;
+    const { search, year } = req.query;
 
     if (!search) {
         return res.status(400).json({ error: 'Search parameter is required' });
     }
 
     try {
-        const movies = await searchMovies(search);
+        const movies = await searchMovies(search, year);
         console.log("controller response", movies)
         res.json(movies);
     } catch (error) {

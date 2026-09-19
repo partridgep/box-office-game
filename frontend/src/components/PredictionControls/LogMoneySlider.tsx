@@ -721,7 +721,7 @@ export default function LogMoneySlider({
           >
             {formatMillions(max)}
           </span>
-          {import.meta.env.DEV && (
+          {import.meta.env.DEV && import.meta.env.DEV_SETTINGS && (
             <>
               <label
                 className={`flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-wide ${
