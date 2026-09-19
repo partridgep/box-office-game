@@ -15,6 +15,8 @@ import {
   OVERSHOOT_MAX_DELTA,
   OVERSHOOT_TICK_MS,
   EXPAND_ANIM_MS,
+  EXPAND_RETURN_MS,
+  EXPAND_HANDOFF_MS,
   growMaxForOvershoot,
 } from "../../utils/logScale";
 import { formatMillions } from "../../utils/formatMoney";
@@ -87,11 +89,20 @@ export default function LogMoneySlider({
   const lastOvershootTickRef = useRef(0);
   const expandLockRef = useRef(false);
   const expandAnimRef = useRef<number | null>(null);
+  const isDraggingRef = useRef(false);
+  /** True while the pointer is past the track. */
+  const pointerPastEdgeRef = useRef(false);
+  /** Once past the edge this drag, stay in overshoot until handoff ease. */
+  const overshootModeRef = useRef(false);
+  const lastPointerXRef = useRef<number | null>(null);
+  const expandVisualRef = useRef<number | null>(null);
 
-  /** While set, drives the thumb so it can ease left after a max expand. */
+  /** While set, drives the thumb so it can ease after a max expand / handoff. */
   const [expandVisual, setExpandVisual] = useState<number | null>(null);
+  expandVisualRef.current = expandVisual;
 
   const [isDragging, setIsDragging] = useState(false);
+  isDraggingRef.current = isDragging;
   const [inputText, setInputText] = useState("");
   const [inputWidth, setInputWidth] = useState<number | undefined>();
   const measureRef = useRef<HTMLSpanElement>(null);
@@ -99,6 +110,8 @@ export default function LogMoneySlider({
   const rootRef = useRef<HTMLDivElement>(null);
   const lastWholeRef = useRef<number | null>(null);
   const velocityRef = useRef({ lastValue: 0, lastTime: 0, speed: 0 });
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const isTicket = variant === "ticket";
 
   const cancelExpandAnim = () => {
@@ -107,12 +120,89 @@ export default function LogMoneySlider({
       expandAnimRef.current = null;
     }
     expandLockRef.current = false;
+    expandVisualRef.current = null;
     setExpandVisual(null);
   };
 
+  const runVisualPhase = (
+    from: number,
+    to: number,
+    duration: number,
+    syncValue: boolean,
+    onDone: () => void,
+  ) => {
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = 1 - (1 - t) ** 2;
+      const v = from + (to - from) * eased;
+      expandVisualRef.current = v;
+      setExpandVisual(v);
+      if (syncValue) {
+        onChangeRef.current(roundToTenth(v));
+      }
+      if (t < 1) {
+        expandAnimRef.current = requestAnimationFrame(tick);
+      } else {
+        onDone();
+      }
+    };
+    expandAnimRef.current = requestAnimationFrame(tick);
+  };
+
+  const valueFromPointerX = (clientX: number): number => {
+    const root = rootRef.current;
+    const currentMax = maxRef.current;
+    if (!root || currentMax <= MIN) return valueRef.current ?? MIN;
+    const rect = root.getBoundingClientRect();
+    const pad = 10;
+    const usable = Math.max(1, rect.width - pad * 2);
+    const x = Math.min(Math.max(clientX - (rect.left + pad), 0), usable);
+    return roundToTenth(MIN + (x / usable) * currentMax);
+  };
+
   /**
-   * After max grows, hold the thumb at the old % on the new scale, then ease
-   * it left to the real value so the expand reads as “range grew.”
+   * Ease from overshoot/visual control back into normal Radix behavior.
+   */
+  const beginHandoff = () => {
+    if (expandAnimRef.current != null) {
+      cancelAnimationFrame(expandAnimRef.current);
+      expandAnimRef.current = null;
+    }
+
+    const from = expandVisualRef.current ?? valueRef.current ?? MIN;
+    const to =
+      lastPointerXRef.current != null
+        ? valueFromPointerX(lastPointerXRef.current)
+        : from;
+    const clampedTo = Math.max(MIN, Math.min(maxRef.current, to));
+
+    overshootModeRef.current = false;
+    pointerPastEdgeRef.current = false;
+    expandLockRef.current = true;
+    expandVisualRef.current = from;
+    setExpandVisual(from);
+
+    if (Math.abs(clampedTo - from) < 0.15) {
+      onChangeRef.current(clampedTo);
+      expandLockRef.current = false;
+      expandVisualRef.current = null;
+      setExpandVisual(null);
+      return;
+    }
+
+    runVisualPhase(from, clampedTo, EXPAND_HANDOFF_MS, true, () => {
+      onChangeRef.current(clampedTo);
+      expandAnimRef.current = null;
+      expandLockRef.current = false;
+      expandVisualRef.current = null;
+      setExpandVisual(null);
+    });
+  };
+
+  /**
+   * After max grows: ease left to show the new range, then (if still held past
+   * the edge) ease back toward the right so the thumb doesn't snap.
    */
   const animateThumbAfterExpand = (
     oldMax: number,
@@ -127,25 +217,106 @@ export default function LogMoneySlider({
     }
 
     const startVisual = Math.min(newMax, (fromValue / oldMax) * newMax);
-    const endVisual = Math.min(newMax, toValue);
+    const midVisual = Math.min(newMax, toValue);
+    // At the hard cap, ease all the way to the end — no 92% headroom.
+    const rightVisual =
+      newMax >= absoluteMax
+        ? newMax
+        : Math.min(
+            newMax,
+            Math.max(midVisual, roundToTenth(newMax * EDGE_EXPAND_RATIO)),
+          );
+
     expandLockRef.current = true;
+    expandVisualRef.current = startVisual;
     setExpandVisual(startVisual);
 
-    const t0 = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - t0) / EXPAND_ANIM_MS);
-      const eased = 1 - (1 - t) ** 2; // ease-out quad
-      const v = startVisual + (endVisual - startVisual) * eased;
-      setExpandVisual(v);
-      if (t < 1) {
-        expandAnimRef.current = requestAnimationFrame(tick);
-      } else {
+    runVisualPhase(startVisual, midVisual, EXPAND_ANIM_MS, false, () => {
+      const stillHeldPastEdge =
+        isDraggingRef.current && pointerPastEdgeRef.current;
+
+      if (!stillHeldPastEdge || rightVisual - midVisual < 0.5) {
         expandAnimRef.current = null;
         expandLockRef.current = false;
-        setExpandVisual(null);
+        // Still in overshoot mode but back inside? handoff; else clear visual.
+        if (isDraggingRef.current && overshootModeRef.current && !pointerPastEdgeRef.current) {
+          beginHandoff();
+        } else {
+          expandVisualRef.current = null;
+          setExpandVisual(null);
+        }
+        return;
       }
-    };
-    expandAnimRef.current = requestAnimationFrame(tick);
+
+      // Ease back toward the right edge while the user keeps holding.
+      runVisualPhase(midVisual, rightVisual, EXPAND_RETURN_MS, true, () => {
+        onChangeRef.current(rightVisual);
+        expandAnimRef.current = null;
+        expandLockRef.current = false;
+        expandVisualRef.current = null;
+        setExpandVisual(null);
+        // Start the overshoot cooldown after the settle, so OVERSHOOT_TICK_MS
+        // actually delays the next range jump while holding.
+        lastOvershootTickRef.current = performance.now();
+
+        if (
+          isDraggingRef.current &&
+          overshootModeRef.current &&
+          !pointerPastEdgeRef.current
+        ) {
+          beginHandoff();
+        }
+      });
+    });
+  };
+
+  const applyOvershootTick = (overshootPx: number) => {
+    if (expandLockRef.current) return;
+
+    const currentMax = maxRef.current;
+    const currentValue = valueRef.current ?? MIN;
+
+    // Scale is at the hard ceiling — snap value to it and leave overshoot mode
+    // so normal slider dragging can sit on the absolute max.
+    if (currentMax >= absoluteMax) {
+      if (currentValue < absoluteMax) {
+        onChangeRef.current(absoluteMax);
+      }
+      overshootModeRef.current = false;
+      pointerPastEdgeRef.current = false;
+      return;
+    }
+
+    if (currentValue >= absoluteMax) return;
+
+    // After first edge entry this drag, keep growing even if slightly below 92%.
+    if (
+      !overshootModeRef.current &&
+      currentValue < currentMax * EDGE_EXPAND_RATIO
+    ) {
+      return;
+    }
+
+    const now = performance.now();
+    if (now - lastOvershootTickRef.current < OVERSHOOT_TICK_MS) return;
+    lastOvershootTickRef.current = now;
+
+    const delta = Math.min(
+      OVERSHOOT_MAX_DELTA,
+      Math.max(0.5, overshootPx / OVERSHOOT_PX_PER_MILLION),
+    );
+    const next = roundToTenth(Math.min(absoluteMax, currentValue + delta));
+    const nextMax = growMaxForOvershoot(currentMax, next, absoluteMax);
+
+    if (nextMax > currentMax) {
+      userExpandedRef.current = true;
+      setMax(nextMax);
+      maxRef.current = nextMax;
+      onChangeRef.current(next);
+      animateThumbAfterExpand(currentMax, nextMax, currentValue, next);
+    } else {
+      onChangeRef.current(next);
+    }
   };
 
   useEffect(() => () => cancelExpandAnim(), []);
@@ -251,8 +422,8 @@ export default function LogMoneySlider({
   };
 
   const handleSliderChange = (values: number[]) => {
-    // Freeze Radix remaps while the expand settle animation runs.
-    if (expandLockRef.current) return;
+    // Freeze Radix while overshooting / animating / handing off.
+    if (expandLockRef.current || overshootModeRef.current) return;
 
     const raw = values[0];
     const speed = sampleVelocity(raw);
@@ -284,6 +455,10 @@ export default function LogMoneySlider({
   const handleSliderCommit = (values: number[]) => {
     cancelExpandAnim();
     setIsDragging(false);
+    isDraggingRef.current = false;
+    pointerPastEdgeRef.current = false;
+    overshootModeRef.current = false;
+    lastPointerXRef.current = null;
     lastWholeRef.current = null;
     lastOvershootTickRef.current = 0;
 
@@ -305,54 +480,64 @@ export default function LogMoneySlider({
     navigator.vibrate?.(5);
   };
 
-  // Gentle, throttled expand when the pointer is held past the right edge.
+  // Overshoot while held past the edge; ease back into Radix when leaving it.
   useEffect(() => {
     if (!isDragging || disabled) return;
 
-    const onMove = (e: PointerEvent) => {
-      if (expandLockRef.current) return;
+    const trackPad = 10;
 
+    const onMove = (e: PointerEvent) => {
+      lastPointerXRef.current = e.clientX;
       const root = rootRef.current;
       if (!root) return;
 
-      const currentMax = maxRef.current;
-      const currentValue = valueRef.current ?? MIN;
-      if (currentValue < currentMax * EDGE_EXPAND_RATIO) return;
-      if (currentValue >= absoluteMax && currentMax >= absoluteMax) return;
-
       const rect = root.getBoundingClientRect();
-      const pad = 10;
-      const usableRight = rect.right - pad;
-      if (e.clientX <= usableRight) return;
+      const usableRight = rect.right - trackPad;
+      const pastEdge = e.clientX > usableRight;
+      pointerPastEdgeRef.current = pastEdge;
 
-      const now = performance.now();
-      if (now - lastOvershootTickRef.current < OVERSHOOT_TICK_MS) return;
-      lastOvershootTickRef.current = now;
+      if (pastEdge) {
+        // Can't grow further — stay on normal Radix so the thumb can reach the end.
+        if (maxRef.current >= absoluteMax) {
+          if (overshootModeRef.current && !expandLockRef.current) {
+            beginHandoff();
+          }
+          return;
+        }
+        if (!overshootModeRef.current) {
+          lastOvershootTickRef.current = 0;
+        }
+        overshootModeRef.current = true;
+        return;
+      }
 
-      const overshoot = e.clientX - usableRight;
-      const delta = Math.min(
-        OVERSHOOT_MAX_DELTA,
-        Math.max(0.5, overshoot / OVERSHOOT_PX_PER_MILLION),
-      );
-      const next = roundToTenth(
-        Math.min(absoluteMax, currentValue + delta),
-      );
-      const nextMax = growMaxForOvershoot(currentMax, next, absoluteMax);
-
-      if (nextMax > currentMax) {
-        userExpandedRef.current = true;
-        setMax(nextMax);
-        maxRef.current = nextMax;
-        onChange(next);
-        animateThumbAfterExpand(currentMax, nextMax, currentValue, next);
-      } else {
-        onChange(next);
+      // Left the edge — ease into normal slider control.
+      if (overshootModeRef.current && !expandLockRef.current) {
+        beginHandoff();
       }
     };
 
+    const intervalId = window.setInterval(() => {
+      if (!overshootModeRef.current || !pointerPastEdgeRef.current) return;
+      if (expandLockRef.current) return;
+      if (lastPointerXRef.current == null) return;
+
+      const root = rootRef.current;
+      if (!root) return;
+      const rect = root.getBoundingClientRect();
+      const usableRight = rect.right - trackPad;
+      const overshootPx = Math.max(0, lastPointerXRef.current - usableRight);
+      applyOvershootTick(overshootPx);
+    }, 50);
+
     window.addEventListener("pointermove", onMove);
-    return () => window.removeEventListener("pointermove", onMove);
-  }, [isDragging, disabled, absoluteMax, onChange]);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("pointermove", onMove);
+    };
+    // beginHandoff / applyOvershootTick close over stable refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDragging, disabled, absoluteMax]);
 
   const applyManualValue = (parsed: number) => {
     const next = snapToDetent(
@@ -373,6 +558,39 @@ export default function LogMoneySlider({
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter") return;
     e.currentTarget.blur();
+  };
+
+  /** DEV-only: restore scale to the comps/fallback fit. */
+  const resetScale = () => {
+    cancelExpandAnim();
+    userExpandedRef.current = false;
+    overshootModeRef.current = false;
+    pointerPastEdgeRef.current = false;
+    initialMaxRef.current = fittedMax;
+    lastOvershootTickRef.current = 0;
+    setMax(fittedMax);
+    maxRef.current = fittedMax;
+    if (value != null && value > fittedMax) {
+      onChange(fittedMax);
+    }
+  };
+
+  /** DEV-only: manually set the scale max. */
+  const setScaleMaxManually = (raw: number) => {
+    if (!Number.isFinite(raw)) return;
+    cancelExpandAnim();
+    const nextMax = Math.max(
+      1,
+      Math.min(absoluteMax, roundToTenth(raw)),
+    );
+    userExpandedRef.current = true;
+    overshootModeRef.current = false;
+    pointerPastEdgeRef.current = false;
+    setMax(nextMax);
+    maxRef.current = nextMax;
+    if (value != null && value > nextMax) {
+      onChange(nextMax);
+    }
   };
 
   const valueTextClass = isTicket
@@ -459,6 +677,10 @@ export default function LogMoneySlider({
             onValueCommit={handleSliderCommit}
             onPointerDown={() => {
               setIsDragging(true);
+              isDraggingRef.current = true;
+              overshootModeRef.current = false;
+              pointerPastEdgeRef.current = false;
+              lastPointerXRef.current = null;
               resetVelocity();
               lastOvershootTickRef.current = 0;
             }}
@@ -499,6 +721,48 @@ export default function LogMoneySlider({
           >
             {formatMillions(max)}
           </span>
+          {import.meta.env.DEV && (
+            <>
+              <label
+                className={`flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-wide ${
+                  isTicket
+                    ? "text-ticket-ink/45 font-[Outfit,sans-serif]"
+                    : "text-stone-500"
+                }`}
+                title="Set scale max manually (dev only)"
+              >
+                Max
+                <input
+                  type="number"
+                  min={1}
+                  max={absoluteMax}
+                  step={1}
+                  value={Math.round(max)}
+                  onChange={(e) => {
+                    const parsed = parseFloat(e.target.value);
+                    if (!isNaN(parsed)) setScaleMaxManually(parsed);
+                  }}
+                  className={`w-14 rounded border px-1 py-0.5 text-[11px] tabular-nums normal-case tracking-normal ${
+                    isTicket
+                      ? "border-ticket-ink/30 bg-ticket/40 text-ticket-ink"
+                      : "border-cinema-700 bg-cinema-900 text-stone-300"
+                  }`}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={resetScale}
+                className={`shrink-0 text-[10px] uppercase tracking-wide underline-offset-2 hover:underline ${
+                  isTicket
+                    ? "text-ticket-ink/45 font-[Outfit,sans-serif]"
+                    : "text-stone-500"
+                }`}
+                title="Reset slider scale to comps/fallback fit (dev only)"
+              >
+                Reset scale
+              </button>
+            </>
+          )}
         </div>
 
         {/* Radix keeps the thumb in-bounds, so 0–100% is inset by half of w-5. */}
@@ -515,6 +779,7 @@ export default function LogMoneySlider({
             }}
             disabled={disabled}
             variant={variant}
+            positionTransitionMs={EXPAND_ANIM_MS}
           />
         </div>
       </div>

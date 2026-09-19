@@ -9,32 +9,46 @@ export const NICE_MAXES = [
 ];
 
 /** Hard caps for prediction fields ($M). */
-export const ABSOLUTE_MAX_DOMESTIC_OPENING = 600;
-export const ABSOLUTE_MAX_INTERNATIONAL_OPENING = 700;
-export const ABSOLUTE_MAX_LIFETIME = 3000;
+export const ABSOLUTE_MAX_DOMESTIC_OPENING = 500;
+export const ABSOLUTE_MAX_INTERNATIONAL_OPENING = 1000;
+export const ABSOLUTE_MAX_DOMESTIC_LIFETIME = 1200;
+export const ABSOLUTE_MAX_INTERNATIONAL_LIFETIME = 2400;
 
 /** Overshoot expand: pixels of past-edge drag per +$1M. */
 export const OVERSHOOT_PX_PER_MILLION = 10;
 /** Max $M added per overshoot tick. */
 export const OVERSHOOT_MAX_DELTA = 4;
 /** Minimum ms between overshoot ticks. */
-export const OVERSHOOT_TICK_MS = 80;
+export const OVERSHOOT_TICK_MS = 280;
 /** How long the thumb eases left after a max expand. */
-export const EXPAND_ANIM_MS = 180;
+export const EXPAND_ANIM_MS = 380;
+/** How long the thumb eases back toward the right edge while still held. */
+export const EXPAND_RETURN_MS = 280;
+/** How long the thumb eases into normal slider control after leaving the edge. */
+export const EXPAND_HANDOFF_MS = 200;
+
+/** $M added to the scale max when current max is below this threshold. */
+export const OVERSHOOT_MAX_STEP_SMALL = 100;
+/** $M added to the scale max when current max is at/above the threshold. */
+export const OVERSHOOT_MAX_STEP_LARGE = 200;
+/** Below this max ($M), overshoot expands by OVERSHOOT_MAX_STEP_SMALL. */
+export const OVERSHOOT_STEP_THRESHOLD = 600;
 
 /**
- * Grow max gently while overshooting — small bump, not a full nice-ceil jump.
- * Keeps the thumb near the right edge so a leftward settle reads clearly.
+ * Grow max while overshooting: +$100M below $600M, otherwise +$200M
+ * (capped at absoluteMax).
  */
 export function growMaxForOvershoot(
   currentMax: number,
-  value: number,
+  _value: number,
   absoluteMax: number,
 ): number {
   if (currentMax >= absoluteMax) return absoluteMax;
-  const minBump = Math.max(8, roundToTenth(currentMax * 0.06));
-  const target = Math.max(value * 1.08, currentMax + minBump);
-  return Math.min(absoluteMax, Math.max(currentMax, roundToTenth(target)));
+  const step =
+    currentMax < OVERSHOOT_STEP_THRESHOLD
+      ? OVERSHOOT_MAX_STEP_SMALL
+      : OVERSHOOT_MAX_STEP_LARGE;
+  return Math.min(absoluteMax, currentMax + step);
 }
 
 export function roundToTenth(value: number): number {

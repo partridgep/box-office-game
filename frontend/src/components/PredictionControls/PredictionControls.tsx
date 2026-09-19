@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useUserStore } from "../../store/useUserStore";
 import { useGuessStore } from "../../store/useGuessStore";
 import { useInviteStore } from "../../store/useInviteStore";
@@ -8,11 +8,11 @@ import UserConfirmation from "../UserSignup/UserConfirmation";
 import { postGuess } from "../../services/guesses.service";
 import { getPredictionAvailability } from "../../utils/predictionWindows";
 import {
-  seedMoneyValue,
   niceCeil,
   ABSOLUTE_MAX_DOMESTIC_OPENING,
   ABSOLUTE_MAX_INTERNATIONAL_OPENING,
-  ABSOLUTE_MAX_LIFETIME,
+  ABSOLUTE_MAX_DOMESTIC_LIFETIME,
+  ABSOLUTE_MAX_INTERNATIONAL_LIFETIME,
 } from "../../utils/logScale";
 import LogMoneySlider from "./LogMoneySlider";
 import RTScoreSlider from "./RTScoreSlider";
@@ -21,6 +21,7 @@ import { formatMillions } from "../../utils/formatMoney";
 import {
   CompMarkersByField,
 } from "../HistoricalComps/HistoricalComps";
+import type { Guess } from "../../types";
 
 interface PredictionControlsProps {
   movieId: string;
@@ -37,8 +38,27 @@ const emptyMarkers: CompMarkersByField = {
   rottenTomatoesScore: [],
 };
 
-const DOMESTIC_OPENING_FALLBACK = 400;
-const INTERNATIONAL_OPENING_FALLBACK = 500;
+const DOMESTIC_OPENING_FALLBACK = 300;
+const INTERNATIONAL_OPENING_FALLBACK = 400;
+
+function valuesFromGuess(guess: Guess | undefined) {
+  if (!guess) {
+    return {
+      domesticOpening: null as number | null,
+      internationalOpening: null as number | null,
+      finalDomestic: null as number | null,
+      finalInternational: null as number | null,
+      rtScore: null as number | null,
+    };
+  }
+  return {
+    domesticOpening: guess.domestic_opening ?? null,
+    internationalOpening: guess.international_opening ?? null,
+    finalDomestic: guess.final_domestic ?? null,
+    finalInternational: guess.final_international ?? null,
+    rtScore: guess.rotten_tomatoes_score ?? null,
+  };
+}
 
 export default function PredictionControls({
   movieId,
@@ -48,70 +68,42 @@ export default function PredictionControls({
 }: PredictionControlsProps) {
   const user = useUserStore((state) => state.user);
   const addGuess = useGuessStore((state) => state.addGuess);
+  const existingGuess = useGuessStore((state) => state.getGuessForMovie(movieId));
   const inviterId = useInviteStore((s) => s.inviterId);
   const clearInvite = useInviteStore((s) => s.clearInvite);
 
-  const domesticSeed = useMemo(
-    () =>
-      seedMoneyValue(
-        compMarkersByField.domesticOpening,
-        DOMESTIC_OPENING_FALLBACK,
-        50,
-      ),
-    [compMarkersByField.domesticOpening],
-  );
+  const initial = valuesFromGuess(existingGuess);
 
-  const internationalSeed = useMemo(
-    () =>
-      seedMoneyValue(
-        compMarkersByField.internationalOpening,
-        INTERNATIONAL_OPENING_FALLBACK,
-        25,
-      ),
-    [compMarkersByField.internationalOpening],
+  const [domesticOpening, setDomesticOpening] = useState<number | null>(
+    initial.domesticOpening,
   );
-
-  const [domesticOpening, setDomesticOpening] = useState<number | null>(domesticSeed);
   const [internationalOpening, setInternationalOpening] = useState<number | null>(
-    internationalSeed,
+    initial.internationalOpening,
   );
-  const [finalDomestic, setFinalDomestic] = useState<number | null>(null);
-  const [finalInternational, setFinalInternational] = useState<number | null>(null);
-  const [rtScore, setRtScore] = useState<number | null>(75);
+  const [finalDomestic, setFinalDomestic] = useState<number | null>(
+    initial.finalDomestic,
+  );
+  const [finalInternational, setFinalInternational] = useState<number | null>(
+    initial.finalInternational,
+  );
+  const [rtScore, setRtScore] = useState<number | null>(initial.rtScore);
 
   const [showSignup, setShowSignup] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Keep seeds in sync when the movie changes or opening comps first resolve.
-  // Adjusting state during render avoids a frame where value=50 and fittedMax=indie.
-  const domCount = compMarkersByField.domesticOpening.length;
-  const intCount = compMarkersByField.internationalOpening.length;
-  const [seedSync, setSeedSync] = useState({ movieId, domCount, intCount });
-  if (
-    seedSync.movieId !== movieId ||
-    seedSync.domCount !== domCount ||
-    seedSync.intCount !== intCount
-  ) {
-    const movieChanged = seedSync.movieId !== movieId;
-    const compsJustArrived =
-      seedSync.domCount === 0 &&
-      seedSync.intCount === 0 &&
-      (domCount > 0 || intCount > 0);
-
-    setSeedSync({ movieId, domCount, intCount });
-
-    if (movieChanged || compsJustArrived) {
-      setDomesticOpening(domesticSeed);
-      setInternationalOpening(internationalSeed);
-    }
-    if (movieChanged) {
-      setFinalDomestic(null);
-      setFinalInternational(null);
-      setRtScore(75);
-      setMessage("");
-    }
+  // Reset / hydrate from placed guess when the movie changes.
+  const [loadedMovieId, setLoadedMovieId] = useState(movieId);
+  if (loadedMovieId !== movieId) {
+    setLoadedMovieId(movieId);
+    const next = valuesFromGuess(existingGuess);
+    setDomesticOpening(next.domesticOpening);
+    setInternationalOpening(next.internationalOpening);
+    setFinalDomestic(next.finalDomestic);
+    setFinalInternational(next.finalInternational);
+    setRtScore(next.rtScore);
+    setMessage("");
   }
 
   useEffect(() => {
@@ -133,15 +125,12 @@ export default function PredictionControls({
       : null;
 
   const finalDomesticFallback = Math.min(
-    ABSOLUTE_MAX_LIFETIME,
-    Math.max(1500, domesticOpening != null ? niceCeil(domesticOpening * 3.5) : 0),
+    ABSOLUTE_MAX_DOMESTIC_LIFETIME,
+    domesticOpening != null ? niceCeil(domesticOpening * 3.5) : 600,
   );
   const finalInternationalFallback = Math.min(
-    ABSOLUTE_MAX_LIFETIME,
-    Math.max(
-      1500,
-      internationalOpening != null ? niceCeil(internationalOpening * 3.5) : 0,
-    ),
+    ABSOLUTE_MAX_INTERNATIONAL_LIFETIME,
+    internationalOpening != null ? niceCeil(internationalOpening * 3.5) : 600,
   );
 
   const isFormValid = (() => {
