@@ -6,31 +6,102 @@ const cheerio = require("cheerio");
  * @returns {Promise<Object>} - The box office data.
  */
 
+const BOM_ORIGIN = "https://www.boxofficemojo.com";
+
+const INTERNATIONAL_REGIONS = [
+  "Europe, Middle East, and Africa",
+  "Latin America",
+  "Asia Pacific",
+  "China",
+];
+
+function parseMoney(value) {
+  if (!value) return 0;
+  const n = Number(value.replace(/[$,]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getOpeningCellText($, row) {
+  const cell = $(row).find("td:nth-child(3)");
+  return cell.find("span.money").text().trim() || cell.text().trim();
+}
+
+/**
+ * Sums international opening weekend totals from either:
+ * - title-page region tables under matching <h3> headers, or
+ * - release-group tables (table.releases-by-region) with matching <th> headers
+ */
+function sumInternationalOpenings($) {
+  let total = 0;
+
+  $("h3").each((_, el) => {
+    const header = $(el).text().trim();
+    if (!INTERNATIONAL_REGIONS.includes(header)) return;
+
+    $(el)
+      .next("table")
+      .find("tr")
+      .each((_, row) => {
+        total += parseMoney(getOpeningCellText($, row));
+      });
+  });
+
+  if (total > 0) return total;
+
+  $("table.releases-by-region").each((_, table) => {
+    const header = $(table).find('th[colspan="4"]').first().text().trim();
+    if (!INTERNATIONAL_REGIONS.includes(header)) return;
+
+    $(table)
+      .find("tr")
+      .each((_, row) => {
+        if ($(row).find("td").length === 0) return;
+        total += parseMoney(getOpeningCellText($, row));
+      });
+  });
+
+  return total;
+}
+
+function findOriginalReleaseHref($) {
+  const original = $("a")
+    .filter((_, el) => $(el).text().trim() === "Original Release")
+    .first()
+    .attr("href");
+
+  if (original) return original;
+
+  // Fallback: first release-group link in the By Release table
+  return $("h3")
+    .filter((_, el) => $(el).text().trim() === "By Release")
+    .first()
+    .next("table")
+    .find('a[href*="/releasegroup/"]')
+    .first()
+    .attr("href");
+}
+
+async function fetchBomPage(url) {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load Box Office Mojo page: ${url}`);
+  }
+
+  return cheerio.load(await res.text());
+}
+
 async function scrapeBoxOffice(imdbID) {
   if (!imdbID) {
     throw new Error("IMDb ID is required");
   }
 
-  // Construct the Box Office Mojo URL using the IMDb ID
-  const url = `https://www.boxofficemojo.com/title/${imdbID}/`;
-
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0"
-    }
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to load Box Office Mojo page");
-  }
-
-  const html = await res.text();
-  const $ = cheerio.load(html);
-
-  function parseMoney(value) {
-    if (!value) return 0;
-    return Number(value.replace(/[$,]/g, ""));
-  }
+  const url = `${BOM_ORIGIN}/title/${imdbID}/`;
+  const $ = await fetchBomPage(url);
 
   // Select the performance summary table
   const performanceTable = $(".mojo-performance-summary-table");
@@ -38,16 +109,12 @@ async function scrapeBoxOffice(imdbID) {
   const getMoneyByLabel = (label) => {
     const span = performanceTable
       .find("span.a-size-small")
-      .filter((i, el) =>
-        $(el).text().includes(label)
-      )
+      .filter((i, el) => $(el).text().includes(label))
       .first();
 
-    return span
-      .closest("div")
-      .find("span.money")
-      .text()
-      .trim() || null;
+    return (
+      span.closest("div").find("span.money").text().trim() || null
+    );
   };
 
   const domesticGross = getMoneyByLabel("Domestic");
@@ -56,40 +123,28 @@ async function scrapeBoxOffice(imdbID) {
 
   const summaryValues = $(".mojo-summary-values");
 
-  const domesticOpening = summaryValues
-    .find("div")
-    .filter((i, el) =>
-      $(el).find("span").first().text().trim() === "Domestic Opening"
-    )
-    .find("span.money")
-    .text()
-    .trim() || null;
+  const domesticOpening =
+    summaryValues
+      .find("div")
+      .filter(
+        (i, el) =>
+          $(el).find("span").first().text().trim() === "Domestic Opening"
+      )
+      .find("span.money")
+      .text()
+      .trim() || null;
 
-  let internationalOpeningTotal = 0;
+  let internationalOpeningTotal = sumInternationalOpenings($);
 
-  const internationalRegions = [
-    "Europe, Middle East, and Africa",
-    "Latin America",
-    "Asia Pacific",
-    "China"
-  ];
-
-  $("h3").each((i, el) => {
-    const header = $(el).text().trim();
-
-    if (!internationalRegions.includes(header)) return;
-
-    const table = $(el).next();
-
-    table.find("tbody tr").each((i, row) => {
-      const moneyText = $(row)
-        .find("td:nth-child(3) span.money")
-        .text()
-        .trim();
-
-      internationalOpeningTotal += parseMoney(moneyText);
-    });
-  });
+  // Re-release title pages only show aggregates; openings live on Original Release
+  if (internationalOpeningTotal === 0) {
+    const releaseHref = findOriginalReleaseHref($);
+    if (releaseHref) {
+      const releaseUrl = new URL(releaseHref, BOM_ORIGIN).toString();
+      const $release = await fetchBomPage(releaseUrl);
+      internationalOpeningTotal = sumInternationalOpenings($release);
+    }
+  }
 
   const internationalOpening =
     internationalOpeningTotal > 0
