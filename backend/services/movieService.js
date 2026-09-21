@@ -80,6 +80,13 @@ const getMovieById = async (tmdbID, isBatch) => {
     actors.push(data.credits.cast[i].name);
   }
 
+  const usRelease = data.release_dates?.results?.find(
+    (r) => r.iso_3166_1 === "US"
+  );
+  const rated =
+    usRelease?.release_dates?.find((r) => r.certification)?.certification ||
+    null;
+
   const movieDetails = {
 
     tmdbID: data.id,
@@ -106,7 +113,7 @@ const getMovieById = async (tmdbID, isBatch) => {
 
     budget: data.budget || null,
 
-    rated: data.rated || null,
+    rated,
 
     released: data.release_date
       ? new Date(data.release_date)

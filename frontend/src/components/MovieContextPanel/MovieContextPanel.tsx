@@ -37,6 +37,8 @@ export default function MovieContextPanel({
         <div className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm text-left">
           <span className="text-stone-400">Release</span>
           <span className="text-stone-200 col-span-3">{releaseDate}</span>
+          <span className="text-stone-400">Rated</span>
+          <span className="text-stone-200 col-span-3">{movie.rated || "Not Yet Rated"}</span>
           <span className="text-stone-400">Budget</span>
           <span className="text-stone-200 col-span-3">{movie.budget || "Unknown"}</span>
           <span className="text-stone-400">Director</span>

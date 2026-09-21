@@ -13,7 +13,7 @@ export default function TicketStub({
   children,
   className = "",
   compact = false,
-  watermark = "R",
+  watermark = "NR",
   footer,
 }: TicketStubProps) {
   return (
@@ -26,9 +26,11 @@ export default function TicketStub({
         .filter(Boolean)
         .join(" ")}
     >
-      {!compact && (
+      {!compact && watermark !== "NR" && (
         <span
-          className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11rem] leading-none opacity-[0.12] rotate-90 select-none"
+          className={["pointer-events-none absolute inset-0 flex items-center justify-center text-[11rem] leading-none opacity-[0.12] rotate-90 select-none",
+            watermark === "PG-13" ? "text-ticket-ink/50" : "text-ticket-ink/70"
+          ].filter(Boolean).join(" ")}
           aria-hidden
         >
           {watermark}

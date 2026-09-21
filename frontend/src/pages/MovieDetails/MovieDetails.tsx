@@ -157,6 +157,9 @@ export default function MovieDetails() {
           <p className="text-xs text-left uppercase tracking-wide mt-0.5 text-ticket-ink/80">
             {movie.genre}
           </p>
+          <p className="text-xs text-left uppercase tracking-wide mt-0.5 text-ticket-ink/80">
+            {movie.rated || "Not Yet Rated"}
+          </p>
           {id && (
             <button
               type="button"
@@ -270,6 +273,7 @@ export default function MovieDetails() {
             </div>
             {useTicketShell ? (
               <TicketStub
+                watermark={movie.rated || "NR"}
                 footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
                 className="rounded-r"
               >
