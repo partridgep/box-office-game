@@ -24,7 +24,7 @@ function PredictionRows({ guess, label }: { guess: Guess; label?: string }) {
           {label}
         </p>
       )}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm font-[Outfit,sans-serif]">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm font-[Outfit,sans-serif] text-left">
         {guess.domestic_opening != null && (
           <>
             <span className="text-ticket-ink/65">Domestic Opening</span>
@@ -43,7 +43,7 @@ function PredictionRows({ guess, label }: { guess: Guess; label?: string }) {
         )}
         {worldwideOpening != null && (
           <>
-            <span className="text-ticket-ink/65">WW Opening</span>
+            <span className="text-ticket-ink/65 font-semibold">WW Opening</span>
             <span className="text-ticket-ink font-semibold text-right">
               {formatMillions(worldwideOpening)}
             </span>
@@ -67,7 +67,7 @@ function PredictionRows({ guess, label }: { guess: Guess; label?: string }) {
         )}
         {worldwideFinal != null && (
           <>
-            <span className="text-ticket-ink/65">WW Final</span>
+            <span className="text-ticket-ink/65 font-semibold">WW Final</span>
             <span className="text-ticket-ink font-semibold text-right">
               {formatMillions(worldwideFinal)}
             </span>
@@ -119,9 +119,6 @@ export default function LockedPredictionSummary({
       )}
 
       <div className="flex items-end justify-between gap-4 pt-2">
-        <span className="text-6xl font-bold leading-none select-none" aria-hidden>
-          ✓
-        </span>
         <button
           type="button"
           onClick={onShareClick}
@@ -129,12 +126,6 @@ export default function LockedPredictionSummary({
         >
           Challenge a Friend
         </button>
-        <div
-          className="shrink-0 w-12 h-12 bg-ticket-ink text-ticket flex items-center justify-center text-[10px] font-bold uppercase leading-tight text-center"
-          aria-hidden
-        >
-          LOCK
-        </div>
       </div>
     </div>
   );

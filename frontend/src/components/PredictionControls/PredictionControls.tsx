@@ -28,6 +28,8 @@ interface PredictionControlsProps {
   availability: ReturnType<typeof getPredictionAvailability>;
   compMarkersByField?: CompMarkersByField;
   inviterName?: string;
+  /** True while signup confirmation is showing — parent should keep this mounted. */
+  onSignupFlowChange?: (active: boolean) => void;
 }
 
 const emptyMarkers: CompMarkersByField = {
@@ -65,6 +67,7 @@ export default function PredictionControls({
   availability,
   compMarkersByField = emptyMarkers,
   inviterName,
+  onSignupFlowChange,
 }: PredictionControlsProps) {
   const user = useUserStore((state) => state.user);
   const addGuess = useGuessStore((state) => state.addGuess);
@@ -162,10 +165,14 @@ export default function PredictionControls({
       return;
     }
 
+    await submitGuess(user.id);
+  };
+
+  const submitGuess = async (userId: string) => {
     setIsSubmitting(true);
     try {
       const guessData = {
-        user_id: user.id,
+        user_id: userId,
         movie_id: movieId,
         domestic_opening: domesticOpening != null ? Math.round(domesticOpening) : null,
         international_opening:
@@ -195,8 +202,13 @@ export default function PredictionControls({
     return (
       <UserSignup
         onSignup={() => {
+          const createdUser = useUserStore.getState().user;
+          onSignupFlowChange?.(true);
           setShowSignup(false);
           setShowConfirmation(true);
+          if (createdUser) {
+            void submitGuess(createdUser.id);
+          }
         }}
       />
     );
@@ -205,7 +217,10 @@ export default function PredictionControls({
   if (showConfirmation) {
     return (
       <UserConfirmation
-        onDone={() => setShowConfirmation(false)}
+        onDone={() => {
+          setShowConfirmation(false);
+          onSignupFlowChange?.(false);
+        }}
       />
     );
   }

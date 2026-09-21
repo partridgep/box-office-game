@@ -1,56 +1,226 @@
-.container {
-  max-width: 500px;
-  margin: 40px auto;
-  padding: 24px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background-color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+.receipt {
+  --receipt-bg: #f4f2ec;
+  --receipt-ink: #14110b;
+  --notch-radius: 9px;
+
+  max-width: 420px;
+  margin: 8px auto 0;
+  color: var(--receipt-ink);
+  font-family: "Outfit", sans-serif;
   text-align: center;
-  font-family: Arial, sans-serif;
+  /* Flattened children silhouette (incl. masked notches) gets one shadow */
+  filter:
+    drop-shadow(0 10px 16px rgba(20, 17, 11, 0.22))
+    drop-shadow(0 2px 4px rgba(20, 17, 11, 0.1));
+}
+
+.body {
+  padding: 28px 24px 22px;
+  background-color: var(--receipt-bg);
+  border-radius: 18px 18px 0 0;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--receipt-ink) 45%, transparent);
 }
 
 .heading {
+  margin: 0 0 22px;
   font-size: 24px;
   font-weight: 700;
-  margin-bottom: 16px;
-  color: #111827;
+  line-height: 1.2;
+  color: var(--receipt-ink);
 }
 
-.text {
-  font-size: 16px;
-  color: #374151;
-  margin-bottom: 12px;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--receipt-ink) 50%, transparent);
+}
+
+.ticketNumber {
+  font-family: "Ticketing", sans-serif;
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--receipt-ink);
+}
+
+.keyRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 40px;
+  border: 1px dashed color-mix(in srgb, var(--receipt-ink) 28%, transparent);
+  background: color-mix(in srgb, var(--receipt-ink) 4%, transparent);
 }
 
 .key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  line-height: 1.4;
   word-break: break-all;
+  text-align: center;
+  color: var(--receipt-ink);
+}
+
+.copyButton {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--receipt-ink) 55%, transparent);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.copyButton:hover {
+  color: var(--receipt-ink);
+  background: color-mix(in srgb, var(--receipt-ink) 8%, transparent);
+}
+
+.copyButton:active {
+  background: color-mix(in srgb, var(--receipt-ink) 12%, transparent);
+}
+
+.copyIconStack {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.copyIconLayer {
+  position: absolute;
+  inset: 0;
+  transition:
+    opacity 0.28s ease,
+    transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+
+.copyIconEnter {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.copyIconExit {
+  opacity: 0;
+  transform: scale(0.55);
+  pointer-events: none;
 }
 
 .note {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 24px;
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--receipt-ink) 55%, transparent);
+}
+
+.noteAside {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: italic;
+  color: color-mix(in srgb, var(--receipt-ink) 40%, transparent);
+}
+
+.perforation {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  margin: 0;
+  background-color: var(--receipt-bg);
+  -webkit-mask-image:
+    radial-gradient(
+      circle var(--notch-radius) at 0 50%,
+      transparent calc(var(--notch-radius) - 0.5px),
+      #000 var(--notch-radius)
+    ),
+    radial-gradient(
+      circle var(--notch-radius) at 100% 50%,
+      transparent calc(var(--notch-radius) - 0.5px),
+      #000 var(--notch-radius)
+    );
+  -webkit-mask-composite: source-in;
+  mask-image:
+    radial-gradient(
+      circle var(--notch-radius) at 0 50%,
+      transparent calc(var(--notch-radius) - 0.5px),
+      #000 var(--notch-radius)
+    ),
+    radial-gradient(
+      circle var(--notch-radius) at 100% 50%,
+      transparent calc(var(--notch-radius) - 0.5px),
+      #000 var(--notch-radius)
+    );
+  mask-composite: intersect;
+}
+
+.dots {
+  flex: 1;
+  height: 8px;
+  margin: 0 16px;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--receipt-ink) 42%, transparent) 1.6px,
+    transparent 1.8px
+  );
+  background-size: 11px 8px;
+  background-position: center;
+  background-repeat: repeat-x;
+}
+
+.stub {
+  padding: 6px 20px 20px;
+  background-color: var(--receipt-bg);
+  border-radius: 0 0 18px 18px;
 }
 
 .button {
-  padding: 12px 24px;
-  background-color: #2563eb;
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 600;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 16px;
+  background-color: var(--receipt-ink);
+  color: var(--color-ticket, #d9a62e);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   border: none;
-  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .button:hover {
-  background-color: #1d4ed8;
+  opacity: 0.9;
 }
 
 .button:active {
-  background-color: #1e40af;
+  opacity: 0.8;
 }

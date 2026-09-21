@@ -275,6 +275,7 @@ async function extractScore(html) {
 
   const score =
     $("rt-text[slot='critics-score']")
+      .first()
       .text()
       .trim();
 

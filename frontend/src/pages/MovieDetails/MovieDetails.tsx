@@ -59,6 +59,8 @@ export default function MovieDetails() {
   } = useMovieDetailsData();
 
   const [showingShareDialog, setShowingShareDialog] = useState(false);
+  /** Keep PredictionControls mounted through signup confirmation even after the guess locks. */
+  const [holdPredictForSignup, setHoldPredictForSignup] = useState(false);
 
   const mode = usePageMode(movie, loggedGuess, isInDatabase);
 
@@ -176,16 +178,17 @@ export default function MovieDetails() {
 
   const panelContent = (
     <>
-      {mode === "predict" && movie.id && (
+      {(mode === "predict" || holdPredictForSignup) && movie.id && (
         <PredictionControls
           movieId={movie.id}
           availability={predictionAvailability}
           compMarkersByField={compMarkersByField}
           inviterName={inviterName}
+          onSignupFlowChange={setHoldPredictForSignup}
         />
       )}
 
-      {mode === "waiting" && loggedGuess && (
+      {mode === "waiting" && loggedGuess && !holdPredictForSignup && (
         <LockedPredictionSummary
           guess={loggedGuess}
           friendGuess={

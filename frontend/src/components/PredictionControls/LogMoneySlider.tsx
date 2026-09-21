@@ -60,7 +60,10 @@ export default function LogMoneySlider({
 }: LogMoneySliderProps) {
   /** Visual / track scale always starts at 0 so comps below the floor stay visible. */
   const scaleMin = 0;
-  const floor = Math.max(scaleMin, Math.min(absoluteMin, absoluteMax));
+  // Round so a floaty absoluteMin (e.g. opening) doesn't poison step grids / commits.
+  const floor = roundToTenth(
+    Math.max(scaleMin, Math.min(absoluteMin, absoluteMax)),
+  );
   const floorRef = useRef(floor);
   floorRef.current = floor;
 
@@ -748,7 +751,9 @@ export default function LogMoneySlider({
             type="number"
             min={floor}
             max={absoluteMax}
-            step={0.1}
+            // "any" avoids native step-mismatch when min is a dynamic floor
+            // (value must be min + n*step). Clamping/snapping stay in JS.
+            step="any"
             disabled={disabled}
             placeholder={scaleMin.toFixed(1)}
             value={numberStr}
