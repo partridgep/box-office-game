@@ -8,12 +8,12 @@ import {
   roundToTenth,
   FAST_SLIDE_SPEED,
   SLOW_SLIDE_SPEED,
-  EDGE_EXPAND_RATIO,
+  EDGE_AT_MAX_EPSILON,
   initialMoneyMax,
   fitMaxForValue,
   OVERSHOOT_PX_PER_MILLION,
   OVERSHOOT_MAX_DELTA,
-  OVERSHOOT_TICK_MS,
+  OVERSHOOT_HOLD_MS,
   EXPAND_ANIM_MS,
   EXPAND_RETURN_MS,
   EXPAND_HANDOFF_MS,
@@ -24,14 +24,16 @@ import CompMarkers, { type CompMarker } from "./CompMarkers";
 
 export type { CompMarker };
 
-const MIN = 0;
-
 interface LogMoneySliderProps {
   label: string;
   value: number | null;
   onChange: (v: number) => void;
+  /** Fires when the user finishes a gesture (pointer up, input blur, comp tap). */
+  onCommit?: (v: number) => void;
   /** Used when comps are empty (and as a floor for the initial fit). */
   fallbackMax: number;
+  /** Hard floor for the selectable value (track still scales from 0). */
+  absoluteMin?: number;
   /** Hard ceiling — value and max cannot exceed this. */
   absoluteMax: number;
   /** Reset the scale when this changes (e.g. movie id). */
@@ -46,7 +48,9 @@ export default function LogMoneySlider({
   label,
   value,
   onChange,
+  onCommit,
   fallbackMax,
+  absoluteMin = 0,
   absoluteMax,
   scaleKey,
   disabled = false,
@@ -54,6 +58,12 @@ export default function LogMoneySlider({
   id,
   variant = "default",
 }: LogMoneySliderProps) {
+  /** Visual / track scale always starts at 0 so comps below the floor stay visible. */
+  const scaleMin = 0;
+  const floor = Math.max(scaleMin, Math.min(absoluteMin, absoluteMax));
+  const floorRef = useRef(floor);
+  floorRef.current = floor;
+
   const markerSignature = useMemo(
     () =>
       compMarkers
@@ -65,13 +75,20 @@ export default function LogMoneySlider({
   );
 
   const fittedMax = useMemo(
-    () => initialMoneyMax(compMarkers, fallbackMax, absoluteMax),
-    // markerSignature captures comps; fallbackMax / absoluteMax are explicit
+    () =>
+      Math.max(
+        // Scale must be able to contain the selectable floor.
+        floor,
+        initialMoneyMax(compMarkers, fallbackMax, absoluteMax),
+      ),
+    // markerSignature captures comps; fallbackMax / absoluteMax / floor are explicit
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [markerSignature, fallbackMax, absoluteMax],
+    [markerSignature, fallbackMax, absoluteMax, floor],
   );
 
-  const withinAbsolute = (m: number) => Math.min(m, absoluteMax);
+  /** Clamp a scale max into [floor, absoluteMax] so the thumb can sit on the floor. */
+  const withinAbsolute = (m: number) =>
+    Math.max(floor, Math.min(m, absoluteMax));
 
   const [max, setMax] = useState(() =>
     withinAbsolute(
@@ -85,8 +102,13 @@ export default function LogMoneySlider({
   maxRef.current = max;
   const valueRef = useRef(value);
   valueRef.current = value;
+
+  const clampValue = (v: number, currentMax = maxRef.current) =>
+    Math.max(floor, Math.min(currentMax, absoluteMax, v));
+
   const userExpandedRef = useRef(false);
-  const lastOvershootTickRef = useRef(0);
+  /** When the pointer first pressed past the edge (resistance hold clock). */
+  const edgeHoldStartedAtRef = useRef<number | null>(null);
   const expandLockRef = useRef(false);
   const expandAnimRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
@@ -103,6 +125,8 @@ export default function LogMoneySlider({
 
   const [isDragging, setIsDragging] = useState(false);
   isDraggingRef.current = isDragging;
+  /** True while holding past the edge against the max (resistance / about to expand). */
+  const [isEdgeHolding, setIsEdgeHolding] = useState(false);
   const [inputText, setInputText] = useState("");
   const [inputWidth, setInputWidth] = useState<number | undefined>();
   const measureRef = useRef<HTMLSpanElement>(null);
@@ -112,7 +136,13 @@ export default function LogMoneySlider({
   const velocityRef = useRef({ lastValue: 0, lastTime: 0, speed: 0 });
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onCommitRef = useRef(onCommit);
+  onCommitRef.current = onCommit;
   const isTicket = variant === "ticket";
+
+  const emitCommit = (v: number) => {
+    onCommitRef.current?.(v);
+  };
 
   const cancelExpandAnim = () => {
     if (expandAnimRef.current != null) {
@@ -139,7 +169,9 @@ export default function LogMoneySlider({
       expandVisualRef.current = v;
       setExpandVisual(v);
       if (syncValue) {
-        onChangeRef.current(roundToTenth(v));
+        onChangeRef.current(
+          roundToTenth(Math.max(floorRef.current, v)),
+        );
       }
       if (t < 1) {
         expandAnimRef.current = requestAnimationFrame(tick);
@@ -153,12 +185,14 @@ export default function LogMoneySlider({
   const valueFromPointerX = (clientX: number): number => {
     const root = rootRef.current;
     const currentMax = maxRef.current;
-    if (!root || currentMax <= MIN) return valueRef.current ?? MIN;
+    if (!root || currentMax <= scaleMin) {
+      return valueRef.current ?? floorRef.current;
+    }
     const rect = root.getBoundingClientRect();
     const pad = 10;
     const usable = Math.max(1, rect.width - pad * 2);
     const x = Math.min(Math.max(clientX - (rect.left + pad), 0), usable);
-    return roundToTenth(MIN + (x / usable) * currentMax);
+    return roundToTenth(scaleMin + (x / usable) * (currentMax - scaleMin));
   };
 
   /**
@@ -170,15 +204,17 @@ export default function LogMoneySlider({
       expandAnimRef.current = null;
     }
 
-    const from = expandVisualRef.current ?? valueRef.current ?? MIN;
+    const from = expandVisualRef.current ?? valueRef.current ?? floorRef.current;
     const to =
       lastPointerXRef.current != null
         ? valueFromPointerX(lastPointerXRef.current)
         : from;
-    const clampedTo = Math.max(MIN, Math.min(maxRef.current, to));
+    const clampedTo = clampValue(to);
 
     overshootModeRef.current = false;
     pointerPastEdgeRef.current = false;
+    edgeHoldStartedAtRef.current = null;
+    setIsEdgeHolding(false);
     expandLockRef.current = true;
     expandVisualRef.current = from;
     setExpandVisual(from);
@@ -218,14 +254,8 @@ export default function LogMoneySlider({
 
     const startVisual = Math.min(newMax, (fromValue / oldMax) * newMax);
     const midVisual = Math.min(newMax, toValue);
-    // At the hard cap, ease all the way to the end — no 92% headroom.
-    const rightVisual =
-      newMax >= absoluteMax
-        ? newMax
-        : Math.min(
-            newMax,
-            Math.max(midVisual, roundToTenth(newMax * EDGE_EXPAND_RATIO)),
-          );
+    // Ease back to the true end — next expand requires another hold against it.
+    const rightVisual = newMax;
 
     expandLockRef.current = true;
     expandVisualRef.current = startVisual;
@@ -244,6 +274,10 @@ export default function LogMoneySlider({
         } else {
           expandVisualRef.current = null;
           setExpandVisual(null);
+          // Restart resistance if still pressed past the edge on the new scale.
+          if (stillHeldPastEdge) {
+            edgeHoldStartedAtRef.current = performance.now();
+          }
         }
         return;
       }
@@ -255,9 +289,8 @@ export default function LogMoneySlider({
         expandLockRef.current = false;
         expandVisualRef.current = null;
         setExpandVisual(null);
-        // Start the overshoot cooldown after the settle, so OVERSHOOT_TICK_MS
-        // actually delays the next range jump while holding.
-        lastOvershootTickRef.current = performance.now();
+        // Resistance resets against the new max — hold again to break through.
+        edgeHoldStartedAtRef.current = performance.now();
 
         if (
           isDraggingRef.current &&
@@ -274,7 +307,7 @@ export default function LogMoneySlider({
     if (expandLockRef.current) return;
 
     const currentMax = maxRef.current;
-    const currentValue = valueRef.current ?? MIN;
+    const currentValue = valueRef.current ?? floorRef.current;
 
     // Scale is at the hard ceiling — snap value to it and leave overshoot mode
     // so normal slider dragging can sit on the absolute max.
@@ -284,22 +317,22 @@ export default function LogMoneySlider({
       }
       overshootModeRef.current = false;
       pointerPastEdgeRef.current = false;
+      edgeHoldStartedAtRef.current = null;
+      setIsEdgeHolding(false);
       return;
     }
 
     if (currentValue >= absoluteMax) return;
 
-    // After first edge entry this drag, keep growing even if slightly below 92%.
-    if (
-      !overshootModeRef.current &&
-      currentValue < currentMax * EDGE_EXPAND_RATIO
-    ) {
-      return;
-    }
+    // Must be against the true end of the current scale (not a % threshold).
+    if (currentValue < currentMax - EDGE_AT_MAX_EPSILON) return;
+
+    const holdStarted = edgeHoldStartedAtRef.current;
+    if (holdStarted == null) return;
 
     const now = performance.now();
-    if (now - lastOvershootTickRef.current < OVERSHOOT_TICK_MS) return;
-    lastOvershootTickRef.current = now;
+    // Resistance: hold past the edge before the scale yields.
+    if (now - holdStarted < OVERSHOOT_HOLD_MS) return;
 
     const delta = Math.min(
       OVERSHOOT_MAX_DELTA,
@@ -310,6 +343,8 @@ export default function LogMoneySlider({
 
     if (nextMax > currentMax) {
       userExpandedRef.current = true;
+      // Pause the hold clock until the expand animation settles.
+      edgeHoldStartedAtRef.current = null;
       setMax(nextMax);
       maxRef.current = nextMax;
       onChangeRef.current(next);
@@ -357,7 +392,19 @@ export default function LogMoneySlider({
   }, [fittedMax, absoluteMax]);
 
   // Expand when a controlled value lands above the current max (input / seed / tick).
+  // Raise value / scale when the floor moves up (e.g. opening increased).
   useEffect(() => {
+    if (maxRef.current < floor) {
+      const nextMax = withinAbsolute(
+        Math.max(floor, fitMaxForValue(floor, floor, absoluteMax)),
+      );
+      setMax(nextMax);
+      maxRef.current = nextMax;
+    }
+    if (value != null && value < floor) {
+      onChange(floor);
+      return;
+    }
     if (value == null) return;
     const capped = Math.min(value, absoluteMax);
     if (capped > maxRef.current) {
@@ -367,13 +414,19 @@ export default function LogMoneySlider({
     if (value > absoluteMax) {
       onChange(absoluteMax);
     }
-  }, [value, absoluteMax, onChange]);
+  }, [value, absoluteMax, floor, onChange]);
 
-  const displayValue = value ?? MIN;
-  const sliderValue = Math.min(expandVisual ?? displayValue, max);
+  const displayValue = value ?? floor;
+  const sliderValue = Math.min(
+    Math.max(expandVisual ?? displayValue, scaleMin),
+    max,
+  );
+  // Thumb/value never sit below the selectable floor, but the track still
+  // spans scaleMin→max so comps in that region remain visible.
+  const constrainedSliderValue = Math.max(sliderValue, floor);
 
   const numberStr = inputText || (value != null ? value.toFixed(1) : "");
-  const sizerStr = numberStr || MIN.toFixed(1);
+  const sizerStr = numberStr || scaleMin.toFixed(1);
 
   useLayoutEffect(() => {
     const el = measureRef.current;
@@ -436,7 +489,7 @@ export default function LogMoneySlider({
       next = snapToWholeMagnet(raw);
     }
 
-    const clamped = Math.max(MIN, Math.min(currentMax, next));
+    const clamped = clampValue(next, currentMax);
 
     if (
       speed <= SLOW_SLIDE_SPEED &&
@@ -458,9 +511,10 @@ export default function LogMoneySlider({
     isDraggingRef.current = false;
     pointerPastEdgeRef.current = false;
     overshootModeRef.current = false;
+    edgeHoldStartedAtRef.current = null;
+    setIsEdgeHolding(false);
     lastPointerXRef.current = null;
     lastWholeRef.current = null;
-    lastOvershootTickRef.current = 0;
 
     const raw = values[0];
     const speed = velocityRef.current.speed;
@@ -476,11 +530,13 @@ export default function LogMoneySlider({
     }
 
     const currentMax = maxRef.current;
-    onChange(Math.max(MIN, Math.min(currentMax, absoluteMax, next)));
+    const committed = clampValue(next, currentMax);
+    onChange(committed);
+    emitCommit(committed);
     navigator.vibrate?.(5);
   };
 
-  // Overshoot while held past the edge; ease back into Radix when leaving it.
+  // Hold past the track edge against the true max; after resistance, expand.
   useEffect(() => {
     if (!isDragging || disabled) return;
 
@@ -502,16 +558,37 @@ export default function LogMoneySlider({
           if (overshootModeRef.current && !expandLockRef.current) {
             beginHandoff();
           }
+          edgeHoldStartedAtRef.current = null;
+          setIsEdgeHolding(false);
           return;
         }
+
+        const atMax =
+          (valueRef.current ?? floorRef.current) >=
+          maxRef.current - EDGE_AT_MAX_EPSILON;
+
+        // Let Radix finish driving to the true end before resistance starts.
+        if (!atMax) {
+          edgeHoldStartedAtRef.current = null;
+          setIsEdgeHolding(false);
+          if (overshootModeRef.current && !expandLockRef.current) {
+            beginHandoff();
+          }
+          return;
+        }
+
         if (!overshootModeRef.current) {
-          lastOvershootTickRef.current = 0;
+          // Start the resistance clock the moment they push past the end.
+          edgeHoldStartedAtRef.current = performance.now();
+          setIsEdgeHolding(true);
         }
         overshootModeRef.current = true;
         return;
       }
 
-      // Left the edge — ease into normal slider control.
+      // Left the edge — clear resistance and ease into normal slider control.
+      edgeHoldStartedAtRef.current = null;
+      setIsEdgeHolding(false);
       if (overshootModeRef.current && !expandLockRef.current) {
         beginHandoff();
       }
@@ -540,16 +617,16 @@ export default function LogMoneySlider({
   }, [isDragging, disabled, absoluteMax]);
 
   const applyManualValue = (parsed: number) => {
-    const next = snapToDetent(
-      roundToTenth(Math.max(MIN, Math.min(absoluteMax, parsed))),
-    );
-    expandToFit(next);
-    onChange(next);
+    const next = snapToDetent(roundToTenth(clampValue(parsed, absoluteMax)));
+    const clamped = clampValue(next, absoluteMax);
+    expandToFit(clamped);
+    onChange(clamped);
+    emitCommit(clamped);
   };
 
   const handleInputBlur = () => {
     const parsed = parseFloat(inputText);
-    if (!isNaN(parsed) && parsed >= MIN) {
+    if (!isNaN(parsed)) {
       applyManualValue(parsed);
     }
     setInputText("");
@@ -560,18 +637,38 @@ export default function LogMoneySlider({
     e.currentTarget.blur();
   };
 
+  const atAbsoluteMax = max >= absoluteMax;
+
+  const expandScaleManually = () => {
+    if (disabled || maxRef.current >= absoluteMax) return;
+    const currentMax = maxRef.current;
+    const nextMax = growMaxForOvershoot(
+      currentMax,
+      valueRef.current ?? floor,
+      absoluteMax,
+    );
+    if (nextMax <= currentMax) return;
+    userExpandedRef.current = true;
+    setMax(nextMax);
+    maxRef.current = nextMax;
+  };
+
   /** DEV-only: restore scale to the comps/fallback fit. */
   const resetScale = () => {
     cancelExpandAnim();
     userExpandedRef.current = false;
     overshootModeRef.current = false;
     pointerPastEdgeRef.current = false;
+    edgeHoldStartedAtRef.current = null;
+    setIsEdgeHolding(false);
     initialMaxRef.current = fittedMax;
-    lastOvershootTickRef.current = 0;
-    setMax(fittedMax);
-    maxRef.current = fittedMax;
+    setMax(withinAbsolute(fittedMax));
+    maxRef.current = withinAbsolute(fittedMax);
     if (value != null && value > fittedMax) {
-      onChange(fittedMax);
+      onChange(Math.max(floor, fittedMax));
+    }
+    if (value != null && value < floor) {
+      onChange(floor);
     }
   };
 
@@ -580,16 +677,21 @@ export default function LogMoneySlider({
     if (!Number.isFinite(raw)) return;
     cancelExpandAnim();
     const nextMax = Math.max(
-      1,
+      floor,
       Math.min(absoluteMax, roundToTenth(raw)),
     );
     userExpandedRef.current = true;
     overshootModeRef.current = false;
     pointerPastEdgeRef.current = false;
+    edgeHoldStartedAtRef.current = null;
+    setIsEdgeHolding(false);
     setMax(nextMax);
     maxRef.current = nextMax;
     if (value != null && value > nextMax) {
       onChange(nextMax);
+    }
+    if (value != null && value < floor) {
+      onChange(floor);
     }
   };
 
@@ -644,11 +746,11 @@ export default function LogMoneySlider({
             ref={inputRef}
             id={id}
             type="number"
-            min={MIN}
+            min={floor}
             max={absoluteMax}
             step={0.1}
             disabled={disabled}
-            placeholder={MIN.toFixed(1)}
+            placeholder={scaleMin.toFixed(1)}
             value={numberStr}
             onChange={(e) => setInputText(e.target.value)}
             onBlur={handleInputBlur}
@@ -668,63 +770,121 @@ export default function LogMoneySlider({
       </div>
 
       <div>
-        <div className="flex items-center gap-2">
-          <Slider.Root
-            ref={rootRef}
-            className="relative flex items-center select-none touch-none h-5 min-w-0 flex-1"
-            value={[sliderValue]}
-            onValueChange={handleSliderChange}
-            onValueCommit={handleSliderCommit}
-            onPointerDown={() => {
-              setIsDragging(true);
-              isDraggingRef.current = true;
-              overshootModeRef.current = false;
-              pointerPastEdgeRef.current = false;
-              lastPointerXRef.current = null;
-              resetVelocity();
-              lastOvershootTickRef.current = 0;
-            }}
-            min={MIN}
-            max={max}
-            step={0.1}
-            disabled={disabled}
-            aria-valuetext={formatMillions(value)}
-          >
-            <Slider.Track
-              className={`relative grow rounded-full h-2 ${
-                isTicket ? "bg-ticket-ink/20" : "bg-cinema-800"
-              }`}
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <Slider.Root
+              ref={rootRef}
+              className="relative flex items-center select-none touch-none h-5 w-full"
+              value={[constrainedSliderValue]}
+              onValueChange={handleSliderChange}
+              onValueCommit={handleSliderCommit}
+              onPointerDown={() => {
+                setIsDragging(true);
+                isDraggingRef.current = true;
+                overshootModeRef.current = false;
+                pointerPastEdgeRef.current = false;
+                edgeHoldStartedAtRef.current = null;
+                setIsEdgeHolding(false);
+                lastPointerXRef.current = null;
+                resetVelocity();
+              }}
+              min={scaleMin}
+              max={max}
+              step={0.1}
+              disabled={disabled}
+              aria-valuetext={formatMillions(value)}
+              aria-valuemin={floor}
             >
-              <Slider.Range
-                className={`absolute rounded-full h-full ${
-                  isTicket ? "bg-ticket-ink/70" : "bg-theater-gold/60"
+              <Slider.Track
+                className={`relative grow rounded-full h-2 ${
+                  isTicket ? "bg-ticket-ink/20" : "bg-cinema-800"
                 }`}
+              >
+                <Slider.Range
+                  className={`absolute rounded-full h-full ${
+                    isTicket ? "bg-ticket-ink/70" : "bg-theater-gold/60"
+                  }`}
+                />
+              </Slider.Track>
+              <Slider.Thumb
+                className={
+                  isTicket
+                    ? "block w-5 h-5 bg-ticket-ink rounded-full hover:bg-black focus:outline-none focus:ring-2 focus:ring-ticket-ink/40 will-change-transform"
+                    : "block w-5 h-5 bg-theater-gold rounded-full shadow-[0_0_12px_rgba(230,197,103,0.5)] hover:bg-[#f0d080] focus:outline-none focus:ring-2 focus:ring-theater-gold/50 will-change-transform"
+                }
+                aria-label={label}
               />
-            </Slider.Track>
-            <Slider.Thumb
-              className={
-                isTicket
-                  ? "block w-5 h-5 bg-ticket-ink rounded-full hover:bg-black focus:outline-none focus:ring-2 focus:ring-ticket-ink/40 will-change-transform"
-                  : "block w-5 h-5 bg-theater-gold rounded-full shadow-[0_0_12px_rgba(230,197,103,0.5)] hover:bg-[#f0d080] focus:outline-none focus:ring-2 focus:ring-theater-gold/50 will-change-transform"
-              }
-              aria-label={label}
-            />
-          </Slider.Root>
-          <span
-            className={`shrink-0 tabular-nums text-xs font-medium ${
+            </Slider.Root>
+
+            {/* Radix keeps the thumb in-bounds, so 0–100% is inset by half of w-5. */}
+            <div className="mx-2.5">
+              <CompMarkers
+                markers={compMarkers}
+                getPos={(v) => valueToPosition(v, scaleMin, max)}
+                formatValue={formatMillions}
+                onSelect={(v) => {
+                  if (disabled) return;
+                  const next = clampValue(snapToDetent(v), absoluteMax);
+                  expandToFit(next);
+                  onChange(next);
+                  emitCommit(next);
+                }}
+                disabled={disabled}
+                variant={variant}
+                positionTransitionMs={EXPAND_ANIM_MS}
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={disabled || atAbsoluteMax}
+            onClick={expandScaleManually}
+            className={`inline-flex h-5 w-19 shrink-0 items-center tabular-nums text-xs font-medium transition-colors ${
               isTicket
-                ? "text-ticket-ink/55 font-[Outfit,sans-serif]"
-                : "text-stone-500"
-            }`}
-            title="Current scale maximum"
-            aria-label={`Scale maximum ${formatMillions(max)}`}
+                ? "text-ticket-ink/55 font-[Outfit,sans-serif] enabled:hover:text-ticket-ink/80"
+                : "text-stone-500 enabled:hover:text-stone-300"
+            } disabled:cursor-default disabled:opacity-60`}
+            title={
+              atAbsoluteMax
+                ? "Scale at absolute maximum"
+                : isEdgeHolding
+                  ? "Hold to increase scale maximum"
+                  : "Increase scale maximum"
+            }
+            aria-label={
+              atAbsoluteMax
+                ? `Scale maximum ${formatMillions(max)}`
+                : isEdgeHolding
+                  ? `Holding to increase scale maximum from ${formatMillions(max)}`
+                  : `Increase scale maximum from ${formatMillions(max)}`
+            }
           >
             {formatMillions(max)}
-          </span>
-          {import.meta.env.DEV && import.meta.env.DEV_SETTINGS && (
+            {!atAbsoluteMax && (
+              <span className="inline-flex items-center">
+                +
+                <span
+                  className={`inline-block overflow-hidden transition-[max-width,opacity] duration-200 ease-out ${
+                    isEdgeHolding
+                      ? "max-w-[0.75em] opacity-100"
+                      : "max-w-0 opacity-0"
+                  }`}
+                  aria-hidden={!isEdgeHolding}
+                >
+                  ?
+                </span>
+                <span
+                  className="ml-0.5 inline-block border-y-[3.5px] border-y-transparent border-l-[5px] border-l-current"
+                  aria-hidden
+                />
+              </span>
+            )}
+          </button>
+          {import.meta.env.DEV && import.meta.env.VITE_DEV_SETTINGS === "true" && (
             <>
               <label
-                className={`flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-wide ${
+                className={`flex h-5 shrink-0 items-center gap-1 text-[10px] uppercase tracking-wide ${
                   isTicket
                     ? "text-ticket-ink/45 font-[Outfit,sans-serif]"
                     : "text-stone-500"
@@ -752,7 +912,7 @@ export default function LogMoneySlider({
               <button
                 type="button"
                 onClick={resetScale}
-                className={`shrink-0 text-[10px] uppercase tracking-wide underline-offset-2 hover:underline ${
+                className={`h-5 shrink-0 text-[10px] uppercase tracking-wide underline-offset-2 hover:underline ${
                   isTicket
                     ? "text-ticket-ink/45 font-[Outfit,sans-serif]"
                     : "text-stone-500"
@@ -763,24 +923,6 @@ export default function LogMoneySlider({
               </button>
             </>
           )}
-        </div>
-
-        {/* Radix keeps the thumb in-bounds, so 0–100% is inset by half of w-5. */}
-        <div className="mx-2.5">
-          <CompMarkers
-            markers={compMarkers}
-            getPos={(v) => valueToPosition(v, MIN, max)}
-            formatValue={formatMillions}
-            onSelect={(v) => {
-              if (disabled) return;
-              const next = Math.min(absoluteMax, snapToDetent(v));
-              expandToFit(next);
-              onChange(next);
-            }}
-            disabled={disabled}
-            variant={variant}
-            positionTransitionMs={EXPAND_ANIM_MS}
-          />
         </div>
       </div>
     </div>

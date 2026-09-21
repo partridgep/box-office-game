@@ -18,8 +18,11 @@ export const ABSOLUTE_MAX_INTERNATIONAL_LIFETIME = 2400;
 export const OVERSHOOT_PX_PER_MILLION = 10;
 /** Max $M added per overshoot tick. */
 export const OVERSHOOT_MAX_DELTA = 4;
-/** Minimum ms between overshoot ticks. */
-export const OVERSHOOT_TICK_MS = 280;
+/**
+ * Hold against the scale max (past the track edge) before a range expand.
+ * Creates resistance that yields only after sustained pressure.
+ */
+export const OVERSHOOT_HOLD_MS = 420;
 /** How long the thumb eases left after a max expand. */
 export const EXPAND_ANIM_MS = 380;
 /** How long the thumb eases back toward the right edge while still held. */
@@ -169,5 +172,5 @@ export const FAST_SLIDE_SPEED = 60;
 /** Below this, apply whole-number magnets for fine adjustment. */
 export const SLOW_SLIDE_SPEED = 18;
 
-/** Fraction of max at which a sustained push expands the scale. */
-export const EDGE_EXPAND_RATIO = 0.92;
+/** Treat the thumb as against the scale max within this $M tolerance. */
+export const EDGE_AT_MAX_EPSILON = 0.15;

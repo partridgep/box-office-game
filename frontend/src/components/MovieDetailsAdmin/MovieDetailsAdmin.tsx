@@ -220,6 +220,14 @@ const MovieDetailsAdmin = () => {
             <p>Manage comps</p>
           </button>
         )}
+        {id && (
+          <button
+            onClick={() => navigate(`/movie/${id}`)}
+            className={styles['update-btn']}
+          >
+            <p>Player view</p>
+          </button>
+        )}
       </div>
       <div className={styles['movie-data']}>
         {isInDatabase && (

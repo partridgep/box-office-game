@@ -41,15 +41,8 @@ export default function LifetimeGroup({
       ? finalDomestic + finalInternational
       : null;
 
-  const showDomesticWarning =
-    finalDomestic != null &&
-    domesticOpening != null &&
-    finalDomestic < domesticOpening;
-
-  const showIntlWarning =
-    finalInternational != null &&
-    internationalOpening != null &&
-    finalInternational < internationalOpening;
+  const domesticMin = domesticOpening ?? 0;
+  const internationalMin = internationalOpening ?? 0;
 
   return (
     <div>
@@ -78,6 +71,7 @@ export default function LifetimeGroup({
           label="Final Domestic ($M)"
           value={finalDomestic}
           onChange={onFinalDomesticChange}
+          absoluteMin={domesticMin}
           fallbackMax={finalDomesticFallback}
           absoluteMax={ABSOLUTE_MAX_DOMESTIC_LIFETIME}
           scaleKey={scaleKey}
@@ -85,23 +79,13 @@ export default function LifetimeGroup({
           variant={variant}
           compMarkers={finalDomesticMarkers}
         />
-        {showDomesticWarning && (
-          <p
-            className={
-              isTicket
-                ? "text-xs text-ticket-ink/80 -mt-2 font-[Outfit,sans-serif]"
-                : "text-xs text-amber-400/90 -mt-2"
-            }
-          >
-            Final domestic is below your opening prediction — unusual but allowed.
-          </p>
-        )}
 
         <LogMoneySlider
           id="final_international"
           label="Final International ($M)"
           value={finalInternational}
           onChange={onFinalInternationalChange}
+          absoluteMin={internationalMin}
           fallbackMax={finalInternationalFallback}
           absoluteMax={ABSOLUTE_MAX_INTERNATIONAL_LIFETIME}
           scaleKey={scaleKey}
@@ -109,17 +93,6 @@ export default function LifetimeGroup({
           variant={variant}
           compMarkers={finalInternationalMarkers}
         />
-        {showIntlWarning && (
-          <p
-            className={
-              isTicket
-                ? "text-xs text-ticket-ink/80 -mt-2 font-[Outfit,sans-serif]"
-                : "text-xs text-amber-400/90 -mt-2"
-            }
-          >
-            Final international is below your opening prediction — unusual but allowed.
-          </p>
-        )}
 
         <div
           className={`flex items-center justify-between pt-2 border-t ${

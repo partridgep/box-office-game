@@ -80,6 +80,12 @@ export default function PredictionControls({
   const [internationalOpening, setInternationalOpening] = useState<number | null>(
     initial.internationalOpening,
   );
+  /** Opening floors for lifetime — updated only after the opening gesture ends. */
+  const [committedDomesticOpening, setCommittedDomesticOpening] = useState<
+    number | null
+  >(initial.domesticOpening);
+  const [committedInternationalOpening, setCommittedInternationalOpening] =
+    useState<number | null>(initial.internationalOpening);
   const [finalDomestic, setFinalDomestic] = useState<number | null>(
     initial.finalDomestic,
   );
@@ -100,6 +106,8 @@ export default function PredictionControls({
     const next = valuesFromGuess(existingGuess);
     setDomesticOpening(next.domesticOpening);
     setInternationalOpening(next.internationalOpening);
+    setCommittedDomesticOpening(next.domesticOpening);
+    setCommittedInternationalOpening(next.internationalOpening);
     setFinalDomestic(next.finalDomestic);
     setFinalInternational(next.finalInternational);
     setRtScore(next.rtScore);
@@ -126,11 +134,15 @@ export default function PredictionControls({
 
   const finalDomesticFallback = Math.min(
     ABSOLUTE_MAX_DOMESTIC_LIFETIME,
-    domesticOpening != null ? niceCeil(domesticOpening * 3.5) : 600,
+    committedDomesticOpening != null
+      ? niceCeil(committedDomesticOpening * 3.5)
+      : 600,
   );
   const finalInternationalFallback = Math.min(
     ABSOLUTE_MAX_INTERNATIONAL_LIFETIME,
-    internationalOpening != null ? niceCeil(internationalOpening * 3.5) : 600,
+    committedInternationalOpening != null
+      ? niceCeil(committedInternationalOpening * 3.5)
+      : 600,
   );
 
   const isFormValid = (() => {
@@ -217,6 +229,7 @@ export default function PredictionControls({
             label="Domestic Opening ($M)"
             value={domesticOpening}
             onChange={setDomesticOpening}
+            onCommit={setCommittedDomesticOpening}
             fallbackMax={DOMESTIC_OPENING_FALLBACK}
             absoluteMax={ABSOLUTE_MAX_DOMESTIC_OPENING}
             scaleKey={movieId}
@@ -229,6 +242,7 @@ export default function PredictionControls({
             label="International Opening ($M)"
             value={internationalOpening}
             onChange={setInternationalOpening}
+            onCommit={setCommittedInternationalOpening}
             fallbackMax={INTERNATIONAL_OPENING_FALLBACK}
             absoluteMax={ABSOLUTE_MAX_INTERNATIONAL_OPENING}
             scaleKey={movieId}
@@ -248,8 +262,8 @@ export default function PredictionControls({
       <LifetimeGroup
         finalDomestic={finalDomestic}
         finalInternational={finalInternational}
-        domesticOpening={domesticOpening}
-        internationalOpening={internationalOpening}
+        domesticOpening={committedDomesticOpening}
+        internationalOpening={committedInternationalOpening}
         onFinalDomesticChange={setFinalDomestic}
         onFinalInternationalChange={setFinalInternational}
         disabled={!availability.finalDomestic}

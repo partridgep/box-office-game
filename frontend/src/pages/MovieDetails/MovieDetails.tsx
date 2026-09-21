@@ -157,6 +157,15 @@ export default function MovieDetails() {
           <p className="text-xs text-left uppercase tracking-wide mt-0.5 text-ticket-ink/80">
             {movie.genre}
           </p>
+          {id && (
+            <button
+              type="button"
+              onClick={() => navigate(`/admin/movie/${id}`)}
+              className="mt-3 text-[10px] uppercase tracking-wider text-ticket-ink/45 hover:text-ticket-ink/80 transition-colors font-[Outfit,sans-serif]"
+            >
+              Admin View
+            </button>
+          )}
         </div>
       </div>
     </TicketStub>
