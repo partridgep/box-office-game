@@ -225,7 +225,7 @@ export default function MovieDetails() {
             Predictions for this movie have closed.
           </p>
           <p className="text-sm text-ticket-ink/65 font-[Outfit,sans-serif]">
-            Check back on another title in the lobby.
+            The movie has been released, therefore you cannot make predictions for it.
           </p>
         </div>
       )}

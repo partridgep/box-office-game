@@ -61,10 +61,10 @@ export function getAccuracyTier(
 
 function compareNumber(
   field: string,
-  guess: number,
+  guess: number | null,
   actual: number | null
 ): GuessComparison | null {
-  if (actual == null) return null;
+  if (actual == null || guess == null) return null;
 
   const delta = guess - actual;
   const percentError = (Math.abs(delta) / actual) * 100;
@@ -132,11 +132,11 @@ export function compareTwoGuesses(
 
   function compare(
     field: string,
-    a: number,
-    b: number,
+    a: number | null,
+    b: number | null,
     actual: number | null
   ): GuessVsGuess | null {
-    if (actual == null) return null;
+    if (actual == null || a == null || b == null) return null;
 
     const deltaA = Math.abs(a - actual);
     const deltaB = Math.abs(b - actual);
@@ -233,6 +233,7 @@ function getGuessError(
         )! - actual
       );
     case "Rotten Tomatoes":
+      if (guess.rotten_tomatoes_score == null) return null;
       return Math.abs(guess.rotten_tomatoes_score - actual);
     default:
       return null;
@@ -291,18 +292,27 @@ export function compareUserToAllGuesses(
   return result;
 }
 
+/** Max reduction in box office error (as a fraction) for an exact RT guess. */
+const RT_MAX_BONUS = 0.05;
+/** RT guesses this many points off (or more) earn no bonus. */
+const RT_BONUS_CUTOFF = 20;
+
+function rtBonus(guessRt: number | null, actualRt: number | null): number {
+  if (actualRt == null || guessRt == null) return 0;
+  const pointsOff = Math.abs(guessRt - actualRt);
+  return RT_MAX_BONUS * Math.max(0, 1 - pointsOff / RT_BONUS_CUTOFF);
+}
+
 export function overallRanking(
   userGuess: Guess,
   allGuesses: Guess[],
   movie: MovieData
 ): OverallPerformance | null {
   const actuals = getMovieActuals(movie);
+  const actualRt = actuals.rottenTomatoesScore;
 
   function scoreGuess(g: Guess): number | null {
-    let score = 0;
-    let count = 0;
-
-    const fields = [
+    const boErrors = [
       actuals.worldwideOpening &&
         Math.abs(
           millionsToDollars(g.domestic_opening + g.international_opening)! -
@@ -313,19 +323,20 @@ export function overallRanking(
           millionsToDollars(g.final_domestic + g.final_international)! -
             actuals.worldwideFinal
         ) / actuals.worldwideFinal,
-      actuals.rottenTomatoesScore &&
-        Math.abs(g.rotten_tomatoes_score - actuals.rottenTomatoesScore) /
-          actuals.rottenTomatoesScore,
-    ];
+    ].filter((v): v is number => typeof v === "number");
 
-    fields.forEach((v) => {
-      if (typeof v === "number") {
-        score += v;
-        count++;
-      }
-    });
+    if (boErrors.length) {
+      const boScore = boErrors.reduce((a, b) => a + b, 0) / boErrors.length;
+      return boScore - rtBonus(g.rotten_tomatoes_score, actualRt);
+    }
 
-    return count ? score / count : null;
+    // Before box office numbers are in, rank on RT alone; players who
+    // skipped RT have nothing to be ranked on yet.
+    if (actualRt != null && g.rotten_tomatoes_score != null) {
+      return Math.abs(g.rotten_tomatoes_score - actualRt);
+    }
+
+    return null;
   }
 
   const scores = allGuesses

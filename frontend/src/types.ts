@@ -52,7 +52,7 @@ export type Guess = {
   international_opening: number,
   final_domestic: number,
   final_international: number,
-  rotten_tomatoes_score: number,
+  rotten_tomatoes_score: number | null,
   createdAt: string,
   updatedAt: string,
   guess_user?: GuessUser; 
