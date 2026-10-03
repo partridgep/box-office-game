@@ -54,12 +54,19 @@ function valuesFromGuess(guess: Guess | undefined) {
     };
   }
   return {
-    domesticOpening: guess.domestic_opening ?? null,
-    internationalOpening: guess.international_opening ?? null,
-    finalDomestic: guess.final_domestic ?? null,
-    finalInternational: guess.final_international ?? null,
-    rtScore: guess.rotten_tomatoes_score ?? null,
+    domesticOpening: toNumberOrNull(guess.domestic_opening),
+    internationalOpening: toNumberOrNull(guess.international_opening),
+    finalDomestic: toNumberOrNull(guess.final_domestic),
+    finalInternational: toNumberOrNull(guess.final_international),
+    rtScore: toNumberOrNull(guess.rotten_tomatoes_score),
   };
+}
+
+/** Guess fields can arrive as strings (Postgres BIGINT). */
+function toNumberOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 export default function PredictionControls({
@@ -210,6 +217,7 @@ export default function PredictionControls({
             void submitGuess(createdUser.id);
           }
         }}
+        onCancel={() => setShowSignup(false)}
       />
     );
   }
@@ -241,7 +249,7 @@ export default function PredictionControls({
         <div className="space-y-5">
           <LogMoneySlider
             id="domestic_opening"
-            label="Domestic Opening ($M)"
+            label="Domestic Opening"
             value={domesticOpening}
             onChange={setDomesticOpening}
             onCommit={setCommittedDomesticOpening}
@@ -254,7 +262,7 @@ export default function PredictionControls({
           />
           <LogMoneySlider
             id="international_opening"
-            label="International Opening ($M)"
+            label="International Opening"
             value={internationalOpening}
             onChange={setInternationalOpening}
             onCommit={setCommittedInternationalOpening}

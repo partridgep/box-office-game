@@ -61,8 +61,35 @@ export default function MovieDetails() {
   const [showingShareDialog, setShowingShareDialog] = useState(false);
   /** Keep PredictionControls mounted through signup confirmation even after the guess locks. */
   const [holdPredictForSignup, setHoldPredictForSignup] = useState(false);
+  const [retroactiveMode, setRetroactiveMode] = useState(false);
 
-  const mode = usePageMode(movie, loggedGuess, isInDatabase);
+  const pageMode = usePageMode(movie, loggedGuess, isInDatabase);
+
+  const canUseRetroactiveMode =
+    isInDatabase &&
+    !loggedGuess &&
+    predictionAvailability != null &&
+    !(
+      predictionAvailability.domesticOpening &&
+      predictionAvailability.rottenTomatoes
+    );
+  const retroactiveActive = retroactiveMode && canUseRetroactiveMode;
+
+  const mode = retroactiveActive ? "predict" : pageMode;
+
+  const effectiveAvailability = useMemo(() => {
+    if (!predictionAvailability || !retroactiveActive) {
+      return predictionAvailability;
+    }
+    return {
+      domesticOpening: true,
+      internationalOpening: true,
+      finalDomestic: true,
+      finalInternational: true,
+      rottenTomatoes: true,
+      anyOpen: true,
+    };
+  }, [predictionAvailability, retroactiveActive]);
 
   const compMarkersByField = useMemo(() => {
     return compsToMarkersByField(compGroups);
@@ -80,7 +107,7 @@ export default function MovieDetails() {
     return inviterGuess.guess_user?.name;
   }, [inviterGuess, user]);
 
-  if (!movie || !predictionAvailability) {
+  if (!movie || !predictionAvailability || !effectiveAvailability) {
     return (
       <div className="flex justify-center items-center h-[60vh]">
         <Loader2 className="animate-spin text-cinema-400" size={48} />
@@ -163,13 +190,29 @@ export default function MovieDetails() {
             {movie.rated || "Not Yet Rated"}
           </p>
           {id && (
-            <button
-              type="button"
-              onClick={() => navigate(`/admin/movie/${id}`)}
-              className="mt-3 text-[10px] uppercase tracking-wider text-ticket-ink/45 hover:text-ticket-ink/80 transition-colors font-[Outfit,sans-serif]"
-            >
-              Admin View
-            </button>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+              <button
+                type="button"
+                onClick={() => navigate(`/admin/movie/${id}`)}
+                className="text-[10px] uppercase tracking-wider text-ticket-ink/45 hover:text-ticket-ink/80 transition-colors font-[Outfit,sans-serif]"
+              >
+                Admin View
+              </button>
+              {canUseRetroactiveMode && (
+                <button
+                  type="button"
+                  onClick={() => setRetroactiveMode((on) => !on)}
+                  aria-pressed={retroactiveMode}
+                  className={`text-[10px] uppercase tracking-wider transition-colors font-[Outfit,sans-serif] ${
+                    retroactiveMode
+                      ? "text-ticket-ink font-bold"
+                      : "text-ticket-ink/45 hover:text-ticket-ink/80"
+                  }`}
+                >
+                  {retroactiveMode ? "Exit Retroactive Mode" : "Retroactive Predict"}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -178,10 +221,16 @@ export default function MovieDetails() {
 
   const panelContent = (
     <>
+      {retroactiveActive && (
+        <div className="mb-4 border border-ticket-ink/40 py-2 px-3 text-xs uppercase tracking-wide text-ticket-ink">
+          Admin retroactive mode — cutoffs are ignored for this prediction.
+        </div>
+      )}
+
       {(mode === "predict" || holdPredictForSignup) && movie.id && (
         <PredictionControls
           movieId={movie.id}
-          availability={predictionAvailability}
+          availability={effectiveAvailability}
           compMarkersByField={compMarkersByField}
           inviterName={inviterName}
           onSignupFlowChange={setHoldPredictForSignup}

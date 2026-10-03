@@ -1,7 +1,8 @@
 .container {
+  position: relative;
   max-width: 400px;
   margin: 0 auto;
-  padding: 8px 0;
+  padding: 40px 0 8px;
   text-align: center;
   font-family: "Outfit", sans-serif;
 }
@@ -11,6 +12,29 @@
   font-weight: 700;
   margin-bottom: 20px;
   color: #14110b;
+}
+
+.backButton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  padding: 4px;
+  background: none;
+  border: none;
+  color: rgba(20, 17, 11, 0.8);
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.backButton:hover:not(:disabled) {
+  color: #14110b;
+  background-color: rgba(20, 17, 11, 0.1);
+}
+
+.backButton:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .form {

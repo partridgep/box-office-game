@@ -4,9 +4,11 @@ import { Lock } from "lucide-react";
 import {
   valueToPosition,
   snapToDetent,
-  snapToWholeMagnet,
   roundToTenth,
+  roundMoney,
+  BILLION_THRESHOLD,
   FAST_SLIDE_SPEED,
+  snapToFlingStep,
   SLOW_SLIDE_SPEED,
   EDGE_AT_MAX_EPSILON,
   initialMoneyMax,
@@ -19,10 +21,19 @@ import {
   EXPAND_HANDOFF_MS,
   growMaxForOvershoot,
 } from "../../utils/logScale";
-import { formatMillions } from "../../utils/formatMoney";
+import {
+  formatMillions,
+  formatMillionsShort,
+  parseMoneyToMillions,
+} from "../../utils/formatMoney";
 import CompMarkers, { type CompMarker } from "./CompMarkers";
 
 export type { CompMarker };
+
+/** A first jump wider than this (≈ thumb width) means the track was clicked. */
+const TRACK_CLICK_MIN_PX = 12;
+/** Pointer drift after a track click that still counts as the same click. */
+const TRACK_CLICK_JITTER_PX = 6;
 
 interface LogMoneySliderProps {
   label: string;
@@ -130,12 +141,18 @@ export default function LogMoneySlider({
   isDraggingRef.current = isDragging;
   /** True while holding past the edge against the max (resistance / about to expand). */
   const [isEdgeHolding, setIsEdgeHolding] = useState(false);
-  const [inputText, setInputText] = useState("");
+  /** Draft text while the input is focused; null when not editing. */
+  const [inputText, setInputText] = useState<string | null>(null);
   const [inputWidth, setInputWidth] = useState<number | undefined>();
   const measureRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const lastWholeRef = useRef<number | null>(null);
+  /** Value when the pointer went down; cleared after the gesture's first change. */
+  const pointerDownValueRef = useRef<number | null>(null);
+  /** True while the gesture is a click on the track (not a drag of the thumb). */
+  const trackClickRef = useRef(false);
+  const trackClickRawRef = useRef(0);
   const velocityRef = useRef({ lastValue: 0, lastTime: 0, speed: 0 });
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -173,7 +190,7 @@ export default function LogMoneySlider({
       setExpandVisual(v);
       if (syncValue) {
         onChangeRef.current(
-          roundToTenth(Math.max(floorRef.current, v)),
+          roundMoney(Math.max(floorRef.current, v)),
         );
       }
       if (t < 1) {
@@ -195,7 +212,7 @@ export default function LogMoneySlider({
     const pad = 10;
     const usable = Math.max(1, rect.width - pad * 2);
     const x = Math.min(Math.max(clientX - (rect.left + pad), 0), usable);
-    return roundToTenth(scaleMin + (x / usable) * (currentMax - scaleMin));
+    return roundMoney(scaleMin + (x / usable) * (currentMax - scaleMin));
   };
 
   /**
@@ -339,9 +356,11 @@ export default function LogMoneySlider({
 
     const delta = Math.min(
       OVERSHOOT_MAX_DELTA,
-      Math.max(0.5, overshootPx / OVERSHOOT_PX_PER_MILLION),
+      Math.max(1, overshootPx / OVERSHOOT_PX_PER_MILLION),
     );
-    const next = roundToTenth(Math.min(absoluteMax, currentValue + delta));
+    // Above $1B values move in $10M steps, so a smaller delta would round away.
+    const step = currentValue >= BILLION_THRESHOLD ? Math.max(10, delta) : delta;
+    const next = roundMoney(Math.min(absoluteMax, currentValue + step));
     const nextMax = growMaxForOvershoot(currentMax, next, absoluteMax);
 
     if (nextMax > currentMax) {
@@ -428,8 +447,10 @@ export default function LogMoneySlider({
   // spans scaleMin→max so comps in that region remain visible.
   const constrainedSliderValue = Math.max(sliderValue, floor);
 
-  const numberStr = inputText || (value != null ? value.toFixed(1) : "");
-  const sizerStr = numberStr || scaleMin.toFixed(1);
+  const placeholder = formatMillionsShort(scaleMin, true);
+  const numberStr =
+    inputText ?? (value != null ? formatMillionsShort(value, true) : "");
+  const sizerStr = numberStr || placeholder;
 
   useLayoutEffect(() => {
     const el = measureRef.current;
@@ -477,6 +498,15 @@ export default function LogMoneySlider({
     return nextMax;
   };
 
+  /** Pixel distance on the track covered by a $M delta at the current scale. */
+  const valueDeltaToPx = (delta: number) => {
+    const root = rootRef.current;
+    const currentMax = maxRef.current;
+    if (!root || currentMax <= scaleMin) return 0;
+    const usable = Math.max(1, root.getBoundingClientRect().width - 20);
+    return (Math.abs(delta) / (currentMax - scaleMin)) * usable;
+  };
+
   const handleSliderChange = (values: number[]) => {
     // Freeze Radix while overshooting / animating / handing off.
     if (expandLockRef.current || overshootModeRef.current) return;
@@ -485,24 +515,33 @@ export default function LogMoneySlider({
     const speed = sampleVelocity(raw);
     const currentMax = maxRef.current;
 
-    // In-range motion only — edge expansion is handled by the throttled overshoot path.
-    let next = roundToTenth(raw);
-
-    if (speed <= SLOW_SLIDE_SPEED) {
-      next = snapToWholeMagnet(raw);
+    if (pointerDownValueRef.current != null) {
+      // First change of a pointer gesture: a jump wider than the thumb is a track click.
+      trackClickRef.current =
+        valueDeltaToPx(raw - pointerDownValueRef.current) > TRACK_CLICK_MIN_PX;
+      trackClickRawRef.current = raw;
+      pointerDownValueRef.current = null;
+    } else if (
+      trackClickRef.current &&
+      valueDeltaToPx(raw - trackClickRawRef.current) > TRACK_CLICK_JITTER_PX
+    ) {
+      trackClickRef.current = false;
     }
 
-    const clamped = clampValue(next, currentMax);
+    if (trackClickRef.current) {
+      const snapped = clampValue(snapToFlingStep(raw, currentMax), currentMax);
+      if (snapped !== valueRef.current) navigator.vibrate?.(8);
+      lastWholeRef.current = snapped;
+      onChange(snapped);
+      return;
+    }
 
-    if (
-      speed <= SLOW_SLIDE_SPEED &&
-      Number.isInteger(clamped) &&
-      clamped !== lastWholeRef.current
-    ) {
+    // In-range motion only — edge expansion is handled by the throttled overshoot path.
+    const clamped = clampValue(roundMoney(raw), currentMax);
+
+    if (speed <= SLOW_SLIDE_SPEED && clamped !== lastWholeRef.current) {
       lastWholeRef.current = clamped;
       navigator.vibrate?.(8);
-    } else if (!Number.isInteger(clamped)) {
-      lastWholeRef.current = null;
     }
 
     onChange(clamped);
@@ -522,15 +561,16 @@ export default function LogMoneySlider({
     const raw = values[0];
     const speed = velocityRef.current.speed;
     resetVelocity();
+    const wasTrackClick = trackClickRef.current;
+    trackClickRef.current = false;
+    pointerDownValueRef.current = null;
 
-    let next: number;
-    if (speed >= FAST_SLIDE_SPEED) {
-      next = Math.round(raw);
-    } else if (speed <= SLOW_SLIDE_SPEED) {
-      next = snapToDetent(snapToWholeMagnet(raw));
-    } else {
-      next = roundToTenth(raw);
-    }
+    const next =
+      wasTrackClick || speed >= FAST_SLIDE_SPEED
+        ? snapToFlingStep(raw, maxRef.current)
+        : speed <= SLOW_SLIDE_SPEED
+          ? snapToDetent(roundMoney(raw))
+          : roundMoney(raw);
 
     const currentMax = maxRef.current;
     const committed = clampValue(next, currentMax);
@@ -620,7 +660,7 @@ export default function LogMoneySlider({
   }, [isDragging, disabled, absoluteMax]);
 
   const applyManualValue = (parsed: number) => {
-    const next = snapToDetent(roundToTenth(clampValue(parsed, absoluteMax)));
+    const next = snapToDetent(roundMoney(clampValue(parsed, absoluteMax)));
     const clamped = clampValue(next, absoluteMax);
     expandToFit(clamped);
     onChange(clamped);
@@ -628,11 +668,11 @@ export default function LogMoneySlider({
   };
 
   const handleInputBlur = () => {
-    const parsed = parseFloat(inputText);
-    if (!isNaN(parsed)) {
+    const parsed = inputText != null ? parseMoneyToMillions(inputText) : null;
+    if (parsed != null) {
       applyManualValue(parsed);
     }
-    setInputText("");
+    setInputText(null);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -748,29 +788,25 @@ export default function LogMoneySlider({
           <input
             ref={inputRef}
             id={id}
-            type="number"
-            min={floor}
-            max={absoluteMax}
-            // "any" avoids native step-mismatch when min is a dynamic floor
-            // (value must be min + n*step). Clamping/snapping stay in JS.
-            step="any"
+            // Text so "1.6b" / "1600m" can be typed; a bare number means millions.
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            spellCheck={false}
             disabled={disabled}
-            placeholder={scaleMin.toFixed(1)}
+            placeholder={placeholder}
             value={numberStr}
             onChange={(e) => setInputText(e.target.value)}
             onBlur={handleInputBlur}
             onKeyDown={handleInputKeyDown}
-            onFocus={() => setInputText(value != null ? value.toFixed(1) : "")}
+            onFocus={() =>
+              setInputText(value != null ? formatMillionsShort(value, true) : "")
+            }
             style={inputWidth != null ? { width: inputWidth } : undefined}
-            className="font-ticketing bg-transparent border-0 p-0 text-left text-lg font-bold tabular-nums text-inherit focus:outline-none disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            aria-label={`${label} in millions`}
+            className="font-ticketing bg-transparent border-0 p-0 text-left text-lg font-bold tabular-nums text-inherit focus:outline-none disabled:cursor-not-allowed"
+            aria-label={label}
+            aria-description="Bare numbers are millions; add B for billions"
           />
-          <span className="font-ticketing invisible select-none" aria-hidden>
-            M
-          </span>
-          <span className="font-ticketing pointer-events-none absolute right-2 top-1/2 -translate-y-1/2" aria-hidden>
-            M
-          </span>
         </div>
       </div>
 
@@ -784,6 +820,8 @@ export default function LogMoneySlider({
               onValueChange={handleSliderChange}
               onValueCommit={handleSliderCommit}
               onPointerDown={() => {
+                pointerDownValueRef.current = valueRef.current ?? floor;
+                trackClickRef.current = false;
                 setIsDragging(true);
                 isDraggingRef.current = true;
                 overshootModeRef.current = false;
@@ -795,9 +833,9 @@ export default function LogMoneySlider({
               }}
               min={scaleMin}
               max={max}
-              step={0.1}
+              step={displayValue >= BILLION_THRESHOLD ? 10 : 1}
               disabled={disabled}
-              aria-valuetext={formatMillions(value)}
+              aria-valuetext={value != null ? `$${formatMillionsShort(value, true)}` : undefined}
               aria-valuemin={floor}
             >
               <Slider.Track
@@ -829,7 +867,7 @@ export default function LogMoneySlider({
                 formatValue={formatMillions}
                 onSelect={(v) => {
                   if (disabled) return;
-                  const next = clampValue(snapToDetent(v), absoluteMax);
+                  const next = clampValue(snapToDetent(roundMoney(v)), absoluteMax);
                   expandToFit(next);
                   onChange(next);
                   emitCommit(next);
@@ -859,13 +897,13 @@ export default function LogMoneySlider({
             }
             aria-label={
               atAbsoluteMax
-                ? `Scale maximum ${formatMillions(max)}`
+                ? `Scale maximum $${formatMillionsShort(max, true)}`
                 : isEdgeHolding
-                  ? `Holding to increase scale maximum from ${formatMillions(max)}`
-                  : `Increase scale maximum from ${formatMillions(max)}`
+                  ? `Holding to increase scale maximum from $${formatMillionsShort(max, true)}`
+                  : `Increase scale maximum from $${formatMillionsShort(max, true)}`
             }
           >
-            {formatMillions(max)}
+            ${formatMillionsShort(max, true)}
             {!atAbsoluteMax && (
               <span className="inline-flex items-center">
                 +

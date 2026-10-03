@@ -4,7 +4,11 @@ require('dotenv').config({ path: '../../.env' })
 const fs = require('fs');
 const path = require('path');
 const Sequelize = require('sequelize');
+const pg = require('pg');
 const process = require('process');
+
+// pg returns BIGINT (OID 20) as strings; our BIGINT columns ($M, ids) fit safely in a JS number.
+pg.types.setTypeParser(20, (value) => parseInt(value, 10));
 const basename = path.basename(__filename);
 const env = process.env.NODE_ENV || 'development';
 const config = require(__dirname + '/../config/config.js')[env];

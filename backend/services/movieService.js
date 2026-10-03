@@ -4,6 +4,9 @@ const { fetchRottenTomatoesData } = require('./rottenTomatoesService');
 const { generateAcronym } = require('../utils/acronym');
 const { Movie } = db;
 
+const formatDollars = (amount) =>
+  amount ? `$${amount.toLocaleString('en-US')}` : null;
+
 // search for movies using TMDB
 const searchMovies = async (search, year) => {
   const params = new URLSearchParams({
@@ -107,11 +110,11 @@ const getMovieById = async (tmdbID, isBatch) => {
 
     domesticGross: null,
     internationalGross: null,
-    worldwideGross: data.revenue || null,
+    worldwideGross: formatDollars(data.revenue),
 
     domesticOpening: null,
 
-    budget: data.budget || null,
+    budget: formatDollars(data.budget),
 
     rated,
 

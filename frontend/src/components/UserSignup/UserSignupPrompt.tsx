@@ -1,9 +1,15 @@
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useUserStore } from "../../store/useUserStore";
 import styles from "./UserSignupPrompt.module.css"
 
-export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
+export default function UserSignup({
+  onSignup,
+  onCancel,
+}: {
+  onSignup?: () => void;
+  onCancel?: () => void;
+}) {
   const createUser = useUserStore((state) => state.createUser);
   const [name, setName] = useState("");
   const [showError, setshowError] = useState(false);
@@ -15,7 +21,7 @@ export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
       setIsSaving(true);
       try {
         await createUser(name);
-        onSignup && onSignup();
+        onSignup?.();
       }
       catch {
         setshowError(true);
@@ -24,9 +30,22 @@ export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
     }
   };
 
+  const backButton = onCancel && (
+    <button
+      type="button"
+      onClick={onCancel}
+      disabled={isSaving}
+      className={styles.backButton}
+      aria-label="Cancel and go back"
+    >
+      <ArrowLeft size={20} aria-hidden />
+    </button>
+  );
+
   if (showError) {
     return (
       <div className={styles.container}>
+        {backButton}
         <h2 className={styles.heading}>Something went wrong!</h2>
         <form onSubmit={handleSubmit} className={styles.form}>
           <button type="submit" className={styles.button} disabled={isSaving}>
@@ -46,6 +65,7 @@ export default function UserSignup({ onSignup }: { onSignup?: () => void }) {
 
   return (
     <div className={styles.container}>
+      {backButton}
       <h2 className={styles.heading}>Enter your name to save your guess</h2>
       <form onSubmit={handleSubmit} className={styles.form}>
         <input

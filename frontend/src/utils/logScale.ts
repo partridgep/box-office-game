@@ -58,17 +58,14 @@ export function roundToTenth(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/** Stick to whole millions when close; otherwise keep 0.1 precision. */
-export function snapToWholeMagnet(
-  value: number,
-  magnetRadius = 0.22,
-): number {
-  const tenths = roundToTenth(value);
-  const nearestWhole = Math.round(tenths);
-  if (Math.abs(tenths - nearestWhole) <= magnetRadius) {
-    return nearestWhole;
-  }
-  return tenths;
+/** $M at which values display in billions ($1.61B → $10M resolution). */
+export const BILLION_THRESHOLD = 1000;
+
+/** Round to the precision the value displays at: $1M below $1B, $10M above. */
+export function roundMoney(value: number): number {
+  const whole = Math.round(value);
+  if (whole >= BILLION_THRESHOLD) return Math.round(whole / 10) * 10;
+  return whole;
 }
 
 /** Pull to milestone detents only within an absolute $M window (not %). */
@@ -152,12 +149,12 @@ export function seedMoneyValue(
 
   if (values.length === 0) {
     return snapToDetent(
-      roundToTenth(Math.max(hardcodedFallback, fallbackMax * 0.25)),
+      roundMoney(Math.max(hardcodedFallback, fallbackMax * 0.25)),
     );
   }
 
   const median = values[Math.floor(values.length / 2)];
-  return snapToDetent(roundToTenth(median));
+  return snapToDetent(roundMoney(median));
 }
 
 /** Linear 0–100 position for markers / CSS layout. */
@@ -167,10 +164,24 @@ export function valueToPosition(value: number, min: number, max: number): number
   return ((clamped - min) / (max - min)) * 100;
 }
 
-/** $M per second — above this, treat the gesture as a fast fling. */
-export const FAST_SLIDE_SPEED = 60;
-/** Below this, apply whole-number magnets for fine adjustment. */
+/** $M per second — above this, a released fling snaps to a round step. */
+export const FAST_SLIDE_SPEED = 80;
+/** $M per second — below this, haptic ticks and milestone detents apply. */
 export const SLOW_SLIDE_SPEED = 18;
+
+const FLING_STEPS = [1, 5, 10, 25, 50, 100];
+
+/** Round step for a fast release, sized to the scale (~2% of max). */
+export function flingStep(scaleMax: number, value: number): number {
+  const target = scaleMax * 0.02;
+  const step = FLING_STEPS.find((s) => s >= target) ?? 100;
+  return value >= BILLION_THRESHOLD ? Math.max(step, 50) : step;
+}
+
+export function snapToFlingStep(value: number, scaleMax: number): number {
+  const step = flingStep(scaleMax, value);
+  return roundMoney(Math.round(value / step) * step);
+}
 
 /** Treat the thumb as against the scale max within this $M tolerance. */
 export const EDGE_AT_MAX_EPSILON = 0.15;

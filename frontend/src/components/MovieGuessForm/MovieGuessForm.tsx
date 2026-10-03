@@ -101,6 +101,7 @@ export default function GuessForm({ movieId, availability }: GuessFormProps) {
           setShowSignup(false);
           setShowConfirmation(true);
         }}
+        onCancel={() => setShowSignup(false)}
       />
     );
   }

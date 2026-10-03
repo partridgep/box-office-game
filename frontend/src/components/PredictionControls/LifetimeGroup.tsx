@@ -68,7 +68,7 @@ export default function LifetimeGroup({
       <div className="space-y-5">
         <LogMoneySlider
           id="final_domestic"
-          label="Final Domestic ($M)"
+          label="Final Domestic"
           value={finalDomestic}
           onChange={onFinalDomesticChange}
           absoluteMin={domesticMin}
@@ -82,7 +82,7 @@ export default function LifetimeGroup({
 
         <LogMoneySlider
           id="final_international"
-          label="Final International ($M)"
+          label="Final International"
           value={finalInternational}
           onChange={onFinalInternationalChange}
           absoluteMin={internationalMin}
