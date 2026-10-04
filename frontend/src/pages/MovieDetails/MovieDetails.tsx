@@ -13,8 +13,6 @@ import BoxOfficeJourneyChart from "../../components/BoxOfficeJourney/BoxOfficeJo
 import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
 import TicketStub from "../../components/TicketStub/TicketStub";
-import { getWeeklyGrossData } from "../../data/mockWeeklyGross";
-import { parseMoney } from "../../utils/guessComparison";
 
 function PosterBackground({
   src,
@@ -56,6 +54,7 @@ export default function MovieDetails() {
     inviterGuess,
     allMovieGuesses,
     compGroups,
+    boxOffice,
   } = useMovieDetailsData();
 
   const [showingShareDialog, setShowingShareDialog] = useState(false);
@@ -94,12 +93,6 @@ export default function MovieDetails() {
   const compMarkersByField = useMemo(() => {
     return compsToMarkersByField(compGroups);
   }, [compGroups]);
-
-  const hasOpeningData = movie?.domesticOpening
-    ? parseMoney(movie.domesticOpening) != null
-    : false;
-
-  const weeklyData = getWeeklyGrossData(hasOpeningData || mode === "results");
 
   const inviterName = useMemo(() => {
     if (!inviterGuess) return undefined;
@@ -262,8 +255,10 @@ export default function MovieDetails() {
             allMovieGuesses={allMovieGuesses}
           />
           <BoxOfficeJourneyChart
-            weeklyData={weeklyData}
+            domesticWeekly={boxOffice.weekly}
+            internationalWeekly={boxOffice.international?.weekly ?? []}
             userFinalDomesticPrediction={loggedGuess.final_domestic}
+            userFinalInternationalPrediction={loggedGuess.final_international}
           />
         </div>
       )}

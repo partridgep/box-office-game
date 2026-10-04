@@ -5,6 +5,7 @@ import { useMovieStore } from '../../store/useMovieStore';
 import { MovieData, SavedMovie } from '../../types';
 import { generateAcronym } from '../../utils/acronym';
 import styles from './MovieDetails.module.css';
+import BoxOfficeHistoryAdmin from './BoxOfficeHistoryAdmin';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLeftLong, faCircleCheck, faPlus, faTrashCan, faArrowsRotate } from '@fortawesome/free-solid-svg-icons';
@@ -331,6 +332,9 @@ const MovieDetailsAdmin = () => {
           <p>
             <strong>Budget:</strong> {movie.budget}
           </p>
+        )}
+        {isInDatabase && movie.id && (
+          <BoxOfficeHistoryAdmin movieId={movie.id} bomReleaseId={movie.bomReleaseId} />
         )}
         <p>
           <strong>All data:</strong>

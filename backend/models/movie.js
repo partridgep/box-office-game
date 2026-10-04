@@ -22,6 +22,18 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'movie_id',
         as: 'compAppearances',
       });
+      Movie.hasMany(models.MovieBoxOfficePeriod, {
+        foreignKey: 'movie_id',
+        as: 'boxOfficePeriods',
+      });
+      Movie.hasMany(models.MovieBomTerritory, {
+        foreignKey: 'movie_id',
+        as: 'bomTerritories',
+      });
+      Movie.hasMany(models.MovieGrossSnapshot, {
+        foreignKey: 'movie_id',
+        as: 'grossSnapshots',
+      });
     }
   }
   Movie.init({
@@ -80,6 +92,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     internationalOpening: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    bomReleaseId: {
       type: DataTypes.STRING,
       allowNull: true,
     },

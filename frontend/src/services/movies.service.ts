@@ -1,3 +1,5 @@
+import { BoxOfficeHistory, InternationalRefreshResult } from '../types';
+
 export const searchMovies = async (search: string, year?: string | number) => {
   const params = new URLSearchParams({ search });
   if (year !== undefined && year !== null && String(year).trim() !== '') {
@@ -5,6 +7,37 @@ export const searchMovies = async (search: string, year?: string | number) => {
   }
   const response = await fetch(`/api/search-movies?${params}`);
   if (!response.ok) throw new Error('Failed to fetch movies');
+  return response.json();
+};
+
+export const getMovieBoxOffice = async (movieId: string): Promise<BoxOfficeHistory> => {
+  const response = await fetch(`/api/movies/${movieId}/box-office`);
+  if (!response.ok) throw new Error('Failed to fetch box office history');
+  return response.json();
+};
+
+export const refreshMovieBoxOffice = async (movieId: string): Promise<BoxOfficeHistory> => {
+  const response = await fetch(`/api/movies/${movieId}/box-office/refresh`, { method: 'POST' });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to refresh box office history');
+  }
+  return response.json();
+};
+
+export const refreshMovieInternationalBoxOffice = async (
+  movieId: string,
+  opts?: { force?: boolean }
+): Promise<BoxOfficeHistory & { refreshResult: InternationalRefreshResult }> => {
+  const response = await fetch(`/api/movies/${movieId}/box-office/international/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force: Boolean(opts?.force) }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to refresh foreign history');
+  }
   return response.json();
 };
 

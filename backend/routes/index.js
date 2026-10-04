@@ -10,6 +10,9 @@ const {
     deleteMovieFromDB,
     getSavedMovies,
     updateAllMovies,
+    getMovieBoxOffice,
+    refreshMovieBoxOffice,
+    refreshMovieInternationalBoxOffice,
 } = require('../controllers/movies');
 const {
     postGuess,
@@ -58,6 +61,9 @@ router.delete('/categories/:id', removeCategory);
 router.put('/categories/:id/movies', putCategoryMovies);
 router.get('/movies/:movieId/comp-groups', getMovieCompGroups);
 router.put('/movies/:movieId/comp-groups', putMovieCompGroups);
+router.get('/movies/:movieId/box-office', getMovieBoxOffice);
+router.post('/movies/:movieId/box-office/refresh', refreshMovieBoxOffice);
+router.post('/movies/:movieId/box-office/international/refresh', refreshMovieInternationalBoxOffice);
 router.post('/guess', postGuess);
 router.get('/guess/id/:guess_id', getGuessFromId);
 router.get('/guesses/movie_id/:movie_id', getAllGuessesForMovie);

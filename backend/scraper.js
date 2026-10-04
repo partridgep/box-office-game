@@ -81,10 +81,67 @@ function findOriginalReleaseHref($) {
     .attr("href");
 }
 
+function getMoneyCellText(cell) {
+  return cell.find("span.money").text().trim() || cell.text().trim();
+}
+
+/**
+ * Lists every international territory release (market, release ID, release
+ * date, opening, current gross) from either the title-page region tables or
+ * release-group tables. Domestic is excluded.
+ */
+function parseTerritories($) {
+  const territories = new Map();
+
+  const addRow = (row) => {
+    const cells = $(row).find("td");
+    if (cells.length < 4) return;
+
+    const market = cells.eq(0).text().trim();
+    const href = cells.eq(0).find('a[href*="/release/rl"]').first().attr("href");
+    const releaseId = href?.match(/\/release\/(rl\d+)/)?.[1];
+    if (!releaseId || market === "Domestic" || territories.has(releaseId)) return;
+
+    territories.set(releaseId, {
+      market,
+      releaseId,
+      releaseDate: parseLongDate(cells.eq(1).text().trim()),
+      opening: parseMoney(getMoneyCellText(cells.eq(2))) || null,
+      gross: parseMoney(getMoneyCellText(cells.eq(3))) || null,
+    });
+  };
+
+  $("h3").each((_, el) => {
+    if (!INTERNATIONAL_REGIONS.includes($(el).text().trim())) return;
+    $(el).next("table").find("tr").each((_, row) => addRow(row));
+  });
+
+  if (territories.size === 0) {
+    $("table.releases-by-region").each((_, table) => {
+      const header = $(table).find('th[colspan="4"]').first().text().trim();
+      if (!INTERNATIONAL_REGIONS.includes(header)) return;
+      $(table).find("tr").each((_, row) => addRow(row));
+    });
+  }
+
+  return [...territories.values()];
+}
+
+function findDomesticReleaseId($) {
+  const href = $('a[href*="/release/rl"]')
+    .filter((_, el) => $(el).text().trim() === "Domestic")
+    .first()
+    .attr("href");
+
+  const match = href?.match(/\/release\/(rl\d+)/);
+  return match ? match[1] : null;
+}
+
 async function fetchBomPage(url) {
   const res = await fetch(url, {
     headers: {
       "User-Agent": "Mozilla/5.0",
+      "Accept-Language": "en-US,en;q=0.9",
     },
   });
 
@@ -135,15 +192,24 @@ async function scrapeBoxOffice(imdbID) {
       .trim() || null;
 
   let internationalOpeningTotal = sumInternationalOpenings($);
+  let bomReleaseId = null;
+  let territories;
 
-  // Re-release title pages only show aggregates; openings live on Original Release
-  if (internationalOpeningTotal === 0) {
-    const releaseHref = findOriginalReleaseHref($);
-    if (releaseHref) {
-      const releaseUrl = new URL(releaseHref, BOM_ORIGIN).toString();
-      const $release = await fetchBomPage(releaseUrl);
+  // Re-release title pages only show aggregates, and their "Domestic" link can
+  // point at a re-release; openings and the original releases live on the
+  // Original Release group page.
+  const releaseHref = findOriginalReleaseHref($);
+  if (releaseHref) {
+    const releaseUrl = new URL(releaseHref, BOM_ORIGIN).toString();
+    const $release = await fetchBomPage(releaseUrl);
+    bomReleaseId = findDomesticReleaseId($release);
+    territories = parseTerritories($release);
+    if (internationalOpeningTotal === 0) {
       internationalOpeningTotal = sumInternationalOpenings($release);
     }
+  } else {
+    bomReleaseId = findDomesticReleaseId($);
+    territories = parseTerritories($);
   }
 
   const internationalOpening =
@@ -157,7 +223,137 @@ async function scrapeBoxOffice(imdbID) {
     worldwideGross,
     domesticOpening,
     internationalOpening,
+    bomReleaseId,
+    territories,
   };
+}
+
+const MONTHS = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+};
+
+const PERIOD_COLUMN_TITLES = {
+  weekly: { gross: "Weekly Gross", number: "Week" },
+  weekend: { gross: "Weekend Gross", number: "Weekend" },
+};
+
+function parseInteger(value) {
+  if (!value) return null;
+  const n = Number(value.replace(/[,+]/g, ""));
+  return Number.isInteger(n) ? n : null;
+}
+
+function toIsoDate(year, month, day) {
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+}
+
+/** Parses "Jul 17, 2026" or "2026 Jul 17" (BOM varies by locale); null for blanks. */
+function parseLongDate(label) {
+  const text = label?.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+
+  const monthFirst = text.match(/^([A-Z][a-z]{2}) (\d{1,2}), (\d{4})$/);
+  const yearFirst = text.match(/^(\d{4}) ([A-Z][a-z]{2}) (\d{1,2})$/);
+  const [monthName, day, year] = monthFirst
+    ? [monthFirst[1], monthFirst[2], monthFirst[3]]
+    : yearFirst
+      ? [yearFirst[2], yearFirst[3], yearFirst[1]]
+      : [];
+
+  if (MONTHS[monthName] == null) return null;
+  return toIsoDate(Number(year), MONTHS[monthName], Number(day));
+}
+
+/**
+ * Parses BOM date labels like "Jul 17-23", "Jul 31-Aug 6", or
+ * "Dec 26-Jan 1, 1998". The start year comes from the row link
+ * (/weekly/2026W29/) since labels usually omit it.
+ */
+function parsePeriodDates(label, year) {
+  const match = label.match(
+    /^([A-Z][a-z]{2}) (\d{1,2})-(?:([A-Z][a-z]{2}) )?(\d{1,2})(?:, (\d{4}))?$/
+  );
+  if (!match) return null;
+
+  const [, startMonthName, startDay, endMonthName, endDay, endYearText] = match;
+  const startMonth = MONTHS[startMonthName];
+  const endMonth = endMonthName ? MONTHS[endMonthName] : startMonth;
+  if (startMonth == null || endMonth == null) return null;
+
+  const endYear = endYearText
+    ? Number(endYearText)
+    : endMonth < startMonth ? year + 1 : year;
+  return {
+    startDate: toIsoDate(year, startMonth, Number(startDay)),
+    endDate: toIsoDate(endYear, endMonth, Number(endDay)),
+  };
+}
+
+/**
+ * Scrapes a BOM release's weekly or weekend table. Territory (non-domestic)
+ * releases only have a weekend table; their rows carry the market's area code.
+ * @param {string} releaseId - The BOM release ID (e.g. "rl170295297").
+ * @param {"weekly"|"weekend"} periodType
+ * @returns {Promise<Object[]>} - One entry per period, holiday rows excluded.
+ */
+async function scrapeReleasePeriods(releaseId, periodType) {
+  const titles = PERIOD_COLUMN_TITLES[periodType];
+  if (!releaseId || !titles) {
+    throw new Error("Release ID and a valid period type are required");
+  }
+
+  const $ = await fetchBomPage(`${BOM_ORIGIN}/release/${releaseId}/${periodType}/`);
+  const table = $("table.mojo-body-table").first();
+  const rows = table.find("tr");
+
+  const columnIndex = {};
+  rows.first().find("th").each((i, th) => {
+    const title = $(th).find("[title]").first().attr("title");
+    if (title) columnIndex[title] = i;
+  });
+
+  const required = ["Date", titles.gross, "Gross To Date"];
+  if (required.some((t) => columnIndex[t] == null)) {
+    throw new Error(`Unexpected BOM ${periodType} table layout for ${releaseId}`);
+  }
+
+  const periods = [];
+
+  rows.slice(1).each((_, row) => {
+    const cells = $(row).find("td");
+    if (cells.length === 0) return;
+
+    const cellText = (title) =>
+      columnIndex[title] == null ? "" : cells.eq(columnIndex[title]).text().trim();
+
+    const dateLink = cells.eq(columnIndex.Date).find("a").first();
+    const href = dateLink.attr("href") || "";
+    if (href.includes("/occasion/")) return;
+
+    const yearMatch = href.match(/\/(\d{4})W\d+\//);
+    if (!yearMatch) return;
+
+    const dates = parsePeriodDates(dateLink.text().trim(), Number(yearMatch[1]));
+    if (!dates) return;
+
+    const gross = parseMoney(cellText(titles.gross));
+    const grossToDate = parseMoney(cellText("Gross To Date"));
+
+    periods.push({
+      area: href.match(/[?&]area=([A-Z0-9]+)/)?.[1] ?? null,
+      periodNumber: parseInteger(cellText(titles.number)),
+      startDate: dates.startDate,
+      endDate: dates.endDate,
+      gross: gross || null,
+      grossToDate: grossToDate || null,
+      rank: parseInteger(cellText("Rank")),
+      theaters: parseInteger(cellText("Number of Theaters")),
+      isEstimate: cellText("Estimated") === "true",
+    });
+  });
+
+  return periods;
 }
 
 async function scrapeRottenTomatoesScore(title, releaseYear) {
@@ -335,5 +531,6 @@ async function fallbackSearch(
 
 module.exports = {
     scrapeBoxOffice,
+    scrapeReleasePeriods,
     scrapeRottenTomatoesScore
 };

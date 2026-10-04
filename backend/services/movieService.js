@@ -217,7 +217,7 @@ const getMoviesByIdsBatch = async (ids) => {
 };
 
 const saveMovie = async (movieData) => {
-    const data = { ...movieData };
+    const { territories, ...data } = movieData;
     if (!data.acronym) {
       data.acronym = generateAcronym(data.title);
     }
@@ -243,12 +243,16 @@ const updateMovieDetails = async (tmdbID, updatedData) => {
     }
 
     // Refresh payloads from TMDB omit acronym — preserve the stored value.
-    const data = { ...updatedData };
+    const { territories, ...data } = updatedData;
     if (!Object.prototype.hasOwnProperty.call(data, 'acronym') || data.acronym == null || data.acronym === '') {
       delete data.acronym;
       if (!movie.acronym && data.title) {
         data.acronym = generateAcronym(data.title);
       }
+    }
+
+    if (data.bomReleaseId == null) {
+      delete data.bomReleaseId;
     }
 
     await movie.update(data);

@@ -8,6 +8,17 @@ const {
     getAllSavedMovies,
     updateMovieDetails
 } = require('../services/movieService');
+const { getBoxOfficePeriods, refreshBoxOfficePeriods } = require('../services/boxOfficeHistoryService');
+const {
+    getInternationalHistory,
+    recordTitleSnapshot,
+    refreshTerritoryPeriods,
+} = require('../services/internationalBoxOfficeService');
+const { isMovieTracked } = require('../services/historyTrackingPolicy');
+const { scrapeBoxOffice } = require('../scraper');
+
+const internationalRefreshesInFlight = new Set();
+const { Movie } = require('../models');
 const runMovieRefresh = require("../jobs/runMovieRefresh");
 
 // search for movies
@@ -113,6 +124,72 @@ const updateAllMovies = async (req, res) => {
   }
 };
 
+const getBoxOfficeHistory = async (movieId) => {
+    const [domestic, international, tracked] = await Promise.all([
+        getBoxOfficePeriods(movieId),
+        getInternationalHistory(movieId),
+        isMovieTracked(movieId),
+    ]);
+    return { ...domestic, international, tracked };
+};
+
+const getMovieBoxOffice = async (req, res) => {
+    try {
+        res.status(200).json(await getBoxOfficeHistory(req.params.movieId));
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Failed to load box office history' });
+    }
+};
+
+const refreshMovieBoxOffice = async (req, res) => {
+    try {
+        const movie = await Movie.findByPk(req.params.movieId);
+        if (!movie) {
+            return res.status(404).json({ error: 'Movie not found' });
+        }
+        if (!movie.bomReleaseId) {
+            return res.status(400).json({ error: 'Movie has no Box Office Mojo release ID; run Update Data first' });
+        }
+
+        await refreshBoxOfficePeriods(movie);
+        res.status(200).json(await getBoxOfficeHistory(movie.id));
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Failed to refresh box office history' });
+    }
+};
+
+const refreshMovieInternationalBoxOffice = async (req, res) => {
+    const { movieId } = req.params;
+
+    if (internationalRefreshesInFlight.has(movieId)) {
+        return res.status(409).json({ error: 'A foreign history refresh is already running for this movie' });
+    }
+
+    internationalRefreshesInFlight.add(movieId);
+    try {
+        const movie = await Movie.findByPk(movieId);
+        if (!movie) {
+            return res.status(404).json({ error: 'Movie not found' });
+        }
+        if (!(await isMovieTracked(movie.id))) {
+            return res.status(400).json({ error: 'Foreign history is only tracked for movies with at least one guess' });
+        }
+
+        const titleData = await scrapeBoxOffice(movie.imdbID);
+        const snapshot = await recordTitleSnapshot(movie, titleData);
+        const territories = await refreshTerritoryPeriods(movie, { force: req.body?.force === true });
+
+        res.status(200).json({
+            ...(await getBoxOfficeHistory(movie.id)),
+            refreshResult: { ...snapshot, ...territories },
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Failed to refresh foreign history' });
+    } finally {
+        internationalRefreshesInFlight.delete(movieId);
+    }
+};
+
 module.exports = {
     getMovieSearch,
     getMovieDetails,
@@ -120,5 +197,8 @@ module.exports = {
     deleteMovieFromDB,
     getSavedMovies,
     updateMovie,
-    updateAllMovies
+    updateAllMovies,
+    getMovieBoxOffice,
+    refreshMovieBoxOffice,
+    refreshMovieInternationalBoxOffice
 };

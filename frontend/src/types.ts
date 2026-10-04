@@ -25,6 +25,7 @@ export type MovieData = {
   runtime: string,
   title: string,
   acronym?: string | null,
+  bomReleaseId?: string | null,
   worldwideGross: string | null,
   writer: string,
   year: number,
@@ -162,6 +163,66 @@ export type CompGroup = {
   sortOrder: number;
   source?: "category" | "manual";
   movies: CompMovie[];
+};
+
+export type BoxOfficePoint = {
+  period: number | null;
+  startDate: string;
+  endDate: string;
+  gross: number | null;
+  grossToDate: number | null;
+  isEstimate: boolean;
+  rank?: number | null;
+  theaters?: number | null;
+  region?: string;
+  updatedAt?: string;
+};
+
+export type BomTerritory = {
+  market: string;
+  region: string | null;
+  releaseId: string;
+  releaseDate: string | null;
+  opening: number | null;
+  gross: number | null;
+  periodsScrapedAt: string | null;
+};
+
+export type InternationalWeeklyPoint = {
+  period: number;
+  weekEnding: string;
+  grossToDate: number;
+  territoriesReporting: number;
+  territoriesToDate: number;
+};
+
+export type GrossSnapshot = {
+  scope: "domestic" | "international";
+  capturedOn: string;
+  gross: number;
+};
+
+export type InternationalHistory = {
+  territories: BomTerritory[];
+  weekly: InternationalWeeklyPoint[];
+  totals: GrossSnapshot[];
+};
+
+export type InternationalRefreshResult = {
+  territories: number;
+  snapshots: number;
+  total: number;
+  due: number;
+  scraped: number;
+  rows: number;
+  failed: number;
+};
+
+export type BoxOfficeHistory = {
+  weekly: BoxOfficePoint[];
+  weekend: BoxOfficePoint[];
+  international?: InternationalHistory;
+  tracked?: boolean;
 };
 
 export type CompGroupInput = {
