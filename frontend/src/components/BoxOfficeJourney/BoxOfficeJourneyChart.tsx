@@ -199,7 +199,7 @@ export default function BoxOfficeJourneyChart({
           })}
         </div>
       </div>
-      <div className="h-[260px] w-full rounded-xl border border-cinema-800 bg-cinema-900/30 p-2">
+      <div className="h-[260px] lg:h-[360px] w-full rounded-xl border border-cinema-800 bg-cinema-900/30 p-2">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <XAxis

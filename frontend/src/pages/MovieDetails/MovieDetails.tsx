@@ -8,7 +8,11 @@ import MovieContextPanel from "../../components/MovieContextPanel/MovieContextPa
 import { compsToMarkersByField } from "../../components/HistoricalComps/HistoricalComps";
 import PredictionControls from "../../components/PredictionControls/PredictionControls";
 import LockedPredictionSummary from "../../components/LockedPredictionSummary/LockedPredictionSummary";
-import GuessComparisonCards from "../../components/GuessComparisonCards/GuessComparisonCards";
+import {
+  OverallPerformance,
+  AccuracyGrid,
+  FriendComparison,
+} from "../../components/GuessComparisonCards/GuessComparisonCards";
 import BoxOfficeJourneyChart from "../../components/BoxOfficeJourney/BoxOfficeJourneyChart";
 import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
@@ -242,27 +246,6 @@ export default function MovieDetails() {
         />
       )}
 
-      {mode === "results" && loggedGuess && (
-        <div className="space-y-6">
-          <GuessComparisonCards
-            movie={movie}
-            userGuess={loggedGuess}
-            friendGuess={
-              inviterGuess?.user_id !== loggedGuess.user_id
-                ? inviterGuess
-                : undefined
-            }
-            allMovieGuesses={allMovieGuesses}
-          />
-          <BoxOfficeJourneyChart
-            domesticWeekly={boxOffice.weekly}
-            internationalWeekly={boxOffice.international?.weekly ?? []}
-            userFinalDomesticPrediction={loggedGuess.final_domestic}
-            userFinalInternationalPrediction={loggedGuess.final_international}
-          />
-        </div>
-      )}
-
       {mode === "closed" && (
         <div className="min-h-50 flex flex-col items-center justify-center text-center gap-2 text-ticket-ink">
           <p className="font-bold uppercase tracking-wide text-lg">
@@ -286,6 +269,71 @@ export default function MovieDetails() {
       )}
     </>
   );
+
+  if (mode === "results" && loggedGuess) {
+    const friendGuess =
+      inviterGuess?.user_id !== loggedGuess.user_id ? inviterGuess : undefined;
+    const resultsPanel =
+      "rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]";
+
+    return (
+      <>
+        <PosterBackground src={posterUrl} fade="page" className="fixed inset-0 z-0" />
+
+        <div className="relative z-10 space-y-6 pt-5">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,28rem)_1fr] gap-6 items-stretch">
+            {titleBlock}
+            <OverallPerformance
+              movie={movie}
+              userGuess={loggedGuess}
+              allMovieGuesses={allMovieGuesses}
+              className="flex flex-col justify-center backdrop-blur-md"
+            />
+          </div>
+
+          <section className={resultsPanel}>
+            <AccuracyGrid
+              movie={movie}
+              userGuess={loggedGuess}
+              allMovieGuesses={allMovieGuesses}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+            />
+          </section>
+
+          <section className={resultsPanel}>
+            <BoxOfficeJourneyChart
+              domesticWeekly={boxOffice.weekly}
+              internationalWeekly={boxOffice.international?.weekly ?? []}
+              userFinalDomesticPrediction={loggedGuess.final_domestic}
+              userFinalInternationalPrediction={loggedGuess.final_international}
+            />
+          </section>
+
+          {friendGuess && (
+            <section className={resultsPanel}>
+              <FriendComparison
+                movie={movie}
+                userGuess={loggedGuess}
+                friendGuess={friendGuess}
+              />
+            </section>
+          )}
+
+          <section className="space-y-4">
+            <h2 className="text-sm font-semibold text-stone-300 uppercase tracking-wider">
+              About this movie
+            </h2>
+            <MovieContextPanel
+              movie={movie}
+              allMovieGuesses={allMovieGuesses}
+              compGroups={compGroups}
+              variant="wide"
+            />
+          </section>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

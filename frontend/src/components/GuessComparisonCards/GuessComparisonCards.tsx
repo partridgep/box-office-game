@@ -14,11 +14,11 @@ import {
 } from "../../utils/guessComparison";
 import { formatDollars } from "../../utils/formatMoney";
 
-interface GuessComparisonCardsProps {
+interface ResultSectionProps {
   movie: MovieData;
   userGuess: Guess;
-  friendGuess?: Guess;
   allMovieGuesses: Guess[];
+  className?: string;
 }
 
 const TIER_STYLES = {
@@ -63,7 +63,7 @@ function AccuracyCard({
     <div
       className={`rounded-xl border p-4 bg-cinema-900/50 ${styles.border}`}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
         <h4 className="text-sm font-semibold text-stone-200">{row.field}</h4>
         <span
           className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles.badge}`}
@@ -111,99 +111,168 @@ function AccuracyCard({
   );
 }
 
-export default function GuessComparisonCards({
+export function OverallPerformance({
   movie,
   userGuess,
-  friendGuess,
   allMovieGuesses,
-}: GuessComparisonCardsProps) {
+  className = "",
+}: ResultSectionProps) {
+  const overall = overallRanking(userGuess, allMovieGuesses, movie);
+  if (!overall) return null;
+
+  return (
+    <div
+      className={`p-5 rounded-xl bg-cinema-900/80 border border-theater-gold/30 ${className}`}
+    >
+      <h3 className="text-sm font-semibold text-theater-gold uppercase tracking-wider mb-3">
+        Overall Performance
+      </h3>
+      <p className="text-stone-200 text-2xl md:text-3xl">
+        Rank <strong>{overall.overallRank}</strong>
+        <span className="text-stone-400 text-lg md:text-xl">
+          {" "}
+          of {overall.totalGuesses}
+        </span>
+      </p>
+      <p className="text-sm text-stone-400 mt-1">
+        Better than {overall.percentile}% of players
+      </p>
+    </div>
+  );
+}
+
+const ACCURACY_GROUPS: { title: string; fields: string[] }[] = [
+  {
+    title: "Opening Weekend",
+    fields: ["Domestic Opening", "International Opening", "Worldwide Opening"],
+  },
+  {
+    title: "Final",
+    fields: ["Domestic Final", "International Final", "Worldwide Final"],
+  },
+  { title: "Critical Reception", fields: ["Rotten Tomatoes"] },
+];
+
+function AccuracyGroup({
+  title,
+  rows,
+  leaderboard,
+  className,
+}: {
+  title: string;
+  rows: GuessComparison[];
+  leaderboard: CategoryLeaderboard[];
+  className: string;
+}) {
   const [parent] = useAutoAnimate();
 
+  return (
+    <div>
+      <h4 className="text-left text-xs font-semibold text-theater-gold uppercase tracking-wider mb-3">
+        {title}
+      </h4>
+      <div ref={parent} className={className}>
+        {rows.map((row) => (
+          <AccuracyCard
+            key={row.field}
+            row={row}
+            leaderboardRow={leaderboard.find((r) => r.field === row.field)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function AccuracyGrid({
+  movie,
+  userGuess,
+  allMovieGuesses,
+  className = "space-y-3",
+}: ResultSectionProps) {
   const userResults = compareGuessToMovie(userGuess, movie);
-  const vsResults = friendGuess
-    ? compareTwoGuesses(userGuess, friendGuess, movie)
-    : [];
   const categoryLeaderboard = compareUserToAllGuesses(
     userGuess,
     allMovieGuesses,
     movie
   );
-  const overall = overallRanking(userGuess, allMovieGuesses, movie);
 
   return (
-    <div className="space-y-6">
-      {overall && (
-        <div className="p-4 rounded-xl bg-cinema-900/80 border border-theater-gold/30">
-          <h3 className="text-sm font-semibold text-theater-gold uppercase tracking-wider mb-2">
-            Overall Performance
-          </h3>
-          <p className="text-stone-200">
-            Rank <strong>{overall.overallRank}</strong> of{" "}
-            {overall.totalGuesses}
-          </p>
-          <p className="text-sm text-stone-400">
-            Better than {overall.percentile}% of players
-          </p>
-        </div>
-      )}
-
-      <div>
-        <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider mb-4">
-          Your Accuracy
-        </h3>
-        <div ref={parent} className="space-y-3">
-          {userResults.map((row) => (
-            <AccuracyCard
-              key={row.field}
-              row={row}
-              leaderboardRow={categoryLeaderboard.find(
-                (r) => r.field === row.field
-              )}
+    <div>
+      <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider mb-4">
+        Your Accuracy
+      </h3>
+      <div className="space-y-6">
+        {ACCURACY_GROUPS.map((group) => {
+          const rows = userResults.filter((r) => group.fields.includes(r.field));
+          if (rows.length === 0) return null;
+          return (
+            <AccuracyGroup
+              key={group.title}
+              title={group.title}
+              rows={rows}
+              leaderboard={categoryLeaderboard}
+              className={className}
             />
-          ))}
-        </div>
+          );
+        })}
       </div>
+    </div>
+  );
+}
 
-      {friendGuess && vsResults.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider mb-4">
-            You vs {friendGuess.guess_user?.name ?? "Friend"}
-          </h3>
-          <div className="space-y-2">
-            {vsResults.map((row) => {
-              const isRT = row.field === "Rotten Tomatoes";
-              const fmt = (v: number) => (isRT ? `${v}%` : formatDollars(v));
-              const winnerLabel =
-                row.winner === "tie"
-                  ? "Tie"
-                  : row.winner === "A"
-                    ? "You"
-                    : friendGuess.guess_user?.name ?? "Friend";
+export function FriendComparison({
+  movie,
+  userGuess,
+  friendGuess,
+}: {
+  movie: MovieData;
+  userGuess: Guess;
+  friendGuess?: Guess;
+}) {
+  const vsResults = friendGuess
+    ? compareTwoGuesses(userGuess, friendGuess, movie)
+    : [];
+  if (!friendGuess || vsResults.length === 0) return null;
 
-              return (
-                <div
-                  key={row.field}
-                  className="flex items-center justify-between p-3 rounded-lg bg-cinema-900/50 border border-cinema-800 text-sm"
-                >
-                  <span className="text-stone-400">{row.field}</span>
-                  <div className="flex items-center gap-3 text-stone-300">
-                    <span className={row.winner === "A" ? "text-theater-gold font-semibold" : ""}>
-                      {fmt(row.guessA)}
-                    </span>
-                    <span className="text-stone-600">vs</span>
-                    <span className={row.winner === "B" ? "text-theater-gold font-semibold" : ""}>
-                      {fmt(row.guessB)}
-                    </span>
-                    <span className="text-xs text-stone-500 ml-2">
-                      → {winnerLabel}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider mb-4">
+        You vs {friendGuess.guess_user?.name ?? "Friend"}
+      </h3>
+      <div className="space-y-2">
+        {vsResults.map((row) => {
+          const isRT = row.field === "Rotten Tomatoes";
+          const fmt = (v: number) => (isRT ? `${v}%` : formatDollars(v));
+          const winnerLabel =
+            row.winner === "tie"
+              ? "Tie"
+              : row.winner === "A"
+                ? "You"
+                : friendGuess.guess_user?.name ?? "Friend";
+
+          return (
+            <div
+              key={row.field}
+              className="flex items-center justify-between p-3 rounded-lg bg-cinema-900/50 border border-cinema-800 text-sm"
+            >
+              <span className="text-stone-400">{row.field}</span>
+              <div className="flex items-center gap-3 text-stone-300">
+                <span className={row.winner === "A" ? "text-theater-gold font-semibold" : ""}>
+                  {fmt(row.guessA)}
+                </span>
+                <span className="text-stone-600">vs</span>
+                <span className={row.winner === "B" ? "text-theater-gold font-semibold" : ""}>
+                  {fmt(row.guessB)}
+                </span>
+                <span className="text-xs text-stone-500 ml-2">
+                  → {winnerLabel}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
