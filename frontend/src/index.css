@@ -67,6 +67,35 @@
   font-family: "Outfit", sans-serif;
 }
 
+/* Marquee lights (PredictButton). Two bulb groups crossfade, half a cycle apart. */
+.marquee-button {
+  --marquee-speed: 1.75s;
+}
+
+.marquee-button:hover {
+  --marquee-speed: 0.18s;
+}
+
+@keyframes marquee-bulb-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.1;
+  }
+}
+
+.marquee-bulbs {
+  animation: marquee-bulb-pulse var(--marquee-speed) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-bulbs {
+    animation: none;
+  }
+}
+
 /* body {
   font-family: "Outfit", sans-serif;
 } */

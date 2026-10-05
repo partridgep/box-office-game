@@ -1,8 +1,10 @@
+import { Fragment } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import {
   Guess,
   MovieData,
   GuessComparison,
+  GuessVsGuess,
   CategoryLeaderboard,
 } from "../../types";
 import {
@@ -13,6 +15,7 @@ import {
   getAccuracyTier,
 } from "../../utils/guessComparison";
 import { formatDollars } from "../../utils/formatMoney";
+import TicketStub from "../TicketStub/TicketStub";
 
 interface ResultSectionProps {
   movie: MovieData;
@@ -63,7 +66,7 @@ function AccuracyCard({
     <div
       className={`rounded-xl border p-4 bg-cinema-900/50 ${styles.border}`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
         <h4 className="text-sm font-semibold text-stone-200">{row.field}</h4>
         <span
           className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles.badge}`}
@@ -72,25 +75,25 @@ function AccuracyCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+      <div className="grid grid-cols-2 gap-2 text-sm mb-5">
         <div>
           <p className="text-stone-500 text-xs">Your Guess</p>
-          <p className="text-stone-200 font-medium">{formatVal(row.guess)}</p>
+          <p className="text-stone-200 font-medium text-xl">{formatVal(row.guess)}</p>
         </div>
         <div>
           <p className="text-stone-500 text-xs">Actual</p>
-          <p className="text-theater-gold font-medium">{formatVal(row.actual)}</p>
+          <p className="text-theater-gold font-medium text-xl">{formatVal(row.actual)}</p>
         </div>
       </div>
 
       <div className="space-y-1.5 mb-3">
-        <div className="h-1.5 bg-cinema-800 rounded-full overflow-hidden">
+        <div className="h-2 bg-cinema-800 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full opacity-70 ${styles.bar}`}
             style={{ width: `${Math.min(guessPct, 100)}%` }}
           />
         </div>
-        <div className="h-1.5 bg-cinema-800 rounded-full overflow-hidden">
+        <div className="h-2 bg-cinema-800 rounded-full overflow-hidden">
           <div
             className="h-full rounded-full bg-theater-gold/60"
             style={{ width: `${Math.min(actualPct, 100)}%` }}
@@ -168,7 +171,7 @@ function AccuracyGroup({
 
   return (
     <div>
-      <h4 className="text-left text-xs font-semibold text-theater-gold uppercase tracking-wider mb-3">
+      <h4 className="text-left text-sm font-semibold text-theater-gold uppercase tracking-wider mb-3">
         {title}
       </h4>
       <div ref={parent} className={className}>
@@ -199,10 +202,10 @@ export function AccuracyGrid({
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider mb-4">
+      <h3 className="text-xl font-semibold text-stone-200 uppercase tracking-wider mb-4">
         Your Accuracy
       </h3>
-      <div className="space-y-6">
+      <div className="space-y-8">
         {ACCURACY_GROUPS.map((group) => {
           const rows = userResults.filter((r) => group.fields.includes(r.field));
           if (rows.length === 0) return null;
@@ -235,44 +238,95 @@ export function FriendComparison({
     : [];
   if (!friendGuess || vsResults.length === 0) return null;
 
+  const friendName = friendGuess.guess_user?.name ?? "Friend";
+  const winsA = vsResults.filter((r) => r.winner === "A").length;
+  const winsB = vsResults.filter((r) => r.winner === "B").length;
+  const tally =
+    winsA === winsB
+      ? `Tied ${winsA}–${winsB}`
+      : winsA > winsB
+        ? `You win ${winsA}–${winsB}`
+        : `${friendName} wins ${winsB}–${winsA}`;
+  const footer = `ADMIT TWO · ${movie.title.toUpperCase()}`;
+
   return (
     <div>
-      <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider mb-4">
-        You vs {friendGuess.guess_user?.name ?? "Friend"}
-      </h3>
-      <div className="space-y-2">
-        {vsResults.map((row) => {
-          const isRT = row.field === "Rotten Tomatoes";
-          const fmt = (v: number) => (isRT ? `${v}%` : formatDollars(v));
-          const winnerLabel =
-            row.winner === "tie"
-              ? "Tie"
-              : row.winner === "A"
-                ? "You"
-                : friendGuess.guess_user?.name ?? "Friend";
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+        <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider">
+          You vs {friendName}
+        </h3>
+        <span className="text-sm text-theater-gold font-semibold">{tally}</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <VersusTicket
+          name="You"
+          side="A"
+          rows={vsResults}
+          wins={winsA}
+          isWinner={winsA > winsB}
+          footer={footer}
+        />
+        <VersusTicket
+          name={friendName}
+          side="B"
+          rows={vsResults}
+          wins={winsB}
+          isWinner={winsB > winsA}
+          footer={footer}
+        />
+      </div>
+    </div>
+  );
+}
 
+function VersusTicket({
+  name,
+  side,
+  rows,
+  wins,
+  isWinner,
+  footer,
+}: {
+  name: string;
+  side: "A" | "B";
+  rows: GuessVsGuess[];
+  wins: number;
+  isWinner: boolean;
+  footer: string;
+}) {
+  return (
+    <TicketStub footer={footer} className="rounded-r">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="text-left min-w-0">
+          <p className="text-2xl uppercase leading-none truncate">{name}</p>
+          <p className="text-xs uppercase tracking-wider text-ticket-ink/65 mt-1">
+            {wins} {wins === 1 ? "win" : "wins"}
+          </p>
+        </div>
+        {isWinner && (
+          <span className="shrink-0 bg-ticket-ink text-ticket text-xs uppercase tracking-[0.2em] px-2 py-1">
+            Winner
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 text-sm font-outfit text-left">
+        {rows.map((row) => {
+          const isRT = row.field === "Rotten Tomatoes";
+          const value = side === "A" ? row.guessA : row.guessB;
+          const won = row.winner === side;
           return (
-            <div
-              key={row.field}
-              className="flex items-center justify-between p-3 rounded-lg bg-cinema-900/50 border border-cinema-800 text-sm"
-            >
-              <span className="text-stone-400">{row.field}</span>
-              <div className="flex items-center gap-3 text-stone-300">
-                <span className={row.winner === "A" ? "text-theater-gold font-semibold" : ""}>
-                  {fmt(row.guessA)}
-                </span>
-                <span className="text-stone-600">vs</span>
-                <span className={row.winner === "B" ? "text-theater-gold font-semibold" : ""}>
-                  {fmt(row.guessB)}
-                </span>
-                <span className="text-xs text-stone-500 ml-2">
-                  → {winnerLabel}
-                </span>
-              </div>
-            </div>
+            <Fragment key={row.field}>
+              <span className="text-ticket-ink/65">{row.field}</span>
+              <span
+                className={`text-right ${won ? "font-bold text-ticket-ink" : "text-ticket-ink/55"}`}
+              >
+                {won && <span aria-label="won">★ </span>}
+                {isRT ? `${value}%` : formatDollars(value)}
+              </span>
+            </Fragment>
           );
         })}
       </div>
-    </div>
+    </TicketStub>
   );
 }
