@@ -67,16 +67,16 @@
   font-family: "Outfit", sans-serif;
 }
 
-/* Marquee lights (PredictButton). Two bulb groups crossfade, half a cycle apart. */
+/*
+ * Marquee lights (PredictButton). At rest two bulb groups crossfade, half a cycle apart.
+ * Hover/focus "powers up" the sign: every bulb on steady and the letter glow blooms (no fast flashing).
+ * `.marquee-off` is the disabled state: bulbs dark, glow off, sign dimmed.
+ */
 .marquee-button {
   --marquee-speed: 1.75s;
 }
 
-.marquee-button:hover {
-  --marquee-speed: 0.18s;
-}
-
-@keyframes marquee-bulb-pulse {
+@keyframes marquee-chase {
   0%,
   100% {
     opacity: 1;
@@ -86,13 +86,195 @@
   }
 }
 
-.marquee-bulbs {
-  animation: marquee-bulb-pulse var(--marquee-speed) ease-in-out infinite;
+.marquee-chase {
+  animation: marquee-chase var(--marquee-speed) ease-in-out infinite;
+}
+
+.marquee-letter-glow {
+  opacity: 0.5;
+  transition: opacity 300ms ease;
+}
+
+.marquee-button:not(.marquee-off):is(:hover, :focus-visible) .marquee-chase {
+  animation: none;
+  opacity: 1;
+}
+
+.marquee-button:not(.marquee-off):is(:hover, :focus-visible) .marquee-letter-glow {
+  opacity: 1;
+}
+
+.marquee-off .marquee-chase {
+  animation: none;
+  opacity: 0;
+}
+
+.marquee-off .marquee-letter-glow {
+  opacity: 0;
+}
+
+.marquee-off svg {
+  filter: saturate(0.5) brightness(0.55);
+}
+
+/* Power-on sequence: `data-power` goes off -> booting -> on the first time the sign scrolls into view. */
+@keyframes marquee-power-on {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Duration must match POWER_STUTTER_MS in PredictButton. */
+@keyframes marquee-power-stutter {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  16% {
+    opacity: 0;
+  }
+  32% {
+    opacity: 0.9;
+  }
+  40% {
+    opacity: 0.1;
+  }
+  58% {
+    opacity: 1;
+  }
+  66% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+[data-power='off'] .marquee-power {
+  opacity: 0;
+}
+
+[data-power='booting'] .marquee-power {
+  animation: marquee-power-on 220ms ease-out var(--power-delay) both;
+}
+
+[data-power='booting'] .marquee-power-stutter {
+  animation: marquee-power-stutter 750ms linear var(--power-delay) both;
+}
+
+/* Bulbs light to full brightness while booting; the chase takes over once the sign is `on`. */
+[data-power='booting'] .marquee-chase {
+  animation: none;
+  opacity: 1;
+}
+
+[data-power='off'] .marquee-letter-glow {
+  opacity: 0;
+}
+
+[data-power='booting'] .marquee-letter-glow {
+  transition-duration: 1400ms;
+}
+
+/* Click: every bulb flashes white-hot once (a single flash, well under WCAG 2.3.1's limit) and the stub tears off. */
+@keyframes marquee-flash {
+  0% {
+    filter: none;
+  }
+  18% {
+    filter: brightness(1.9) saturate(0.55);
+  }
+  100% {
+    filter: brightness(1.15);
+  }
+}
+
+/* Duration must match TEAR_MS in PredictButton. Pivots on the bottom-left so the top peels away first. */
+@keyframes marquee-stub-tear {
+  0% {
+    transform: none;
+  }
+  30% {
+    transform: rotate(2.5deg);
+  }
+  45% {
+    transform: translateX(2px) rotate(1.5deg);
+  }
+  100% {
+    transform: translate(22px, 12px) rotate(4deg);
+  }
+}
+
+.marquee-stub {
+  transform-origin: 0 100%;
+}
+
+[data-pressed] .marquee-chase,
+[data-pressed] .marquee-power {
+  animation: none;
+  opacity: 1;
+}
+
+[data-pressed] .marquee-letter-glow {
+  opacity: 1;
+}
+
+[data-pressed] svg {
+  animation: marquee-flash 450ms ease-out both;
+}
+
+/* The stub lives outside the button (on the surrounding ticket), so it reacts through the shared scope. */
+.admit-ticket-scope:has([data-pressed]) .marquee-stub {
+  animation: marquee-stub-tear 480ms cubic-bezier(0.3, 0, 0, 1) forwards;
+  box-shadow: 8px 16px 28px rgba(0, 0, 0, 0.55);
+}
+
+.admit-ticket-scope:has(.marquee-off) .marquee-stub {
+  filter: saturate(0.4) brightness(0.5);
+}
+
+/* The torn stub flies into the movie page's title ticket. */
+.admit-ticket,
+.admit-ticket-scope:has([data-pressed]) .marquee-stub {
+  view-transition-name: admit-ticket;
+}
+
+::view-transition-group(admit-ticket) {
+  animation-duration: 600ms;
+  animation-timing-function: cubic-bezier(0.3, 0, 0, 1);
+}
+
+::view-transition-old(admit-ticket),
+::view-transition-new(admit-ticket) {
+  height: 100%;
+  object-fit: cover;
+}
+
+::view-transition-old(admit-ticket) {
+  animation-duration: 200ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .marquee-bulbs {
-    animation: none;
+  .marquee-chase,
+  .marquee-power,
+  .marquee-stub,
+  .marquee-button svg {
+    animation: none !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+
+  [data-power] .marquee-power {
+    opacity: 1;
   }
 }
 

@@ -2,6 +2,9 @@ export const CAP_HEIGHT = 54;
 
 type Point = { x: number; y: number };
 
+/** `index` is the bulb's position along its stroke, so alternating patterns can follow each stroke. */
+export type Bulb = Point & { index: number };
+
 type Op =
   | { kind: 'line'; x: number; y: number; bulbs?: number }
   | { kind: 'arc'; cx: number; cy: number; r: number; from: number; to: number };
@@ -34,37 +37,30 @@ const A = (cx: number, cy: number, r: number, from: number, to: number): Op => (
   to,
 });
 
-const pStroke: Stroke = { start: [0, 54], ops: [L(0, 0), L(20, 0), A(20, 14, 14, -90, 90), L(0, 28)] };
+const pStroke: Stroke = { start: [0, 54], ops: [L(0, 0), L(20, 0), A(20, 13.5, 13.5, -90, 90), L(0, 27)] };
 const midBar: Stroke = { start: [0, 27], ops: [L(24, 27)] };
 
 // Letters are centerlines on a CAP_HEIGHT-tall grid; the visible letter is this centerline stroked thick.
+// Proportions follow a geometric sans: round letters are true circles, bowls are full half-circles.
 const GLYPHS: Record<string, Glyph> = {
   P: { width: 34, strokes: [pStroke] },
-  R: { width: 34, strokes: [pStroke, { start: [14, 28], ops: [L(28, 54)], extend: [-6, 12] }] },
+  R: { width: 34, strokes: [pStroke, { start: [16.48, 27], ops: [L(29, 54)], extend: [-6, 12] }] },
   E: { width: 30, strokes: [{ start: [30, 0], ops: [L(0, 0), L(0, 54), L(30, 54)] }, midBar] },
   F: { width: 30, strokes: [{ start: [30, 0], ops: [L(0, 0), L(0, 54)] }, midBar] },
   D: {
-    width: 36,
-    strokes: [
-      {
-        start: [0, 0],
-        ops: [L(18, 0), A(18, 18, 18, -90, 0), L(36, 36), A(18, 36, 18, 0, 90), L(0, 54)],
-        closed: true,
-      },
-    ],
+    width: 41,
+    strokes: [{ start: [0, 0], ops: [L(14, 0), A(14, 27, 27, -90, 90), L(0, 54)], closed: true }],
   },
   I: { width: 0, strokes: [{ start: [0, 0], ops: [L(0, 54)] }] },
   C: {
-    width: 36,
-    strokes: [
-      { start: [36, 0], ops: [L(18, 0), A(18, 18, 18, -90, -180), L(0, 36), A(18, 36, 18, 180, 90), L(36, 54)] },
-    ],
+    width: 46,
+    strokes: [{ start: [44.36, 6.32], ops: [A(27, 27, 27, -50, -310)] }],
   },
   T: {
-    width: 44,
+    width: 56,
     strokes: [
-      { start: [0, 0], ops: [L(44, 0, 4)] },
-      { start: [22, 0], ops: [L(22, 54)] },
+      { start: [0, 0], ops: [L(56, 0, 4)] },
+      { start: [28, 0], ops: [L(28, 54)] },
     ],
   },
   B: {
@@ -75,14 +71,14 @@ const GLYPHS: Record<string, Glyph> = {
     ],
   },
   O: {
-    width: 36,
-    strokes: [{ start: [0, 18], ops: [A(18, 18, 18, 180, 360), L(36, 36), A(18, 36, 18, 0, 180)], closed: true }],
+    width: 54,
+    strokes: [{ start: [0, 27], ops: [A(27, 27, 27, 180, 360), A(27, 27, 27, 0, 180)], closed: true }],
   },
   X: {
-    width: 36,
+    width: 44,
     strokes: [
-      { start: [7, 0], ops: [L(29, 54)], extend: [12, 12] },
-      { start: [29, 0], ops: [L(7, 54)], extend: [12, 12] },
+      { start: [8, 0], ops: [L(36, 54)], extend: [12, 12] },
+      { start: [36, 0], ops: [L(8, 54)], extend: [12, 12] },
     ],
   },
 };
@@ -94,18 +90,35 @@ export interface MarqueeBox {
   height: number;
 }
 
-export interface MarqueeLayout {
+interface LineLayout {
   path: string;
-  bulbs: Point[];
+  bulbs: Bulb[];
   boxes: MarqueeBox[];
   width: number;
 }
 
-interface LayoutOptions {
+/** A laid-out line, in its own coordinates; draw it translated by (x, y). */
+export interface MarqueeLine extends LineLayout {
+  x: number;
+  y: number;
+}
+
+export interface MarqueeLayout {
+  lines: MarqueeLine[];
+  width: number;
+  /** Centerline extent: from the top of the first line to the baseline of the last. */
+  height: number;
+}
+
+interface LineOptions {
   strokeWidth: number;
   letterGap: number;
   wordGap: number;
   bulbSpacing: number;
+}
+
+interface LayoutOptions extends LineOptions {
+  lineGap: number;
 }
 
 interface Segment {
@@ -146,17 +159,25 @@ function pointAlong(run: Segment[], distance: number): Point {
 }
 
 /**
- * Lays out `text` left to right starting at x = 0, with the cap-height centerline spanning y = 0..CAP_HEIGHT.
- * Returns one SVG path for every letter's centerline plus bulb positions sampled along those same centerlines.
+ * Lays out each entry of `lines` as its own centered line. Each line's centerline spans y = 0..CAP_HEIGHT in
+ * its own coordinates, with one SVG path for every letter's centerline plus bulbs sampled along those centerlines.
  */
-export function layoutMarquee(
-  text: string,
-  { strokeWidth, letterGap, wordGap, bulbSpacing }: LayoutOptions
-): MarqueeLayout {
+export function layoutMarquee(lines: string[], { lineGap, ...options }: LayoutOptions): MarqueeLayout {
+  const laidOut = lines.map((text) => layoutLine(text, options));
+  const width = Math.max(...laidOut.map((line) => line.width));
+  const lineHeight = CAP_HEIGHT + options.strokeWidth + lineGap;
+  return {
+    lines: laidOut.map((line, i) => ({ ...line, x: (width - line.width) / 2, y: i * lineHeight })),
+    width,
+    height: (lines.length - 1) * lineHeight + CAP_HEIGHT,
+  };
+}
+
+function layoutLine(text: string, { strokeWidth, letterGap, wordGap, bulbSpacing }: LineOptions): LineLayout {
   const half = strokeWidth / 2;
   const minBulbDistance = bulbSpacing * 0.55;
   const pathParts: string[] = [];
-  const bulbs: Point[] = [];
+  const bulbs: Bulb[] = [];
   const boxes: MarqueeBox[] = [];
   let cursor = 0;
 
@@ -169,7 +190,7 @@ export function layoutMarquee(
     if (!glyph) throw new Error(`No marquee glyph for "${char}"`);
 
     const ox = cursor + half;
-    const letterBulbs: Point[] = [];
+    const letterBulbs: Bulb[] = [];
 
     for (const stroke of glyph.strokes) {
       let [x, y] = stroke.start;
@@ -233,10 +254,10 @@ export function layoutMarquee(
       else strokeBulbs.push({ x: ox + x, y });
       pathParts.push(stroke.extend ? extendedLine(stroke, ox) : strokePath.join(''));
 
-      for (const bulb of strokeBulbs) {
+      strokeBulbs.forEach((bulb, index) => {
         const tooClose = letterBulbs.some((b) => Math.hypot(b.x - bulb.x, b.y - bulb.y) < minBulbDistance);
-        if (!tooClose) letterBulbs.push({ x: round(bulb.x), y: round(bulb.y) });
-      }
+        if (!tooClose) letterBulbs.push({ x: round(bulb.x), y: round(bulb.y), index });
+      });
     }
 
     bulbs.push(...letterBulbs);

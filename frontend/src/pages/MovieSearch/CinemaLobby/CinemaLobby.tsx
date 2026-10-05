@@ -7,7 +7,7 @@ import { getLobbySections } from '../../../services/categories.service';
 import { LobbyMovie, LobbySection, MovieData } from '../../../types';
 import { getPredictionAvailability } from "../../../utils/predictionWindows";
 
-import PredictButton from '../../../components/PredictButton';
+import PredictButton, { AdmitOneStub } from '../../../components/PredictButton';
 
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons';
@@ -222,8 +222,9 @@ export function CinemaLobby() {
     <div className="min-h-screen bg-cinema-950 text-stone-100 flex flex-col">
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-12">
         {activeMovie && (
-          <section className="relative rounded-3xl overflow-hidden border border-theater-gold/30 bg-cinema-900 shadow-2xl">
-            <div className="absolute inset-0 z-0">
+          <section className="relative rounded-3xl border border-theater-gold/30 bg-cinema-900 shadow-2xl">
+            {/* Clipping lives here, not on the section, so the stub can tear off past the card's edge. */}
+            <div className="absolute inset-0 z-0 overflow-hidden rounded-3xl">
               <img
                 src={`https://image.tmdb.org/t/p/w92${activeMovie.poster}`}
                 alt={activeMovie.title}
@@ -232,7 +233,8 @@ export function CinemaLobby() {
               <div className="absolute inset-0 bg-linear-to-t from-stone-950 via-theater-gold/10 to-transparent" />
             </div>
 
-            <div className="relative z-5 grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 sm:p-10 lg:p-12 items-center">
+            <div className="admit-ticket-scope relative z-5 grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 pr-16 sm:p-10 sm:pr-24 lg:p-12 lg:pr-28 items-center">
+              <AdmitOneStub className="absolute inset-y-0 right-0 w-10 sm:w-14 rounded-r-3xl" />
               <div className="lg:col-span-5 flex justify-center">
                 <div className="relative group w-48 sm:w-64 block aspect-2/3 rounded-lg overflow-hidden shadow-2xl border border-yellow-900/40">
                   <img
@@ -276,13 +278,14 @@ export function CinemaLobby() {
                 </div>
 
                 <PredictButton
-                  onClick={() => activeMovie.tmdbID && navigate(`/movie/${activeMovie.tmdbID}`)}
+                  to={activeMovie.tmdbID ? `/movie/${activeMovie.tmdbID}` : undefined}
+                  movieTitle={activeMovie.title}
                 />
               </div>
             </div>
 
             {featuredMovies.length > 1 && (
-              <div className="absolute bottom-4 right-6 z-5 flex space-x-2">
+              <div className="absolute bottom-4 right-16 sm:right-20 z-5 flex space-x-2">
                 {featuredMovies.map((_, idx) => (
                   <button
                     key={idx}

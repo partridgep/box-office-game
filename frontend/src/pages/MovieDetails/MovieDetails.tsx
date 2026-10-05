@@ -124,7 +124,7 @@ export default function MovieDetails() {
     : "TBA";
 
   const titleBlock = (
-    <TicketStub compact className="max-w-md rounded-r">
+    <TicketStub compact className="admit-ticket max-w-md rounded-r">
       <div className="flex items-start gap-3">
         <button
           type="button"
