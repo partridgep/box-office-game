@@ -13,9 +13,13 @@ import {
   compareUserToAllGuesses,
   overallRanking,
   getAccuracyTier,
+  formatMissAmount,
+  formatRank,
 } from "../../utils/guessComparison";
 import { formatDollars } from "../../utils/formatMoney";
 import TicketStub from "../TicketStub/TicketStub";
+import MissMeter from "../MissMeter/MissMeter";
+import LetterboardHeading, { backlightDelay } from "../Letterboard/LetterboardHeading";
 
 interface ResultSectionProps {
   movie: MovieData;
@@ -26,88 +30,130 @@ interface ResultSectionProps {
 
 const TIER_STYLES = {
   nailed: {
-    label: "Nailed it",
-    border: "border-green-500/40",
-    badge: "bg-green-500/20 text-green-400",
-    bar: "bg-green-500",
+    border: "border-theater-gold/65",
+    badge: "text-theater-gold",
+    pin: "bg-theater-gold shadow-[0_0_10px_rgba(230,197,103,0.6)]",
   },
   close: {
-    label: "Close",
-    border: "border-yellow-500/40",
-    badge: "bg-yellow-500/20 text-yellow-400",
-    bar: "bg-yellow-500",
+    border: "border-stone-700/50",
+    badge: "text-stone-300",
+    pin: "bg-stone-300",
   },
   off: {
-    label: "Way off",
-    border: "border-red-500/40",
-    badge: "bg-red-500/20 text-red-400",
-    bar: "bg-red-500",
+    border: "border-stone-700/50",
+    badge: "text-cinema-300",
+    pin: "bg-cinema-300",
   },
 };
+
+/** Badge copy: a verdict plus how far, and which way, the guess missed. */
+function verdictFor(row: GuessComparison, tier: keyof typeof TIER_STYLES) {
+  if (row.delta === 0) return { verdict: "Dead on", detail: "" };
+  const amount = formatMissAmount(row);
+  const direction = row.delta > 0 ? "over" : "under";
+
+  if (tier === "off") {
+    return { verdict: row.delta > 0 ? "Way over" : "Way under", detail: `by ${amount}` };
+  }
+  return { verdict: tier === "nailed" ? "Nailed it" : "Close", detail: `${amount} ${direction}` };
+}
 
 function AccuracyCard({
   row,
   leaderboardRow,
+  featured = false,
+  revealDelayMs = 0,
 }: {
   row: GuessComparison;
   leaderboardRow?: CategoryLeaderboard;
+  revealDelayMs?: number;
+  /** The group's headline result (Worldwide): spans two columns, and two rows beside the stacked cards on large screens. */
+  featured?: boolean;
 }) {
   const tier = getAccuracyTier(row.percentError);
   const styles = TIER_STYLES[tier];
+  const { verdict, detail } = verdictFor(row, tier);
   const isRT = row.field === "Rotten Tomatoes";
-  const maxVal = Math.max(row.guess, row.actual);
-  const guessPct = maxVal > 0 ? (row.guess / maxVal) * 100 : 0;
-  const actualPct = maxVal > 0 ? (row.actual / maxVal) * 100 : 0;
 
   const formatVal = (v: number) =>
     isRT ? `${v}%` : formatDollars(v);
+  const differenceLabel =
+    row.delta > 0 ? "Your Overshot" : row.delta < 0 ? "Your Undershot" : "Difference";
+  // Proper minus sign so "−" and "+" share a width and screen readers say "minus".
+  const sign = row.delta > 0 ? "+" : row.delta < 0 ? "\u2212" : "";
 
   return (
     <div
-      className={`rounded-xl border p-4 bg-cinema-900/50 ${styles.border}`}
+      className={`backlit flex flex-col rounded-xl border bg-cinema-900/50 ${styles.border} ${
+        featured ? "p-5 sm:p-6 sm:col-span-2 lg:row-span-2" : "p-4"
+      }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
-        <h4 className="text-sm font-semibold text-stone-200">{row.field}</h4>
+        <div className="text-left">
+          <h4 className={`font-semibold text-stone-100 ${featured ? "text-base" : "text-sm"}`}>
+            {row.field}
+          </h4>
+          {featured && (
+            <p className="mt-0.5 text-xs text-stone-400">Domestic + international combined</p>
+          )}
+        </div>
         <span
-          className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles.badge}`}
+          className={`text-[14px] uppercase tracking-wider tabular-nums px-2 py-0.5 rounded-sm border border-current/40 ${styles.badge}`}
         >
-          {styles.label} · {row.percentError.toFixed(1)}% off
+          <span className="font-bold">{verdict}</span>
+          {detail && <span className="font-medium opacity-80"> {detail}</span>}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-sm mb-5">
-        <div>
-          <p className="text-stone-500 text-xs">Your Guess</p>
-          <p className="text-stone-200 font-medium text-xl">{formatVal(row.guess)}</p>
-        </div>
-        <div>
-          <p className="text-stone-500 text-xs">Actual</p>
-          <p className="text-theater-gold font-medium text-xl">{formatVal(row.actual)}</p>
-        </div>
-      </div>
+      {/* Ledger rows at one size, right-aligned, so the two figures compare digit for digit. */}
+      <dl className={`mb-5 space-y-1 ${featured ? "flex-1 flex flex-col justify-center" : ""}`}>
+        {[
+          { label: "Your Guess", value: formatVal(row.guess), valueClass: "font-medium text-stone-100" },
+          { label: "Actual", value: formatVal(row.actual), valueClass: "font-semibold text-theater-gold" },
+          {
+            label: differenceLabel,
+            value: `${sign}${formatVal(Math.abs(row.delta))}`,
+            valueClass: "font-medium text-stone-300",
+            rowClass: "mt-1.5 pt-1.5 border-t border-stone-600/70",
+            small: true,
+          },
+        ].map(({ label, value, valueClass, rowClass = "", small = false }) => (
+          <div key={label} className={`flex items-baseline gap-3 ${rowClass}`}>
+            <dt
+              className={`font-medium uppercase tracking-wider text-stone-400 ${
+                small ? (featured ? "text-sm" : "text-xs") : featured ? "sm:text-lg" : "text-base"
+              }`}
+            >
+              {label}
+            </dt>
+            <span aria-hidden="true" className="flex-1 border-b border-dotted border-stone-600/70" />
+            <dd
+              className={`font-marquee leading-tight tabular-nums ${valueClass} ${
+                small
+                  ? featured ? "text-2xl sm:text-3xl" : "text-lg"
+                  : featured ? "text-4xl sm:text-5xl" : "text-2xl"
+              }`}
+            >
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
 
-      <div className="space-y-1.5 mb-3">
-        <div className="h-2 bg-cinema-800 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full opacity-70 ${styles.bar}`}
-            style={{ width: `${Math.min(guessPct, 100)}%` }}
-          />
-        </div>
-        <div className="h-2 bg-cinema-800 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-theater-gold/60"
-            style={{ width: `${Math.min(actualPct, 100)}%` }}
-          />
-        </div>
+      <div className="mb-3">
+        <MissMeter
+          delta={row.delta}
+          percentError={row.percentError}
+          missAmount={formatMissAmount(row)}
+          pinClassName={styles.pin}
+          revealDelayMs={revealDelayMs}
+          landingPulse={tier === "nailed"}
+        />
       </div>
 
       {leaderboardRow && (
-        <p className="text-xs text-stone-500">
-          Rank {leaderboardRow.userRank} / {leaderboardRow.totalGuesses}
-          <span className="text-stone-400">
-            {" "}
-            · Top {leaderboardRow.percentile}%
-          </span>
+        <p className="text-xs tabular-nums text-stone-300">
+          {formatRank(leaderboardRow.userRank, leaderboardRow.totalGuesses)}
         </p>
       )}
     </div>
@@ -127,9 +173,9 @@ export function OverallPerformance({
     <div
       className={`p-5 rounded-xl bg-cinema-900/80 border border-theater-gold/30 ${className}`}
     >
-      <h3 className="text-sm font-semibold text-theater-gold uppercase tracking-wider mb-3">
+      <h2 className="text-sm font-semibold text-theater-gold uppercase tracking-wider mb-3">
         Overall Performance
-      </h3>
+      </h2>
       <p className="text-stone-200 text-2xl md:text-3xl">
         Rank <strong>{overall.overallRank}</strong>
         <span className="text-stone-400 text-lg md:text-xl">
@@ -147,14 +193,16 @@ export function OverallPerformance({
 const ACCURACY_GROUPS: { title: string; fields: string[] }[] = [
   {
     title: "Opening Weekend",
-    fields: ["Domestic Opening", "International Opening", "Worldwide Opening"],
+    fields: ["Worldwide Opening", "Domestic Opening", "International Opening"],
   },
   {
     title: "Final",
-    fields: ["Domestic Final", "International Final", "Worldwide Final"],
+    fields: ["Worldwide Final", "Domestic Final", "International Final"],
   },
   { title: "Critical Reception", fields: ["Rotten Tomatoes"] },
 ];
+
+const PIN_STAGGER_MS = 120;
 
 function AccuracyGroup({
   title,
@@ -170,16 +218,16 @@ function AccuracyGroup({
   const [parent] = useAutoAnimate();
 
   return (
-    <div>
-      <h4 className="text-left text-sm font-semibold text-theater-gold uppercase tracking-wider mb-3">
-        {title}
-      </h4>
+    <div className="backlit-scope" style={backlightDelay(title)}>
+      <LetterboardHeading className="mb-4">{title}</LetterboardHeading>
       <div ref={parent} className={className}>
-        {rows.map((row) => (
+        {rows.map((row, i) => (
           <AccuracyCard
             key={row.field}
             row={row}
             leaderboardRow={leaderboard.find((r) => r.field === row.field)}
+            featured={rows.length > 1 && row.field.startsWith("Worldwide")}
+            revealDelayMs={i * PIN_STAGGER_MS}
           />
         ))}
       </div>
@@ -202,12 +250,14 @@ export function AccuracyGrid({
 
   return (
     <div>
-      <h3 className="text-xl font-semibold text-stone-200 uppercase tracking-wider mb-4">
+      <h2 className="text-2xl font-semibold text-stone-200 uppercase tracking-wider mb-4">
         Your Accuracy
-      </h3>
-      <div className="space-y-8">
+      </h2>
+      <div className="space-y-10">
         {ACCURACY_GROUPS.map((group) => {
-          const rows = userResults.filter((r) => group.fields.includes(r.field));
+          const rows = group.fields.flatMap((field) =>
+            userResults.filter((r) => r.field === field)
+          );
           if (rows.length === 0) return null;
           return (
             <AccuracyGroup
@@ -252,9 +302,9 @@ export function FriendComparison({
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-        <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider">
+        <h2 className="text-sm font-semibold text-stone-200 uppercase tracking-wider">
           You vs {friendName}
-        </h3>
+        </h2>
         <span className="text-sm text-theater-gold font-semibold">{tally}</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

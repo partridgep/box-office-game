@@ -2,6 +2,7 @@
 
 @theme {
   --font-display: "Satoshi", "sans-serif";
+  --font-marquee: "Oswald", "Outfit", sans-serif;
   --breakpoint-3xl: 120rem;
   --color-cinema-50: #ffe5e7;
   --color-cinema-100: #ffb3b8;
@@ -259,11 +260,210 @@
   animation-duration: 200ms;
 }
 
+/*
+ * Changeable-letter marquee board (LetterboardHeading): dark plastic letters slotted on rails
+ * over a backlit panel. Rails repeat every `--row` so wrapped lines also sit on one.
+ */
+.letterboard {
+  --row: 1.25em;
+  /* Just under Oswald's baseline within a --row line box, so letters rest on the rail. */
+  --rail: 1.24em;
+  --pad: 0.3em;
+  position: relative;
+  padding: var(--pad) 0.75em;
+  font-family: "Oswald", "Outfit", sans-serif;
+  font-size: clamp(1.25rem, 1rem + 1.2vw, 1.45rem);
+  font-weight: 600;
+  line-height: var(--row);
+  color: #1d1a17;
+  text-align: left;
+  width: fit-content;
+  border-block: 0.1rem solid #2a2420;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 var(--rail),
+      rgb(60 45 30 / 0.18) var(--rail) calc(var(--rail) + 0.06em),
+      transparent calc(var(--rail) + 0.06em) var(--row)
+    ) 0 var(--pad) / 100% var(--row),
+    repeating-linear-gradient(
+      to right,
+      transparent 0 calc(5em - 1px),
+      rgb(60 45 30 / 0.12) calc(5em - 1px) 5em
+    ),
+    radial-gradient(ellipse at center, #fffaf0 0%, #f1e9d8 60%, #ddd2bc 100%);
+  box-shadow:
+    inset 0 0 1.25em rgb(255 244 220 / 0.9),
+    inset 0 0.15em 0.4em rgb(0 0 0 / 0.25),
+    0 0 1.5em rgb(255 122 42 / 0.18);
+}
+
+.letterboard-rows {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  column-gap: 0.45em;
+}
+
+.letterboard-word {
+  white-space: nowrap;
+}
+
+.letterboard-letter {
+  display: inline-block;
+  margin-inline: 0.035em;
+  letter-spacing: 0.02em;
+  transform: translateY(var(--drop)) rotate(var(--tilt));
+  text-shadow:
+    0 1px 0 rgb(255 255 255 / 0.45),
+    0 0.06em 0.12em rgb(0 0 0 / 0.3);
+}
+
+/*
+ * Backlight power-on: `data-power` goes off -> booting -> on the first time the board scrolls into view.
+ * The tube catches on its second strike, with two flashes over 1.2s (under WCAG 2.3.1's three per second).
+ */
+@keyframes letterboard-power-on {
+  0% {
+    filter: brightness(0.35) saturate(0.6);
+  }
+  8% {
+    filter: brightness(1.05);
+  }
+  16% {
+    filter: brightness(0.4) saturate(0.6);
+  }
+  42% {
+    filter: brightness(0.45) saturate(0.7);
+  }
+  50% {
+    filter: brightness(1);
+  }
+  58% {
+    filter: brightness(0.7) saturate(0.85);
+  }
+  72%,
+  100% {
+    filter: none;
+  }
+}
+
+.letterboard[data-power='off'] {
+  filter: brightness(0.35) saturate(0.6);
+}
+
+.letterboard[data-power='booting'] {
+  animation: letterboard-power-on 1200ms linear var(--power-delay, 0ms) both;
+}
+
+/*
+ * `.backlit` content (AccuracyCard) follows its scope's board on the same beat, but with a shallower dim:
+ * it holds real data, so it stays readable while unlit. Timing must match `letterboard-power-on`.
+ */
+@keyframes backlit-power-on {
+  0% {
+    filter: brightness(0.55) saturate(0.7);
+  }
+  8% {
+    filter: brightness(1.05);
+  }
+  16% {
+    filter: brightness(0.6) saturate(0.7);
+  }
+  42% {
+    filter: brightness(0.62) saturate(0.75);
+  }
+  50% {
+    filter: brightness(1);
+  }
+  58% {
+    filter: brightness(0.82) saturate(0.9);
+  }
+  72%,
+  100% {
+    filter: none;
+  }
+}
+
+.backlit-scope:has(> .letterboard[data-power='off']) .backlit {
+  filter: brightness(0.55) saturate(0.7);
+}
+
+.backlit-scope:has(> .letterboard[data-power='booting']) .backlit {
+  animation: backlit-power-on 1200ms linear var(--power-delay, 0ms) both;
+}
+
+/*
+ * MissMeter reveal: pins wait on the actual mark while their board is dark, then swing out to the guess as the
+ * backlight starts its flicker (same `--power-delay`, plus a per-card stagger), with a slight needle overshoot.
+ * Outside a backlit scope they simply render in place.
+ */
+.miss-pin,
+.miss-fill {
+  --reveal-delay: calc(var(--power-delay, 0ms) + var(--pin-delay, 0ms));
+  transition: transform 750ms cubic-bezier(0.25, 1.8, 0.45, 1) var(--reveal-delay);
+}
+
+.miss-pin {
+  transform: translateX(var(--pin-x));
+}
+
+.backlit-scope:has(> .letterboard[data-power='off']) .miss-pin {
+  transform: translateX(0);
+}
+
+.backlit-scope:has(> .letterboard[data-power='off']) .miss-fill {
+  transform: scaleX(0);
+}
+
+/* Nailed guesses: one soft ring as the pin lands. Delay = reveal delay + most of the slide. */
+@keyframes miss-pin-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+.miss-pin-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-theater-gold);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* One rule for booting and on, so the pulse isn't restarted when the board finishes powering on. */
+.backlit-scope:has(> .letterboard:not([data-power='off'])) .miss-pin-pulse::after {
+  animation: miss-pin-pulse 700ms ease-out calc(var(--power-delay, 0ms) + var(--pin-delay, 0ms) + 600ms) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .marquee-chase,
   .marquee-power,
   .marquee-stub,
   .marquee-button svg {
+    animation: none !important;
+  }
+
+  .letterboard[data-power],
+  .backlit-scope .backlit {
+    animation: none !important;
+    filter: none !important;
+  }
+
+  .miss-pin,
+  .miss-fill {
+    transition: none !important;
+  }
+
+  .miss-pin-pulse::after {
     animation: none !important;
   }
 

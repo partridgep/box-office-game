@@ -59,6 +59,29 @@ export function getAccuracyTier(
   return "off";
 }
 
+/** One decimal for small misses, where it matters; whole percents above 10%. */
+export function formatPercentError(percentError: number): string {
+  return percentError < 10 ? `${percentError.toFixed(1)}%` : `${Math.round(percentError)}%`;
+}
+
+/** How far a guess missed: relative % for money; the score difference for RT, which is already a percentage. */
+export function formatMissAmount(row: GuessComparison): string {
+  if (row.field === "Rotten Tomatoes") return `${Math.abs(row.delta)}%`;
+  return formatPercentError(row.percentError);
+}
+
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+export function formatRank(rank: number, total: number): string {
+  if (total === 1) return "Only guess so far";
+  if (rank === total) return `Last of ${total}`;
+  return `${ordinal(rank)} of ${total}`;
+}
+
 function compareNumber(
   field: string,
   guess: number | null,
