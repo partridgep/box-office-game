@@ -14,9 +14,11 @@ import {
   FriendComparison,
 } from "../../components/GuessComparisonCards/GuessComparisonCards";
 import BoxOfficeJourneyChart from "../../components/BoxOfficeJourney/BoxOfficeJourneyChart";
+import SocialProof from "../../components/SocialProof/SocialProof";
 import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
 import TicketStub from "../../components/TicketStub/TicketStub";
+import { hasAnyActuals } from "../../utils/guessComparison";
 
 function PosterBackground({
   src,
@@ -57,6 +59,7 @@ export default function MovieDetails() {
     loggedGuess,
     inviterGuess,
     allMovieGuesses,
+    friendGuesses,
     compGroups,
     boxOffice,
   } = useMovieDetailsData();
@@ -113,6 +116,7 @@ export default function MovieDetails() {
   }
 
   const posterUrl = `https://image.tmdb.org/t/p/original${movie.poster}`;
+  const revealGuesses = Boolean(loggedGuess) || hasAnyActuals(movie);
   const useTicketShell = mode !== "results";
 
   const releaseDate = movie.released
@@ -271,61 +275,84 @@ export default function MovieDetails() {
   );
 
   if (mode === "results" && loggedGuess) {
-    const friendGuess =
-      inviterGuess?.user_id !== loggedGuess.user_id ? inviterGuess : undefined;
+    const preferredFriendGuessId =
+      inviterGuess && inviterGuess.user_id !== loggedGuess.user_id
+        ? inviterGuess.id
+        : undefined;
+    // From sm up: each block is its own card. Below sm they share one continuous reel.
     const resultsPanel =
-      "rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]";
+      "sm:rounded-2xl sm:border sm:border-theater-gold/20 sm:bg-cinema-950/90 sm:backdrop-blur-md sm:p-6 sm:shadow-[0_0_40px_rgba(0,0,0,0.4)]";
 
     return (
       <>
         <PosterBackground src={posterUrl} fade="page" className="fixed inset-0 z-0" />
 
-        <div className="relative z-10 space-y-6 pt-5">
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,28rem)_1fr] gap-6 items-stretch">
+        {/* -mx-4 cancels Layout main px-4 below sm so charts/data can use full width */}
+        <div className="relative z-10 pt-5 -mx-4 sm:mx-0">
+          <div className="px-4 sm:px-0 mb-6 grid grid-cols-1 lg:grid-cols-[minmax(0,28rem)_1fr] gap-6 items-stretch">
             {titleBlock}
             <OverallPerformance
               movie={movie}
               userGuess={loggedGuess}
               allMovieGuesses={allMovieGuesses}
+              friendGuesses={friendGuesses}
               className="flex flex-col justify-center backdrop-blur-md"
             />
           </div>
 
-          <section className={resultsPanel}>
-            <AccuracyGrid
-              movie={movie}
-              userGuess={loggedGuess}
-              allMovieGuesses={allMovieGuesses}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
-            />
-          </section>
-
-          <section className={resultsPanel}>
-            <BoxOfficeJourneyChart
-              domesticWeekly={boxOffice.weekly}
-              internationalWeekly={boxOffice.international?.weekly ?? []}
-              userFinalDomesticPrediction={loggedGuess.final_domestic}
-              userFinalInternationalPrediction={loggedGuess.final_international}
-            />
-          </section>
-
-          {friendGuess && (
+          <div className="space-y-8 bg-cinema-950/90 backdrop-blur-md px-3 py-5 sm:space-y-6 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
             <section className={resultsPanel}>
-              <FriendComparison
+              <AccuracyGrid
                 movie={movie}
                 userGuess={loggedGuess}
-                friendGuess={friendGuess}
+                allMovieGuesses={allMovieGuesses}
+                friendGuesses={friendGuesses}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
               />
             </section>
-          )}
 
-          <section className="space-y-4">
-            <h2 className="text-sm font-semibold text-stone-300 uppercase tracking-wider">
+            <section className={resultsPanel}>
+              <BoxOfficeJourneyChart
+                domesticWeekly={boxOffice.weekly}
+                internationalWeekly={boxOffice.international?.weekly ?? []}
+                userFinalDomesticPrediction={loggedGuess.final_domestic}
+                userFinalInternationalPrediction={loggedGuess.final_international}
+              />
+            </section>
+
+            {friendGuesses.length > 0 && (
+              <section className={resultsPanel}>
+                <FriendComparison
+                  movie={movie}
+                  userGuess={loggedGuess}
+                  friendGuesses={friendGuesses}
+                  preferredFriendGuessId={preferredFriendGuessId}
+                />
+              </section>
+            )}
+
+            <section
+              className={`${resultsPanel} -mx-3 sm:mx-0 sm:overflow-hidden sm:p-0`}
+            >
+              <SocialProof
+                movie={movie}
+                allMovieGuesses={allMovieGuesses}
+                friendGuesses={friendGuesses}
+                revealGuesses={revealGuesses}
+                bare
+              />
+            </section>
+          </div>
+
+          <section className="mt-0 space-y-5 border-t border-theater-gold/25 pt-16 sm:pt-6 sm:mt-6 sm:space-y-4 sm:border-t-0">
+            <h2 className="px-3 sm:px-0 text-2xl font-semibold text-stone-100 uppercase tracking-wider">
               About this movie
             </h2>
             <MovieContextPanel
               movie={movie}
               allMovieGuesses={allMovieGuesses}
+              friendGuesses={friendGuesses}
+              revealGuesses={revealGuesses}
               compGroups={compGroups}
               variant="wide"
             />
@@ -387,6 +414,8 @@ export default function MovieDetails() {
             <MovieContextPanel
               movie={movie}
               allMovieGuesses={allMovieGuesses}
+              friendGuesses={friendGuesses}
+              revealGuesses={revealGuesses}
               compGroups={compGroups}
             />
           </div>

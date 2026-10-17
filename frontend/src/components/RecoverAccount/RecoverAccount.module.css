@@ -42,3 +42,14 @@
     color: red;
     margin-bottom: 1rem;
 }
+
+.session-msg {
+    margin: -1rem 0 1.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    background: rgba(230, 197, 103, 0.12);
+    border: 1px solid rgba(230, 197, 103, 0.35);
+    color: #e6c567;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}

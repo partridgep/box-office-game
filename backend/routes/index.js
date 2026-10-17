@@ -1,5 +1,6 @@
 const express = require('express');
 const authenticateUser = require("../middleware/authenticateUser")
+const optionalAuth = require("../middleware/optionalAuth")
 const { getBoxOfficeData } = require('../controllers/boxOfficeController');
 const { getRottenTomatoesScore } = require('../controllers/rottenTomatoesController');
 const {
@@ -27,7 +28,11 @@ const {
     postFollowUser,
     deleteUnfollowUser,
     getIsFollowing,
-    postConnectUsers
+    postConnectUsers,
+    getUserByCode,
+    postFollowByCode,
+    deleteFollowByCode,
+    getMyFollowing
 } = require('../controllers/usersController');
 const {
     getCategories,
@@ -66,10 +71,14 @@ router.post('/movies/:movieId/box-office/refresh', refreshMovieBoxOffice);
 router.post('/movies/:movieId/box-office/international/refresh', refreshMovieInternationalBoxOffice);
 router.post('/guess', postGuess);
 router.get('/guess/id/:guess_id', getGuessFromId);
-router.get('/guesses/movie_id/:movie_id', getAllGuessesForMovie);
+router.get('/guesses/movie_id/:movie_id', optionalAuth, getAllGuessesForMovie);
 router.get('/guesses', getGuessesForUser);
 router.post('/users/save', saveUser);
 router.post('/users/recover', recoverAccount);
+router.get('/users/me/following', authenticateUser, getMyFollowing);
+router.get('/users/code/:code', optionalAuth, getUserByCode);
+router.post('/users/code/:code/follow', authenticateUser, postFollowByCode);
+router.delete('/users/code/:code/follow', authenticateUser, deleteFollowByCode);
 router.get('/users/:id', getUserProfile);
 router.post('/users/:id/follow', authenticateUser, postFollowUser);
 router.delete('/users/:id/follow', authenticateUser, deleteUnfollowUser);

@@ -70,7 +70,7 @@ const getAllGuessesForMovie = async (req, res) => {
   }
 
   try {
-    const guesses = await fetchAllGuessesForMovie(movie_id);
+    const guesses = await fetchAllGuessesForMovie(movie_id, req.user?.id);
     res.status(200).json({
         status: 200,
         message: "Fetched guesses for movie",

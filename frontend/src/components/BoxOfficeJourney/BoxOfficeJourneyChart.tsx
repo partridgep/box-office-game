@@ -168,14 +168,14 @@ export default function BoxOfficeJourneyChart({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+        <h3 className="text-lg sm:text-sm text-left sm:text-center font-semibold text-stone-200 uppercase tracking-wider">
           Box Office Journey
         </h3>
         <div
           role="group"
           aria-label="Box office market"
-          className="flex rounded-lg border border-cinema-700 bg-cinema-900/60 p-0.5"
+          className="flex w-fit rounded-lg border border-cinema-700 bg-cinema-900/60 p-0.5"
         >
           {(Object.keys(MARKET_LABELS) as Market[]).map((m) => {
             const isActive = m === market;
@@ -187,7 +187,7 @@ export default function BoxOfficeJourneyChart({
                 onClick={() => setSelectedMarket(m)}
                 disabled={isDisabled}
                 aria-pressed={isActive}
-                className={`px-2.5 py-1 text-[10px] uppercase tracking-wider rounded-md transition-colors ${
+                className={`min-h-8 px-2.5 py-1 text-[10px] uppercase tracking-wider rounded-md transition-colors ${
                   isActive
                     ? "bg-cinema-700 text-theater-gold font-semibold"
                     : "text-stone-400 hover:text-stone-200 disabled:opacity-40 disabled:hover:text-stone-400"
@@ -199,9 +199,9 @@ export default function BoxOfficeJourneyChart({
           })}
         </div>
       </div>
-      <div className="h-[260px] lg:h-[360px] w-full rounded-xl border border-cinema-800 bg-cinema-900/30 p-2">
+      <div className="h-[260px] lg:h-[360px] w-full rounded-none sm:rounded-xl border-y sm:border border-cinema-800 bg-cinema-900/30 -mx-3 px-1 py-2 sm:mx-0 sm:p-2">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="period"
               tick={{ fill: "#78716c", fontSize: 11 }}
@@ -214,7 +214,7 @@ export default function BoxOfficeJourneyChart({
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`}
-              width={48}
+              width={40}
             />
             <Tooltip content={<CustomTooltip predictionDollars={predictionDollars} />} />
             {predictionDollars != null && (

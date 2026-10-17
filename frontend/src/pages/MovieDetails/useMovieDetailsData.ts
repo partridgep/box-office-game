@@ -7,6 +7,7 @@ import { useMovieStore } from "../../store/useMovieStore";
 import { useGuessStore } from "../../store/useGuessStore";
 import { useUserStore } from "../../store/useUserStore";
 import { useSetInviterId } from "../../store/useInviteStore";
+import { useFriendsStore } from "../../store/useFriendsStore";
 import { getPredictionAvailability } from "../../utils/predictionWindows";
 import { MovieData, SavedMovie, Guess, CompGroup, BoxOfficeHistory } from "../../types";
 
@@ -20,6 +21,7 @@ export function useMovieDetailsData() {
   const { movies } = useMovieStore();
   const user = useUserStore((state) => state.user);
   const setInviterId = useSetInviterId();
+  const friendsVersion = useFriendsStore((state) => state.version);
 
   const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
   const [inviterGuess, setInviterGuess] = useState<Guess | undefined>();
@@ -54,7 +56,6 @@ export function useMovieDetailsData() {
 
   useEffect(() => {
     if (movieId && isInDatabase) {
-      loadAllMovieGuesses();
       loadCompGroups(movieId);
       loadBoxOffice(movieId);
     } else {
@@ -62,6 +63,35 @@ export function useMovieDetailsData() {
       setBoxOffice(EMPTY_BOX_OFFICE);
     }
   }, [movieId, isInDatabase]);
+
+  // Refetch on login/logout and follow/unfollow: which guesses are friends' (and named) depends on the viewer.
+  useEffect(() => {
+    if (movieId && isInDatabase) {
+      loadAllMovieGuesses();
+    }
+  }, [movieId, isInDatabase, user?.id, friendsVersion]);
+
+  // The server can only flag the viewer's guess when their JWT is still valid; the stored guess id always can.
+  const markedGuesses = useMemo(
+    () =>
+      loggedGuess
+        ? allMovieGuesses.map((g) =>
+            g.id === loggedGuess.id ? { ...g, ...loggedGuess, is_viewer: true, is_friend: false } : g
+          )
+        : allMovieGuesses,
+    [allMovieGuesses, loggedGuess]
+  );
+
+  // The inviter counts as a friend even for a logged-out visitor; their shared guess carries the name.
+  const friendGuesses = useMemo(
+    () =>
+      markedGuesses.flatMap((g) => {
+        if (g.is_viewer) return [];
+        if (inviterGuess && g.id === inviterGuess.id) return [{ ...g, ...inviterGuess }];
+        return g.is_friend ? [g] : [];
+      }),
+    [markedGuesses, inviterGuess]
+  );
 
   useEffect(() => {
     if (fromGuessId) {
@@ -80,8 +110,13 @@ export function useMovieDetailsData() {
 
   async function loadAllMovieGuesses() {
     if (!movieId || !isInDatabase) return;
-    const allGuesses = await getAllGuessesForMovie(movieId);
-    setAllMovieGuesses(allGuesses.data ?? []);
+    try {
+      const allGuesses = await getAllGuessesForMovie(movieId);
+      setAllMovieGuesses(allGuesses.data ?? []);
+    } catch (error) {
+      console.error("Error fetching movie guesses:", error);
+      setAllMovieGuesses([]);
+    }
   }
 
   async function loadCompGroups(subjectMovieId: string) {
@@ -120,7 +155,8 @@ export function useMovieDetailsData() {
     predictionAvailability,
     loggedGuess,
     inviterGuess,
-    allMovieGuesses,
+    allMovieGuesses: markedGuesses,
+    friendGuesses,
     compGroups,
     boxOffice,
     refreshGuesses: loadAllMovieGuesses,

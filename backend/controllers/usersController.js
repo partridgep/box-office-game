@@ -5,8 +5,51 @@ const {
   recoverUser,
   followUser,
   unfollowUser,
-  isFollowing
+  isFollowing,
+  fetchUserPreviewByCode,
+  followUserByCode,
+  unfollowUserByCode,
+  fetchFollowing
 } = require('../services/userService');
+
+const getUserByCode = async (req, res) => {
+  try {
+    const user = await fetchUserPreviewByCode({ code: req.params.code, viewerId: req.user?.id });
+    res.json({ user });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+};
+
+const postFollowByCode = async (req, res) => {
+  try {
+    const user = await followUserByCode({
+      followerId: req.user.id,
+      code: req.params.code,
+      mutual: Boolean(req.body?.mutual),
+    });
+    res.json({ message: "User followed", user });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+};
+
+const deleteFollowByCode = async (req, res) => {
+  try {
+    const unfollowed = await unfollowUserByCode({ followerId: req.user.id, code: req.params.code });
+    res.json({ message: "User unfollowed", unfollowed });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+};
+
+const getMyFollowing = async (req, res) => {
+  try {
+    res.json({ following: await fetchFollowing(req.user.id) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
 const saveUser = async (req, res) => {
   console.log("save user come one", req.body)
@@ -142,5 +185,9 @@ module.exports = {
   postFollowUser,
   deleteUnfollowUser,
   getIsFollowing,
-  postConnectUsers
+  postConnectUsers,
+  getUserByCode,
+  postFollowByCode,
+  deleteFollowByCode,
+  getMyFollowing
 };

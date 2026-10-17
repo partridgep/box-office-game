@@ -14,6 +14,8 @@ export type CompMarkersByField = {
 
 interface HistoricalCompsProps {
   groups: CompGroup[];
+  /** Under "About this movie": match Prediction Pool / Movie Details title weight */
+  subsection?: boolean;
 }
 
 function compLabel(movie: CompMovie) {
@@ -95,13 +97,22 @@ function CompRow({ movie }: { movie: CompMovie }) {
   );
 }
 
-export default function HistoricalComps({ groups }: HistoricalCompsProps) {
+export default function HistoricalComps({
+  groups,
+  subsection = false,
+}: HistoricalCompsProps) {
   const hasComps = groups.some((group) => group.movies.length > 0);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-stone-200 uppercase tracking-wider">
+        <h3
+          className={
+            subsection
+              ? "text-lg font-semibold text-stone-100 uppercase tracking-wider"
+              : "text-sm font-semibold text-stone-200 uppercase tracking-wider"
+          }
+        >
           Historical Comps
         </h3>
       </div>

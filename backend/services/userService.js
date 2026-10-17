@@ -1,5 +1,5 @@
 const db = require('../models');
-const { User, Follow, sequelize } = db;
+const { User, Follow, Guess, sequelize } = db;
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -32,14 +32,21 @@ const createUser = async (req) => {
 };
 
 const recoverUser = async ({ name, access_key }) => {
-  const name_normalized = name
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '');
+  // Same normalization as createUser (collapsed spaces), plus a no-space
+  // variant so older accounts recovered before that was consistent still match.
+  const name_normalized = name.trim().toLowerCase().replace(/\s+/g, " ");
+  const name_compact = name_normalized.replace(/\s+/g, "");
 
-  // Get all users with this normalized name
+  const { Op } = require("sequelize");
   const users = await User.findAll({
-    where: { name_normalized }
+    where: {
+      [Op.or]: [
+        { name_normalized },
+        ...(name_compact !== name_normalized
+          ? [{ name_normalized: name_compact }]
+          : []),
+      ],
+    },
   });
 
   if (!users.length) {
@@ -142,6 +149,82 @@ async function unfollowUser({ followerId, followingId }) {
   });
 }
 
+const normalizeCode = (code) => String(code ?? "").trim().toUpperCase();
+
+async function findUserByCode(code) {
+  const user = await User.findOne({ where: { short_id: normalizeCode(code) } });
+  if (!user) {
+    const err = new Error("No player with that code");
+    err.status = 404;
+    throw err;
+  }
+  return user;
+}
+
+/** Public preview for a friend code; never exposes the internal id or access key hash. */
+async function fetchUserPreviewByCode({ code, viewerId }) {
+  const user = await findUserByCode(code);
+  const is_self = viewerId != null && String(user.id) === String(viewerId);
+
+  const [prediction_count, theirFollowing, viewerFollowing] = await Promise.all([
+    Guess.count({ where: { user_id: user.id } }),
+    Follow.findAll({ where: { follower_id: user.id }, attributes: ["following_id"], raw: true }),
+    viewerId && !is_self
+      ? Follow.findAll({ where: { follower_id: viewerId }, attributes: ["following_id"], raw: true })
+      : [],
+  ]);
+
+  const viewerFollowingIds = new Set(viewerFollowing.map((f) => String(f.following_id)));
+  const friends_in_common = theirFollowing.filter((f) =>
+    viewerFollowingIds.has(String(f.following_id))
+  ).length;
+
+  return {
+    name: user.name,
+    short_id: user.short_id,
+    followers_count: user.followers_count,
+    prediction_count,
+    friends_in_common,
+    is_self,
+    is_following: viewerFollowingIds.has(String(user.id)),
+  };
+}
+
+/**
+ * `mutual` is for invite links: the person who shared the link has already opted in to following back.
+ * Typed codes only follow one way, so nobody can add themselves to someone else's friends list.
+ */
+async function followUserByCode({ followerId, code, mutual = false }) {
+  const user = await findUserByCode(code);
+  await followUser({ followerId, followingId: user.id });
+  if (mutual) {
+    await followUser({ followerId: user.id, followingId: followerId });
+  }
+  return { name: user.name, short_id: user.short_id };
+}
+
+async function unfollowUserByCode({ followerId, code }) {
+  const user = await findUserByCode(code);
+  return unfollowUser({ followerId, followingId: user.id });
+}
+
+async function fetchFollowing(viewerId) {
+  const viewer = await User.findByPk(viewerId, {
+    include: [
+      {
+        model: User,
+        as: "following",
+        attributes: ["name", "short_id"],
+        through: { attributes: [] },
+      },
+    ],
+  });
+  if (!viewer) return [];
+  return viewer.following
+    .map((u) => ({ name: u.name, short_id: u.short_id }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 async function isFollowing(followerId, followingId) {
   return !!(await Follow.findOne({
     where: {
@@ -158,4 +241,8 @@ module.exports = {
   followUser,
   unfollowUser,
   isFollowing,
+  fetchUserPreviewByCode,
+  followUserByCode,
+  unfollowUserByCode,
+  fetchFollowing,
 };

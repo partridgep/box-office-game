@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useId, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import {
   Guess,
@@ -18,13 +18,14 @@ import {
 } from "../../utils/guessComparison";
 import { formatDollars } from "../../utils/formatMoney";
 import TicketStub from "../TicketStub/TicketStub";
-import MissMeter from "../MissMeter/MissMeter";
+import MissMeter, { type MissMeterOther } from "../MissMeter/MissMeter";
 import LetterboardHeading, { backlightDelay } from "../Letterboard/LetterboardHeading";
 
 interface ResultSectionProps {
   movie: MovieData;
   userGuess: Guess;
   allMovieGuesses: Guess[];
+  friendGuesses?: Guess[];
   className?: string;
 }
 
@@ -46,6 +47,8 @@ const TIER_STYLES = {
   },
 };
 
+const MAX_FRIEND_PINS = 3;
+
 /** Badge copy: a verdict plus how far, and which way, the guess missed. */
 function verdictFor(row: GuessComparison, tier: keyof typeof TIER_STYLES) {
   if (row.delta === 0) return { verdict: "Dead on", detail: "" };
@@ -55,17 +58,64 @@ function verdictFor(row: GuessComparison, tier: keyof typeof TIER_STYLES) {
   if (tier === "off") {
     return { verdict: row.delta > 0 ? "Way over" : "Way under", detail: `by ${amount}` };
   }
-  return { verdict: tier === "nailed" ? "Nailed it" : "Close", detail: `${amount} ${direction}` };
+  return { verdict: tier === "nailed" ? "Nailed it!" : "Close...", detail: `${amount} ${direction}` };
+}
+
+type FriendFieldRow = {
+  guess: Guess;
+  row: GuessComparison;
+};
+
+function meterOthers(friendsOnField: FriendFieldRow[]): MissMeterOther[] {
+  return [...friendsOnField]
+    .sort((a, b) => a.row.percentError - b.row.percentError)
+    .slice(0, MAX_FRIEND_PINS)
+    .map(({ guess, row }) => {
+      const isRT = row.field === "Rotten Tomatoes";
+      return {
+        id: guess.id,
+        name: guess.guess_user?.name ?? "Friend",
+        delta: row.delta,
+        percentError: row.percentError,
+        missAmount: formatMissAmount(row),
+        guessLabel: isRT ? `${row.guess}%` : formatDollars(row.guess),
+      };
+    });
+}
+
+/** Closest friend to the actual on this field — for the one-line rivalry. */
+function rivalryLine(userRow: GuessComparison, friendsOnField: FriendFieldRow[]): string | null {
+  if (friendsOnField.length === 0) return null;
+  const rival = [...friendsOnField].sort(
+    (a, b) => a.row.percentError - b.row.percentError
+  )[0];
+  const name = rival.guess.guess_user?.name ?? "Friend";
+  const isRT = userRow.field === "Rotten Tomatoes";
+  // How much closer the winner was to the actual (dollars for BO, score points for RT).
+  const missGap = Math.abs(Math.abs(userRow.delta) - Math.abs(rival.row.delta));
+  const gapLabel = isRT ? `${missGap} pts` : formatDollars(missGap);
+
+  if (userRow.percentError < rival.row.percentError) {
+    return `You beat ${name} by ${gapLabel}.`;
+  }
+  if (userRow.percentError > rival.row.percentError) {
+    return `${name} beat you by ${gapLabel}.`;
+  }
+  return `You and ${name} tied for closest.`;
 }
 
 function AccuracyCard({
   row,
   leaderboardRow,
+  friendLeaderboardRow,
+  friendsOnField,
   featured = false,
   revealDelayMs = 0,
 }: {
   row: GuessComparison;
   leaderboardRow?: CategoryLeaderboard;
+  friendLeaderboardRow?: CategoryLeaderboard;
+  friendsOnField: FriendFieldRow[];
   revealDelayMs?: number;
   /** The group's headline result (Worldwide): spans two columns, and two rows beside the stacked cards on large screens. */
   featured?: boolean;
@@ -81,6 +131,9 @@ function AccuracyCard({
     row.delta > 0 ? "Your Overshot" : row.delta < 0 ? "Your Undershot" : "Difference";
   // Proper minus sign so "−" and "+" share a width and screen readers say "minus".
   const sign = row.delta > 0 ? "+" : row.delta < 0 ? "\u2212" : "";
+
+  const others = meterOthers(friendsOnField);
+  const rivalry = rivalryLine(row, friendsOnField);
 
   return (
     <div
@@ -148,13 +201,26 @@ function AccuracyCard({
           pinClassName={styles.pin}
           revealDelayMs={revealDelayMs}
           landingPulse={tier === "nailed"}
+          others={others}
         />
       </div>
 
-      {leaderboardRow && (
-        <p className="text-xs tabular-nums text-stone-300">
-          {formatRank(leaderboardRow.userRank, leaderboardRow.totalGuesses)}
-        </p>
+      {rivalry && (
+        <p className="mb-2 text-xs text-left text-stone-400">{rivalry}</p>
+      )}
+
+      {(leaderboardRow || friendLeaderboardRow) && (
+        <div className="text-xs text-right italic [font-synthesis:style] tabular-nums text-stone-300 space-y-0.5">
+          {leaderboardRow && (
+            <p>{formatRank(leaderboardRow.userRank, leaderboardRow.totalGuesses)}</p>
+          )}
+          {friendLeaderboardRow && (
+            <p>
+              {formatRank(friendLeaderboardRow.userRank, friendLeaderboardRow.totalGuesses)} among
+              friends
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -164,10 +230,16 @@ export function OverallPerformance({
   movie,
   userGuess,
   allMovieGuesses,
+  friendGuesses = [],
   className = "",
 }: ResultSectionProps) {
   const overall = overallRanking(userGuess, allMovieGuesses, movie);
   if (!overall) return null;
+
+  const amongFriends =
+    friendGuesses.length > 0
+      ? overallRanking(userGuess, [userGuess, ...friendGuesses], movie)
+      : null;
 
   return (
     <div
@@ -185,6 +257,15 @@ export function OverallPerformance({
       </p>
       <p className="text-sm text-stone-400 mt-1">
         Better than {overall.percentile}% of players
+        {amongFriends && (
+          <>
+            {" "}
+            ·{" "}
+            <span className="text-theater-gold/90">
+              #{amongFriends.overallRank} among {amongFriends.totalGuesses} friends
+            </span>
+          </>
+        )}
       </p>
     </div>
   );
@@ -208,11 +289,15 @@ function AccuracyGroup({
   title,
   rows,
   leaderboard,
+  friendLeaderboard,
+  friendsByField,
   className,
 }: {
   title: string;
   rows: GuessComparison[];
   leaderboard: CategoryLeaderboard[];
+  friendLeaderboard: CategoryLeaderboard[];
+  friendsByField: Map<string, FriendFieldRow[]>;
   className: string;
 }) {
   const [parent] = useAutoAnimate();
@@ -226,6 +311,8 @@ function AccuracyGroup({
             key={row.field}
             row={row}
             leaderboardRow={leaderboard.find((r) => r.field === row.field)}
+            friendLeaderboardRow={friendLeaderboard.find((r) => r.field === row.field)}
+            friendsOnField={friendsByField.get(row.field) ?? []}
             featured={rows.length > 1 && row.field.startsWith("Worldwide")}
             revealDelayMs={i * PIN_STAGGER_MS}
           />
@@ -239,6 +326,7 @@ export function AccuracyGrid({
   movie,
   userGuess,
   allMovieGuesses,
+  friendGuesses = [],
   className = "space-y-3",
 }: ResultSectionProps) {
   const userResults = compareGuessToMovie(userGuess, movie);
@@ -247,6 +335,19 @@ export function AccuracyGrid({
     allMovieGuesses,
     movie
   );
+  const friendLeaderboard =
+    friendGuesses.length > 0
+      ? compareUserToAllGuesses(userGuess, [userGuess, ...friendGuesses], movie)
+      : [];
+
+  const friendsByField = new Map<string, FriendFieldRow[]>();
+  for (const g of friendGuesses) {
+    for (const row of compareGuessToMovie(g, movie)) {
+      const list = friendsByField.get(row.field) ?? [];
+      list.push({ guess: g, row });
+      friendsByField.set(row.field, list);
+    }
+  }
 
   return (
     <div>
@@ -265,6 +366,8 @@ export function AccuracyGrid({
               title={group.title}
               rows={rows}
               leaderboard={categoryLeaderboard}
+              friendLeaderboard={friendLeaderboard}
+              friendsByField={friendsByField}
               className={className}
             />
           );
@@ -274,21 +377,52 @@ export function AccuracyGrid({
   );
 }
 
+/** Prefer the inviter, else the friend you beat on the most categories, else the first. */
+function defaultRivalId(
+  userGuess: Guess,
+  friends: Guess[],
+  movie: MovieData,
+  preferredId?: string
+): string {
+  if (preferredId && friends.some((f) => f.id === preferredId)) return preferredId;
+  let bestId = friends[0]?.id ?? "";
+  let bestWins = -1;
+  for (const f of friends) {
+    const vs = compareTwoGuesses(userGuess, f, movie);
+    const wins = vs.filter((r) => r.winner === "A").length;
+    if (wins > bestWins) {
+      bestWins = wins;
+      bestId = f.id;
+    }
+  }
+  return bestId;
+}
+
 export function FriendComparison({
   movie,
   userGuess,
-  friendGuess,
+  friendGuesses,
+  preferredFriendGuessId,
 }: {
   movie: MovieData;
   userGuess: Guess;
-  friendGuess?: Guess;
+  friendGuesses: Guess[];
+  /** e.g. inviter guess id when arriving via share link */
+  preferredFriendGuessId?: string;
 }) {
-  const vsResults = friendGuess
-    ? compareTwoGuesses(userGuess, friendGuess, movie)
-    : [];
-  if (!friendGuess || vsResults.length === 0) return null;
+  const groupId = useId();
+  const [selectedId, setSelectedId] = useState(() =>
+    defaultRivalId(userGuess, friendGuesses, movie, preferredFriendGuessId)
+  );
 
-  const friendName = friendGuess.guess_user?.name ?? "Friend";
+  if (friendGuesses.length === 0) return null;
+
+  const selected =
+    friendGuesses.find((f) => f.id === selectedId) ?? friendGuesses[0];
+  const vsResults = compareTwoGuesses(userGuess, selected, movie);
+  if (vsResults.length === 0) return null;
+
+  const friendName = selected.guess_user?.name ?? "Friend";
   const winsA = vsResults.filter((r) => r.winner === "A").length;
   const winsB = vsResults.filter((r) => r.winner === "B").length;
   const tally =
@@ -301,13 +435,58 @@ export function FriendComparison({
 
   return (
     <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-        <h2 className="text-sm font-semibold text-stone-200 uppercase tracking-wider">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <h2 className="text-2xl font-semibold text-stone-200 uppercase tracking-wider">
           You vs {friendName}
         </h2>
-        <span className="text-sm text-theater-gold font-semibold">{tally}</span>
+        <span
+          className="text-sm text-theater-gold font-semibold tabular-nums"
+          aria-live="polite"
+        >
+          {tally}
+        </span>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      {friendGuesses.length > 1 && (
+        <fieldset className="mb-4">
+          <legend className="sr-only">Choose a friend to compare</legend>
+          <div
+            role="radiogroup"
+            aria-label="Friend to compare"
+            className="flex flex-wrap gap-2"
+          >
+            {friendGuesses.map((f) => {
+              const name = f.guess_user?.name ?? "Friend";
+              const checked = f.id === selected.id;
+              return (
+                <label
+                  key={f.id}
+                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-theater-gold ${
+                    checked
+                      ? "border-theater-gold/60 bg-theater-gold/10 text-theater-gold"
+                      : "border-stone-700/60 text-stone-300 hover:border-stone-500"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={groupId}
+                    value={f.id}
+                    checked={checked}
+                    onChange={() => setSelectedId(f.id)}
+                    className="sr-only"
+                  />
+                  {name}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+
+      <div
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        aria-live="polite"
+      >
         <VersusTicket
           name="You"
           side="A"

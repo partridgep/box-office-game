@@ -1,3 +1,6 @@
+import { apiClient } from "./apiClient";
+import { Guess } from "../types";
+
 export const postGuess = async (guessData: Record<string, any>) => {
   const response = await fetch('/api/guess', {
       method: 'POST',
@@ -41,14 +44,6 @@ export const getGuessFromId = async (guess_id: string) => {
   return data;
 };
 
-export const getAllGuessesForMovie = async (movie_id: string) => {
-  const response = await fetch(`/api/guesses/movie_id/${movie_id}`);
-  const data = await response.json();
-
-  if (!response.ok) {
-    console.log("error!", data.error)
-    throw new Error(data.error || "Failed to fetch guess");
-  }
-
-  return data;
-};
+/** Sends the JWT when present so the server can flag friends' guesses; strangers' guesses come back anonymized. */
+export const getAllGuessesForMovie = (movie_id: string) =>
+  apiClient<{ data: Guess[] }>(`/api/guesses/movie_id/${movie_id}`);

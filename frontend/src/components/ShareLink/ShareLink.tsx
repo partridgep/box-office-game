@@ -3,6 +3,7 @@ import styles from './ShareLink.module.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faClipboard } from '@fortawesome/free-solid-svg-icons';
 import { library, IconProp } from '@fortawesome/fontawesome-svg-core';
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 
 library.add({ faClipboard });
 
@@ -15,6 +16,7 @@ export default function ShareLink({ shareLink, onClose }: { shareLink: string, o
   const inputRef = useRef<HTMLInputElement>(null);
   const [justCopied, setJustCopied] = useState(false);
 
+  useBodyScrollLock();
 
   useEffect(() => {
     dialogRef.current?.showModal();

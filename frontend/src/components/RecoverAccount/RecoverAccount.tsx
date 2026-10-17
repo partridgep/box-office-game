@@ -3,9 +3,17 @@ import { useUserStore } from "../../store/useUserStore";
 import { loginUser } from "../../services/users.service";
 // import { encryptText, saveEncrypted } from '../../utils/crypto/cryptoStorage';
 import { persistUser } from "../../utils/userPersistence";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock";
 import styles from './RecoverAccount.module.css';
 
-export default function RecoverAccount({ onClose }: { onClose: () => void }) {
+export default function RecoverAccount({
+  onClose,
+  message,
+}: {
+  onClose: () => void;
+  /** e.g. session-expired copy when silent refresh failed */
+  message?: string | null;
+}) {
   const setUser = useUserStore((s) => s.setUser);
 
   const [name, setName] = useState("");
@@ -13,6 +21,9 @@ export default function RecoverAccount({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState("");
 
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const messageId = "recover-session-message";
+
+  useBodyScrollLock();
 
   useEffect(() => {
     dialogRef.current?.showModal();
@@ -38,8 +49,8 @@ export default function RecoverAccount({ onClose }: { onClose: () => void }) {
       setError("");
       dialogRef.current?.close();
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Recovery failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Recovery failed");
     }
   };
 
@@ -49,44 +60,54 @@ export default function RecoverAccount({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <dialog ref={dialogRef} className={styles['dialog']}>
-        <form onSubmit={handleRecover} className={styles['form']}>
+    <dialog
+      ref={dialogRef}
+      className={styles["dialog"]}
+      aria-describedby={message ? messageId : undefined}
+    >
+      <form onSubmit={handleRecover} className={styles["form"]}>
         <h2>Recover Your Account</h2>
 
-        <div className={styles['inputs']}>
-            <input
-                type="text"
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-            />
+        {message && (
+          <p id={messageId} className={styles["session-msg"]} role="status">
+            {message}
+          </p>
+        )}
 
-            <input
-                type="text"
-                placeholder="Access key"
-                value={accessKey}
-                onChange={(e) => setAccessKey(e.target.value)}
-                required
-            />
+        <div className={styles["inputs"]}>
+          <input
+            type="text"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            autoComplete="username"
+          />
+
+          <input
+            type="text"
+            placeholder="Access key"
+            value={accessKey}
+            onChange={(e) => setAccessKey(e.target.value)}
+            required
+            autoComplete="off"
+            spellCheck={false}
+          />
         </div>
 
+        {error && (
+          <p className={styles["error-msg"]} role="alert">
+            {error}
+          </p>
+        )}
 
-        {error && <p className={styles['error-msg']}>{error}</p>}
-
-        <div className={styles['buttons']}>
-            <button
-                type="button"
-                onClick={handleClose}
-            >
-                Close
-            </button>
-            <button type="submit">
-                Recover
-            </button>
+        <div className={styles["buttons"]}>
+          <button type="button" onClick={handleClose}>
+            Close
+          </button>
+          <button type="submit">Recover</button>
         </div>
-
-        </form>
+      </form>
     </dialog>
   );
 }

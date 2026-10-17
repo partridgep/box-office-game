@@ -95,7 +95,7 @@ export default function LockedPredictionSummary({
     friendGuess && friendGuess.user_id !== guess.user_id;
 
   return (
-    <div className="space-y-6 text-ticket-ink">
+    <div className="space-y-3 text-ticket-ink">
       <div>
         <h2 className="text-2xl font-bold uppercase tracking-wide mb-1">
           Prediction Locked In

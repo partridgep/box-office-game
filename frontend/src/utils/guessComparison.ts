@@ -263,6 +263,39 @@ function getGuessError(
   }
 }
 
+/** Rank one guess among all on a single field (lower absolute error wins). */
+export function rankGuessOnField(
+  guess: Guess,
+  allGuesses: Guess[],
+  movie: MovieData,
+  field: string
+): { rank: number; total: number } | null {
+  const actuals = getMovieActuals(movie);
+  const actualByField: Record<string, number | null> = {
+    "Domestic Opening": actuals.domesticOpening,
+    "International Opening": actuals.internationalOpening,
+    "Worldwide Opening": actuals.worldwideOpening,
+    "Domestic Final": actuals.finalDomestic,
+    "International Final": actuals.finalInternational,
+    "Worldwide Final": actuals.worldwideFinal,
+    "Rotten Tomatoes": actuals.rottenTomatoesScore,
+  };
+  const actual = actualByField[field] ?? null;
+  if (actual == null) return null;
+
+  const scored = allGuesses
+    .map((g) => {
+      const error = getGuessError(g, field, actual);
+      return error != null ? { guess: g, error } : null;
+    })
+    .filter(Boolean) as { guess: Guess; error: number }[];
+
+  scored.sort((a, b) => a.error - b.error);
+  const index = scored.findIndex((s) => s.guess.id === guess.id);
+  if (index === -1) return null;
+  return { rank: index + 1, total: scored.length };
+}
+
 export function compareUserToAllGuesses(
   userGuess: Guess,
   allGuesses: Guess[],

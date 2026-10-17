@@ -444,7 +444,81 @@
   animation: miss-pin-pulse 700ms ease-out calc(var(--power-delay, 0ms) + var(--pin-delay, 0ms) + 600ms) both;
 }
 
+/* Friend pins: fade in after You has landed (~750ms slide), then optional per-friend stagger. */
+@keyframes miss-friend-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.miss-friend-pin,
+.miss-friend-legend {
+  --friend-fade-delay: calc(
+    var(--power-delay, 0ms) + var(--pin-delay, 0ms) + 750ms + var(--friend-stagger, 0ms)
+  );
+  animation: miss-friend-fade 320ms ease-out var(--friend-fade-delay) both;
+}
+
+.backlit-scope:has(> .letterboard[data-power='off']) .miss-friend-pin,
+.backlit-scope:has(> .letterboard[data-power='off']) .miss-friend-legend {
+  animation: none;
+  opacity: 0;
+}
+
+/* Prediction Pool: brief fade when Opening / Final / Reception swaps. */
+@keyframes pool-segment-swap {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.pool-segment-swap {
+  animation: pool-segment-swap 180ms ease-out;
+}
+
+/* Box-office rubber stamp for a confirmed follow. */
+.follow-stamp {
+  display: inline-block;
+  padding: 0.15em 0.6em;
+  border: 3px double currentColor;
+  border-radius: 4px;
+  font-family: var(--font-marquee);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  transform: rotate(-8deg);
+  animation: follow-stamp-in 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes follow-stamp-in {
+  from {
+    transform: rotate(-14deg) scale(2.4);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    transform: rotate(-8deg) scale(1);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .pool-segment-swap {
+    animation: none !important;
+  }
+
+  .follow-stamp {
+    animation: none !important;
+  }
+
   .marquee-chase,
   .marquee-power,
   .marquee-stub,
@@ -465,6 +539,12 @@
 
   .miss-pin-pulse::after {
     animation: none !important;
+  }
+
+  .miss-friend-pin,
+  .miss-friend-legend {
+    animation: none !important;
+    opacity: 1 !important;
   }
 
   ::view-transition-group(*),

@@ -47,7 +47,8 @@ export interface GuessUser {
 
 export type Guess = {
   id: string,
-  user_id: string,
+  /** Omitted on other players' guesses unless they're a friend of the viewer. */
+  user_id?: string,
   movie_id: string,
   domestic_opening: number,
   international_opening: number,
@@ -56,7 +57,11 @@ export type Guess = {
   rotten_tomatoes_score: number | null,
   createdAt: string,
   updatedAt: string,
-  guess_user?: GuessUser; 
+  guess_user?: GuessUser;
+  /** Set on guesses from the movie-guesses endpoint: the viewer's own guess. */
+  is_viewer?: boolean;
+  /** Set on guesses from the movie-guesses endpoint: the viewer follows this guesser. */
+  is_friend?: boolean;
 };
 
 export type MovieActuals = {
