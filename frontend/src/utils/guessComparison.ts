@@ -359,45 +359,63 @@ function rtBonus(guessRt: number | null, actualRt: number | null): number {
   return RT_MAX_BONUS * Math.max(0, 1 - pointsOff / RT_BONUS_CUTOFF);
 }
 
+/**
+ * Lower is better: avg worldwide opening/final % error, minus a small RT bonus.
+ * Before BO actuals land, falls back to absolute RT points off.
+ */
+export function overallScore(guess: Guess, movie: MovieData): number | null {
+  const actuals = getMovieActuals(movie);
+  const actualRt = actuals.rottenTomatoesScore;
+
+  const boErrors = [
+    actuals.worldwideOpening &&
+      Math.abs(
+        millionsToDollars(guess.domestic_opening + guess.international_opening)! -
+          actuals.worldwideOpening
+      ) / actuals.worldwideOpening,
+    actuals.worldwideFinal &&
+      Math.abs(
+        millionsToDollars(guess.final_domestic + guess.final_international)! -
+          actuals.worldwideFinal
+      ) / actuals.worldwideFinal,
+  ].filter((v): v is number => typeof v === "number");
+
+  if (boErrors.length) {
+    const boScore = boErrors.reduce((a, b) => a + b, 0) / boErrors.length;
+    return boScore - rtBonus(guess.rotten_tomatoes_score, actualRt);
+  }
+
+  // Before box office numbers are in, rank on RT alone; players who
+  // skipped RT have nothing to be ranked on yet.
+  if (actualRt != null && guess.rotten_tomatoes_score != null) {
+    return Math.abs(guess.rotten_tomatoes_score - actualRt);
+  }
+
+  return null;
+}
+
+/** Head-to-head using the same metric as overallRanking (ties when scores match). */
+export function compareOverall(
+  guessA: Guess,
+  guessB: Guess,
+  movie: MovieData
+): "A" | "B" | "tie" | null {
+  const scoreA = overallScore(guessA, movie);
+  const scoreB = overallScore(guessB, movie);
+  if (scoreA == null || scoreB == null) return null;
+  if (scoreA < scoreB) return "A";
+  if (scoreB < scoreA) return "B";
+  return "tie";
+}
+
 export function overallRanking(
   userGuess: Guess,
   allGuesses: Guess[],
   movie: MovieData
 ): OverallPerformance | null {
-  const actuals = getMovieActuals(movie);
-  const actualRt = actuals.rottenTomatoesScore;
-
-  function scoreGuess(g: Guess): number | null {
-    const boErrors = [
-      actuals.worldwideOpening &&
-        Math.abs(
-          millionsToDollars(g.domestic_opening + g.international_opening)! -
-            actuals.worldwideOpening
-        ) / actuals.worldwideOpening,
-      actuals.worldwideFinal &&
-        Math.abs(
-          millionsToDollars(g.final_domestic + g.final_international)! -
-            actuals.worldwideFinal
-        ) / actuals.worldwideFinal,
-    ].filter((v): v is number => typeof v === "number");
-
-    if (boErrors.length) {
-      const boScore = boErrors.reduce((a, b) => a + b, 0) / boErrors.length;
-      return boScore - rtBonus(g.rotten_tomatoes_score, actualRt);
-    }
-
-    // Before box office numbers are in, rank on RT alone; players who
-    // skipped RT have nothing to be ranked on yet.
-    if (actualRt != null && g.rotten_tomatoes_score != null) {
-      return Math.abs(g.rotten_tomatoes_score - actualRt);
-    }
-
-    return null;
-  }
-
   const scores = allGuesses
     .map((g) => {
-      const s = scoreGuess(g);
+      const s = overallScore(g, movie);
       return s != null ? { guess: g, score: s } : null;
     })
     .filter(Boolean) as { guess: Guess; score: number }[];

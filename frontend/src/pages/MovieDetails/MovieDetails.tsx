@@ -19,6 +19,17 @@ import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
 import TicketStub from "../../components/TicketStub/TicketStub";
 import { hasAnyActuals } from "../../utils/guessComparison";
+import {
+  EMPTY_HIDDEN,
+  hiddenCompsUserKey,
+  selectHiddenCompIds,
+  useHiddenCompsStore,
+} from "../../store/useHiddenCompsStore";
+import {
+  EMPTY_STARRED,
+  selectStarredCompIds,
+  useStarredCompsStore,
+} from "../../store/useStarredCompsStore";
 
 function PosterBackground({
   src,
@@ -97,9 +108,23 @@ export default function MovieDetails() {
     };
   }, [predictionAvailability, retroactiveActive]);
 
+  // Must use movie.id (DB uuid), not the route param (tmdbID) — same key as HistoricalComps.
+  const subjectMovieId = movie?.id ?? null;
+  const prefsUserKey = hiddenCompsUserKey(user?.id);
+  const hiddenCompIds = useHiddenCompsStore((s) =>
+    subjectMovieId
+      ? selectHiddenCompIds(s.byUser, prefsUserKey, subjectMovieId)
+      : EMPTY_HIDDEN
+  );
+  const starredCompIds = useStarredCompsStore((s) =>
+    subjectMovieId
+      ? selectStarredCompIds(s.byUser, prefsUserKey, subjectMovieId)
+      : EMPTY_STARRED
+  );
+
   const compMarkersByField = useMemo(() => {
-    return compsToMarkersByField(compGroups);
-  }, [compGroups]);
+    return compsToMarkersByField(compGroups, hiddenCompIds, starredCompIds);
+  }, [compGroups, hiddenCompIds, starredCompIds]);
 
   const inviterName = useMemo(() => {
     if (!inviterGuess) return undefined;
@@ -320,17 +345,6 @@ export default function MovieDetails() {
               />
             </section>
 
-            {friendGuesses.length > 0 && (
-              <section className={resultsPanel}>
-                <FriendComparison
-                  movie={movie}
-                  userGuess={loggedGuess}
-                  friendGuesses={friendGuesses}
-                  preferredFriendGuessId={preferredFriendGuessId}
-                />
-              </section>
-            )}
-
             <section
               className={`${resultsPanel} -mx-3 sm:mx-0 sm:overflow-hidden sm:p-0`}
             >
@@ -342,6 +356,17 @@ export default function MovieDetails() {
                 bare
               />
             </section>
+
+            {friendGuesses.length > 0 && (
+              <section className={resultsPanel}>
+                <FriendComparison
+                  movie={movie}
+                  userGuess={loggedGuess}
+                  friendGuesses={friendGuesses}
+                  preferredFriendGuessId={preferredFriendGuessId}
+                />
+              </section>
+            )}
           </div>
 
           <section className="mt-0 space-y-5 border-t border-theater-gold/25 pt-16 sm:pt-6 sm:mt-6 sm:space-y-4 sm:border-t-0">

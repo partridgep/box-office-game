@@ -152,6 +152,7 @@ export type CompMovie = {
   acronym?: string | null;
   year: number;
   poster: string;
+  released?: Date | string | null;
   domesticOpening: string | null;
   internationalOpening: string | null;
   domesticGross: string | null;

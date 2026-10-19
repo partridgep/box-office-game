@@ -79,11 +79,15 @@ export default function MovieContextPanel({
     </div>
   );
 
-  const comps = (
+  const comps = movie.id ? (
     <div className={`${shell} p-4`}>
-      <HistoricalComps groups={compGroups} subsection={isWide} />
+      <HistoricalComps
+        groups={compGroups}
+        subjectMovieId={movie.id}
+        subsection={isWide}
+      />
     </div>
-  );
+  ) : null;
 
   if (isWide) {
     return (

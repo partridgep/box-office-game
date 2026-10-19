@@ -9,6 +9,7 @@ import {
 } from "../../types";
 import {
   compareGuessToMovie,
+  compareOverall,
   compareTwoGuesses,
   compareUserToAllGuesses,
   overallRanking,
@@ -425,26 +426,43 @@ export function FriendComparison({
   const friendName = selected.guess_user?.name ?? "Friend";
   const winsA = vsResults.filter((r) => r.winner === "A").length;
   const winsB = vsResults.filter((r) => r.winner === "B").length;
-  const tally =
-    winsA === winsB
-      ? `Tied ${winsA}–${winsB}`
-      : winsA > winsB
-        ? `You win ${winsA}–${winsB}`
-        : `${friendName} wins ${winsB}–${winsA}`;
+  const categoryTotal = winsA + winsB;
+  // Same metric as Overall Performance — category ★s are supporting color only.
+  const overallWinner = compareOverall(userGuess, selected, movie);
+  const headline =
+    overallWinner === "A"
+      ? "You win"
+      : overallWinner === "B"
+        ? `${friendName} wins`
+        : overallWinner === "tie"
+          ? "Tied overall"
+          : null;
+  const categorySub =
+    categoryTotal === 0
+      ? null
+      : winsA === winsB
+        ? `Tied on categories ${winsA}–${winsB}`
+        : winsA > winsB
+          ? `You were closer on ${winsA} of ${categoryTotal} categories`
+          : `${friendName} was closer on ${winsB} of ${categoryTotal} categories`;
   const footer = `ADMIT TWO · ${movie.title.toUpperCase()}`;
 
   return (
     <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
         <h2 className="text-2xl font-semibold text-stone-200 uppercase tracking-wider">
           You vs {friendName}
         </h2>
-        <span
-          className="text-sm text-theater-gold font-semibold tabular-nums"
-          aria-live="polite"
-        >
-          {tally}
-        </span>
+        {(headline || categorySub) && (
+          <div className="text-right tabular-nums" aria-live="polite">
+            {headline && (
+              <p className="text-sm text-theater-gold font-semibold">{headline}</p>
+            )}
+            {categorySub && (
+              <p className="text-xs text-stone-400 mt-0.5">{categorySub}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {friendGuesses.length > 1 && (
@@ -492,7 +510,7 @@ export function FriendComparison({
           side="A"
           rows={vsResults}
           wins={winsA}
-          isWinner={winsA > winsB}
+          isWinner={overallWinner === "A"}
           footer={footer}
         />
         <VersusTicket
@@ -500,7 +518,7 @@ export function FriendComparison({
           side="B"
           rows={vsResults}
           wins={winsB}
-          isWinner={winsB > winsA}
+          isWinner={overallWinner === "B"}
           footer={footer}
         />
       </div>
@@ -529,7 +547,7 @@ function VersusTicket({
         <div className="text-left min-w-0">
           <p className="text-2xl uppercase leading-none truncate">{name}</p>
           <p className="text-xs uppercase tracking-wider text-ticket-ink/65 mt-1">
-            {wins} {wins === 1 ? "win" : "wins"}
+            {wins} categor{wins === 1 ? "y" : "ies"}
           </p>
         </div>
         {isWinner && (
