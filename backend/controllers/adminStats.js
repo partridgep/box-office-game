@@ -1,6 +1,7 @@
 'use strict';
 
 const { getAdminEngagementStats } = require('../services/adminStatsService');
+const { listJobRuns } = require('../services/jobRunService');
 
 const getAdminStats = async (req, res) => {
   try {
@@ -14,6 +15,21 @@ const getAdminStats = async (req, res) => {
   }
 };
 
+const getAdminJobRuns = async (req, res) => {
+  try {
+    const limit = req.query.limit;
+    const job = req.query.job || null;
+    const runs = await listJobRuns({ job, limit });
+    res.status(200).json({ data: runs });
+  } catch (error) {
+    console.error('Failed to load job runs:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to load job runs',
+    });
+  }
+};
+
 module.exports = {
   getAdminStats,
+  getAdminJobRuns,
 };

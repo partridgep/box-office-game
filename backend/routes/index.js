@@ -49,7 +49,7 @@ const {
     getMovieBorrowedCategories,
     putMovieBorrowedCategories,
 } = require('../controllers/categories');
-const { getAdminStats } = require('../controllers/adminStats');
+const { getAdminStats, getAdminJobRuns } = require('../controllers/adminStats');
 
 const router = express.Router();
 
@@ -64,6 +64,7 @@ router.get('/all-movies', getSavedMovies);
 router.post('/refresh-movies', updateAllMovies);
 router.get('/lobby', getLobby);
 router.get('/admin/stats', getAdminStats);
+router.get('/admin/job-runs', getAdminJobRuns);
 router.get('/categories', getCategories);
 router.post('/categories', postCategory);
 router.get('/categories/:id', getCategory);

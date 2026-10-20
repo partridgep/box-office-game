@@ -154,6 +154,44 @@ export type AdminEngagementStats = {
   };
 };
 
+export type JobRunError = {
+  stage: string;
+  movieId?: string | null;
+  title?: string | null;
+  message: string;
+  at?: string;
+};
+
+export type MovieRefreshSummary = {
+  moviesTotal?: number;
+  moviesUpdated?: number;
+  moviesSkipped?: number;
+  moviesFailed?: number;
+  boxOfficeRefreshed?: number;
+  boxOfficeSkipped?: number;
+  boxOfficeFailed?: number;
+  territoriesRefreshed?: number;
+  territoriesSkipped?: number;
+  territoriesFailed?: number;
+  territoryMarketsDue?: number;
+  territoryMarketsScraped?: number;
+  territoryMarketsFailed?: number;
+  errors?: JobRunError[];
+  errorsTruncated?: boolean;
+};
+
+export type JobRun = {
+  id: string;
+  job: string;
+  trigger: string | null;
+  status: "running" | "success" | "partial" | "failed" | string;
+  startedAt: string;
+  finishedAt: string | null;
+  summary: MovieRefreshSummary | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type LobbyMovie = {
   id: string;
   tmdbID: string | number;

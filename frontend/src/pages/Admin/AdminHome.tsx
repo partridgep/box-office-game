@@ -4,7 +4,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
 import { library, IconProp } from "@fortawesome/fontawesome-svg-core";
 
-import { getAdminStats } from "../../services/admin.service";
+import {
+  getAdminJobRuns,
+  getAdminStats,
+} from "../../services/admin.service";
 import {
   getCategories,
   createCategory,
@@ -15,7 +18,12 @@ import {
   updateAllMovies,
 } from "../../services/movies.service";
 import { useMovieStore } from "../../store/useMovieStore";
-import { AdminEngagementStats, Category, MovieData } from "../../types";
+import {
+  AdminEngagementStats,
+  Category,
+  JobRun,
+  MovieData,
+} from "../../types";
 
 library.add({ faArrowsRotate });
 
@@ -88,6 +96,68 @@ function formatSparkDay(day: string) {
     day: "numeric",
     timeZone: "UTC",
   });
+}
+
+function formatRunWhen(value: string | null | undefined) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDuration(startedAt: string, finishedAt: string | null) {
+  if (!finishedAt) return "running";
+  const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  const rem = sec % 60;
+  return `${min}m ${rem}s`;
+}
+
+function jobStatusClass(status: string) {
+  switch (status) {
+    case "success":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+    case "partial":
+      return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+    case "failed":
+      return "border-rose-500/40 bg-rose-500/10 text-rose-300";
+    case "running":
+      return "border-sky-500/40 bg-sky-500/10 text-sky-300";
+    default:
+      return "border-cinema-700 bg-cinema-900 text-stone-300";
+  }
+}
+
+function summarizeRun(run: JobRun) {
+  const s = run.summary;
+  if (!s) return "No summary";
+  const marketFailed = s.territoryMarketsFailed ?? 0;
+  const marketScraped = s.territoryMarketsScraped ?? 0;
+  const marketDue = s.territoryMarketsDue ?? 0;
+  const parts = [
+    `${s.moviesUpdated ?? 0}/${s.moviesTotal ?? "?"} metadata`,
+    `${s.boxOfficeRefreshed ?? 0} domestic history`,
+  ];
+  if (marketDue > 0 || marketScraped > 0 || marketFailed > 0) {
+    parts.push(`${marketScraped}/${marketDue} foreign history`);
+    if (marketFailed > 0) parts.push(`${marketFailed} foreign fails`);
+  } else {
+    parts.push(`${s.territoriesRefreshed ?? 0} foreign history`);
+  }
+  const failed =
+    (s.moviesFailed ?? 0) +
+    (s.boxOfficeFailed ?? 0) +
+    (s.territoriesFailed ?? 0);
+  if (failed > 0 && marketFailed === 0) parts.push(`${failed} failed`);
+  return parts.join(" · ");
 }
 
 function GuessesSparkline({
@@ -186,6 +256,10 @@ export default function AdminHome() {
   const [stats, setStats] = useState<AdminEngagementStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [jobRuns, setJobRuns] = useState<JobRun[]>([]);
+  const [jobRunsError, setJobRunsError] = useState<string | null>(null);
+  const [jobRunsLoading, setJobRunsLoading] = useState(true);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -285,6 +359,21 @@ export default function AdminHome() {
     loadCategories();
   }, []);
 
+  async function loadJobRuns() {
+    setJobRunsLoading(true);
+    setJobRunsError(null);
+    try {
+      const runs = await getAdminJobRuns({ job: "movie_refresh", limit: 10 });
+      setJobRuns(runs);
+    } catch (err) {
+      setJobRunsError(
+        err instanceof Error ? err.message : "Failed to load job runs"
+      );
+    } finally {
+      setJobRunsLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     setStatsLoading(true);
@@ -306,6 +395,10 @@ export default function AdminHome() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    void loadJobRuns();
   }, []);
 
   useEffect(() => {
@@ -377,8 +470,10 @@ export default function AdminHome() {
       await updateAllMovies();
       const updatedMovies = await getSavedMovies();
       setMovies(updatedMovies);
+      await loadJobRuns();
     } catch (error) {
       console.error("Error updating movies:", error);
+      await loadJobRuns();
     } finally {
       setIsUpdating(false);
     }
@@ -447,11 +542,7 @@ export default function AdminHome() {
         <div>
           <h1 className="text-2xl font-bold text-white">Admin</h1>
           <p className="text-sm text-stone-400 mt-1">
-            Find a movie or jump into a category. Press{" "}
-            <kbd className="rounded border border-cinema-700 bg-cinema-950 px-1.5 py-0.5 text-xs text-stone-300">
-              /
-            </kbd>{" "}
-            to focus search.
+            Ops overview — engagement, data refreshes, and movie tools.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -589,12 +680,198 @@ export default function AdminHome() {
         ) : null}
       </section>
 
+      <section className="space-y-3" aria-labelledby="job-runs-heading">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2
+            id="job-runs-heading"
+            className="text-sm font-semibold uppercase tracking-wider text-stone-300"
+          >
+            Server runs
+          </h2>
+          <p className="text-[11px] text-stone-500">
+            Nightly cron + Update all · metadata, then domestic/foreign history
+            scrapes
+          </p>
+        </div>
+        <p className="text-[11px] text-stone-500 leading-snug">
+          Counts are scrape outcomes for this run—not opening or final gross
+          figures. Domestic = US weekly/weekend history; foreign = per-territory
+          weekend history.
+        </p>
+
+        {jobRunsLoading ? (
+          <p className="text-sm text-stone-500">Loading runs…</p>
+        ) : jobRunsError ? (
+          <p className="text-sm text-rose-300" role="alert">
+            {jobRunsError}
+          </p>
+        ) : jobRuns.length === 0 ? (
+          <p className="text-sm text-stone-500">
+            No recorded runs yet. Trigger Update all data or wait for the nightly
+            cron.
+          </p>
+        ) : (
+          <ul className="rounded-xl border border-cinema-800 divide-y divide-cinema-800/80 overflow-hidden">
+            {jobRuns.map((run) => {
+              const expanded = expandedRunId === run.id;
+              const errors = run.summary?.errors ?? [];
+              return (
+                <li key={run.id} className="bg-cinema-950/40">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedRunId((id) => (id === run.id ? null : run.id))
+                    }
+                    aria-expanded={expanded}
+                    className="w-full flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left hover:bg-cinema-900/50"
+                  >
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${jobStatusClass(run.status)}`}
+                    >
+                      {run.status}
+                    </span>
+                    <span className="text-xs text-stone-400 capitalize">
+                      {run.trigger || "unknown"}
+                    </span>
+                    <span className="text-xs text-stone-300">
+                      {formatRunWhen(run.startedAt)}
+                    </span>
+                    <span className="text-xs text-stone-500">
+                      {formatDuration(run.startedAt, run.finishedAt)}
+                    </span>
+                    <span className="min-w-0 flex-1 text-xs text-stone-400 truncate">
+                      {summarizeRun(run)}
+                    </span>
+                    <span className="text-[11px] text-stone-500">
+                      {expanded ? "Hide" : errors.length ? `Errors (${errors.length})` : "Details"}
+                    </span>
+                  </button>
+                  {expanded && (
+                    <div className="border-t border-cinema-800/60 px-3 py-3 space-y-2 bg-cinema-900/30">
+                      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <dt className="text-stone-500">Metadata updated</dt>
+                          <dd className="tabular-nums text-stone-200">
+                            {run.summary?.moviesUpdated ?? 0}
+                            <span className="text-stone-500">
+                              {" "}
+                              / {run.summary?.moviesTotal ?? "—"}
+                            </span>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-stone-500">Metadata failed</dt>
+                          <dd className="tabular-nums text-stone-200">
+                            {run.summary?.moviesFailed ?? 0}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-stone-500">Domestic history</dt>
+                          <dd className="tabular-nums text-stone-200">
+                            {run.summary?.boxOfficeRefreshed ?? 0} scraped
+                            {(run.summary?.boxOfficeFailed ?? 0) > 0
+                              ? ` · ${run.summary?.boxOfficeFailed} fail`
+                              : ""}
+                            {(run.summary?.boxOfficeSkipped ?? 0) > 0 ? (
+                              <span className="block text-[11px] text-stone-500">
+                                {run.summary?.boxOfficeSkipped} skipped (not
+                                in-release)
+                              </span>
+                            ) : null}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-stone-500">Foreign history</dt>
+                          <dd className="tabular-nums text-stone-200">
+                            {(run.summary?.territoryMarketsDue ?? 0) > 0 ||
+                            (run.summary?.territoryMarketsFailed ?? 0) > 0 ? (
+                              <>
+                                {run.summary?.territoryMarketsScraped ?? 0}/
+                                {run.summary?.territoryMarketsDue ?? 0}{" "}
+                                territories scraped
+                                {(run.summary?.territoryMarketsFailed ?? 0) > 0
+                                  ? ` · ${run.summary?.territoryMarketsFailed} fail`
+                                  : ""}
+                                <span className="block text-[11px] text-stone-500">
+                                  Across{" "}
+                                  {run.summary?.territoriesRefreshed ?? 0} movie
+                                  {(run.summary?.territoriesRefreshed ?? 0) === 1
+                                    ? ""
+                                    : "s"}
+                                  {(run.summary?.territoriesFailed ?? 0) > 0
+                                    ? ` · ${run.summary?.territoriesFailed} with errors`
+                                    : ""}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                {run.summary?.territoriesRefreshed ?? 0} movies
+                                scraped
+                                {(run.summary?.territoriesFailed ?? 0) > 0
+                                  ? ` · ${run.summary?.territoriesFailed} fail`
+                                  : ""}
+                              </>
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
+                      {errors.length === 0 ? (
+                        <p className="text-xs text-stone-500">No errors logged.</p>
+                      ) : (
+                        <ul className="space-y-1 max-h-48 overflow-y-auto">
+                          {errors.map((err, index) => (
+                            <li
+                              key={`${run.id}-err-${index}`}
+                              className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 text-xs text-rose-100"
+                            >
+                              <span className="text-rose-300/80">{err.stage}</span>
+                              {err.title ? (
+                                <span className="text-stone-300">
+                                  {" "}
+                                  · {err.title}
+                                </span>
+                              ) : null}
+                              <span className="block text-stone-400 mt-0.5">
+                                {err.message}
+                              </span>
+                            </li>
+                          ))}
+                          {run.summary?.errorsTruncated ? (
+                            <li className="text-[11px] text-stone-500">
+                              Additional errors were truncated.
+                            </li>
+                          ) : null}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="space-y-4" aria-labelledby="catalog-heading">
+        <div>
+          <h2
+            id="catalog-heading"
+            className="text-sm font-semibold uppercase tracking-wider text-stone-300"
+          >
+            Catalog
+          </h2>
+          <p className="text-xs text-stone-500 mt-1">
+            Browse categories or open a movie to edit metadata, comps, and
+            history.
+          </p>
+        </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-8">
         <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-300">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-300">
               Categories
-            </h2>
+            </h3>
             <button
               type="button"
               onClick={() => setShowNewCategory((o) => !o)}
@@ -687,9 +964,17 @@ export default function AdminHome() {
 
         <main className="space-y-4 min-w-0">
           <div className="space-y-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-300">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-300">
               Find movie
-            </h2>
+            </h3>
+            <p className="text-xs text-stone-500">
+              Press{" "}
+              <kbd className="rounded border border-cinema-700 bg-cinema-950 px-1.5 py-0.5 text-[11px] text-stone-300">
+                /
+              </kbd>{" "}
+              to focus search. Database filters as you type; ↑↓ then Enter opens
+              a row. Shift+Enter or Search TMDB queries the API.
+            </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <label className="flex-1">
                 <span className="sr-only">Search movies</span>
@@ -729,10 +1014,6 @@ export default function AdminHome() {
                 {tmdbSearching ? "Searching…" : "Search TMDB"}
               </button>
             </div>
-            <p className="text-xs text-stone-500">
-              Database filters as you type. ↑↓ then Enter opens a row. Shift+Enter
-              or Search TMDB queries the API.
-            </p>
           </div>
 
           {tmdbError && (
@@ -930,6 +1211,7 @@ export default function AdminHome() {
           )}
         </main>
       </div>
+      </section>
     </div>
   );
 }

@@ -115,12 +115,16 @@ const updateMovie = async (req, res) => {
 const updateAllMovies = async (req, res) => {
   console.log("Manual request: refreshing movies...");
 
-  const result = await runMovieRefresh();
+  const result = await runMovieRefresh({ trigger: 'manual' });
   console.log(result)
   if (result.success) {
     res.status(200).json({ message: 'Movies refreshed successfully.', data: result });
   } else {
-    res.status(500).json({ message: "Failed to refresh movies.", error: result.error });
+    res.status(500).json({
+      message: "Failed to refresh movies.",
+      error: result.error,
+      data: result,
+    });
   }
 };
 
