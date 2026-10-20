@@ -70,7 +70,12 @@ const getAllGuessesForMovie = async (req, res) => {
   }
 
   try {
-    const guesses = await fetchAllGuessesForMovie(movie_id, req.user?.id);
+    // Admin tooling passes full=1 to include guesser identities (no auth gate yet).
+    const includeIdentities =
+      req.query.full === '1' || req.query.full === 'true';
+    const guesses = await fetchAllGuessesForMovie(movie_id, req.user?.id, {
+      includeIdentities,
+    });
     res.status(200).json({
         status: 200,
         message: "Fetched guesses for movie",

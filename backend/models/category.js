@@ -14,10 +14,15 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'category_id',
         as: 'memberships',
       });
+      Category.hasMany(models.MovieBorrowedCategory, {
+        foreignKey: 'category_id',
+        as: 'borrowedByMovies',
+      });
       Category.hasMany(models.MovieCompGroup, {
         foreignKey: 'category_id',
         as: 'compGroups',
       });
+
     }
   }
 

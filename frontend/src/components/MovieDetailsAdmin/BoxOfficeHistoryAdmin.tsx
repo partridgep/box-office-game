@@ -257,11 +257,12 @@ export default function BoxOfficeHistoryAdmin({ movieId, bomReleaseId }: BoxOffi
             href={`https://www.boxofficemojo.com/release/${bomReleaseId}/weekly/`}
             target="_blank"
             rel="noreferrer"
+            className="text-cinema-400 hover:text-cinema-300 underline-offset-2 hover:underline"
           >
             {bomReleaseId}
           </a>
         ) : (
-          'not set (run Update Data)'
+          'not set (run Update data)'
         )}
       </p>
       {bomReleaseId && (

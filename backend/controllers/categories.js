@@ -10,6 +10,10 @@ const {
   getLobbySections,
   getCompGroupsForMovie,
   replaceCompGroupsForMovie,
+  getCategoryMembershipsForMovie,
+  setCategoryMembershipsForMovie,
+  getBorrowedCategoriesForMovie,
+  setBorrowedCategoriesForMovie,
 } = require('../services/categoryService');
 
 const getCategories = async (req, res) => {
@@ -105,6 +109,66 @@ const putMovieCompGroups = async (req, res) => {
   }
 };
 
+const getMovieCategoryMemberships = async (req, res) => {
+  try {
+    const links = await getCategoryMembershipsForMovie(req.params.movieId);
+    res.status(200).json(links);
+  } catch (error) {
+    const status = error.message === 'Movie not found' ? 404 : 500;
+    res.status(status).json({
+      error: error.message || 'Failed to load category memberships',
+    });
+  }
+};
+
+const putMovieCategoryMemberships = async (req, res) => {
+  try {
+    const categoryIds = Array.isArray(req.body)
+      ? req.body
+      : req.body?.categoryIds;
+    const links = await setCategoryMembershipsForMovie(
+      req.params.movieId,
+      categoryIds
+    );
+    res.status(200).json(links);
+  } catch (error) {
+    const status = error.message === 'Movie not found' ? 404 : 400;
+    res.status(status).json({
+      error: error.message || 'Failed to update category memberships',
+    });
+  }
+};
+
+const getMovieBorrowedCategories = async (req, res) => {
+  try {
+    const links = await getBorrowedCategoriesForMovie(req.params.movieId);
+    res.status(200).json(links);
+  } catch (error) {
+    const status = error.message === 'Movie not found' ? 404 : 500;
+    res.status(status).json({
+      error: error.message || 'Failed to load borrowed categories',
+    });
+  }
+};
+
+const putMovieBorrowedCategories = async (req, res) => {
+  try {
+    const categoryIds = Array.isArray(req.body)
+      ? req.body
+      : req.body?.categoryIds;
+    const links = await setBorrowedCategoriesForMovie(
+      req.params.movieId,
+      categoryIds
+    );
+    res.status(200).json(links);
+  } catch (error) {
+    const status = error.message === 'Movie not found' ? 404 : 400;
+    res.status(status).json({
+      error: error.message || 'Failed to update borrowed categories',
+    });
+  }
+};
+
 module.exports = {
   getCategories,
   getCategory,
@@ -115,4 +179,8 @@ module.exports = {
   getLobby,
   getMovieCompGroups,
   putMovieCompGroups,
+  getMovieCategoryMemberships,
+  putMovieCategoryMemberships,
+  getMovieBorrowedCategories,
+  putMovieBorrowedCategories,
 };

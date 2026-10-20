@@ -79,7 +79,11 @@ const fetchGuessesForUser = async (user_id) => {
  * keep their identity and are flagged; everyone else's are anonymized so the endpoint can't be used to
  * scrape who guessed what.
  */
-const fetchAllGuessesForMovie = async (movie_id, viewerId) => {
+const fetchAllGuessesForMovie = async (
+  movie_id,
+  viewerId,
+  { includeIdentities = false } = {}
+) => {
 
   try {
     if (!movie_id) {
@@ -96,6 +100,7 @@ const fetchAllGuessesForMovie = async (movie_id, viewerId) => {
             attributes: ["id", "name", "short_id"],
           },
         ],
+        order: [['createdAt', 'DESC']],
       }),
       viewerId
         ? Follow.findAll({
@@ -113,9 +118,10 @@ const fetchAllGuessesForMovie = async (movie_id, viewerId) => {
       const is_viewer = viewerId != null && String(user_id) === String(viewerId);
       const is_friend = !is_viewer && followingIds.has(String(user_id));
 
-      return is_viewer || is_friend
-        ? { ...rest, user_id, guess_user, is_viewer, is_friend }
-        : { ...rest, is_viewer, is_friend };
+      if (includeIdentities || is_viewer || is_friend) {
+        return { ...rest, user_id, guess_user, is_viewer, is_friend };
+      }
+      return { ...rest, is_viewer, is_friend };
     });
 
    } catch (error) {

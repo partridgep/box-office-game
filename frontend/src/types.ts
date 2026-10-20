@@ -167,9 +167,28 @@ export type CompGroup = {
   label: string | null;
   categoryId: string | null;
   sortOrder: number;
-  source?: "category" | "manual";
+  source?: "category" | "manual" | "borrowed";
   movies: CompMovie[];
 };
+
+export type MovieCategoryLink = {
+  id: string;
+  movieId: string;
+  categoryId: string;
+  sortOrder: number;
+  category: Pick<
+    Category,
+    | "id"
+    | "slug"
+    | "lobby_label"
+    | "comp_label"
+    | "sort_order"
+    | "is_active"
+    | "display_in_lobby"
+  > | null;
+};
+
+export type BorrowedCategoryLink = MovieCategoryLink;
 
 export type BoxOfficePoint = {
   period: number | null;

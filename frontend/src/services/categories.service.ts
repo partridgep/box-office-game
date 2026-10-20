@@ -1,8 +1,10 @@
 import {
+  BorrowedCategoryLink,
   Category,
   CompGroup,
   CompGroupInput,
   LobbySection,
+  MovieCategoryLink,
 } from "../types";
 
 export const getCategories = async (): Promise<Category[]> => {
@@ -111,6 +113,59 @@ export const replaceCompGroups = async (
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || "Failed to update comp groups");
+  }
+  return response.json();
+};
+
+export const getMovieCategoryMemberships = async (
+  movieId: string
+): Promise<MovieCategoryLink[]> => {
+  const response = await fetch(`/api/movies/${movieId}/categories`);
+  if (!response.ok) throw new Error("Failed to fetch category memberships");
+  return response.json();
+};
+
+export const setMovieCategoryMemberships = async (
+  movieId: string,
+  categoryIds: string[]
+): Promise<MovieCategoryLink[]> => {
+  const response = await fetch(`/api/movies/${movieId}/categories`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ categoryIds }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to update category memberships");
+  }
+  return response.json();
+};
+
+export const getBorrowedCategories = async (
+  movieId: string
+): Promise<BorrowedCategoryLink[]> => {
+  const response = await fetch(
+    `/api/movies/${movieId}/borrowed-categories`
+  );
+  if (!response.ok) throw new Error("Failed to fetch borrowed categories");
+  return response.json();
+};
+
+export const setBorrowedCategories = async (
+  movieId: string,
+  categoryIds: string[]
+): Promise<BorrowedCategoryLink[]> => {
+  const response = await fetch(
+    `/api/movies/${movieId}/borrowed-categories`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryIds }),
+    }
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to update borrowed categories");
   }
   return response.json();
 };

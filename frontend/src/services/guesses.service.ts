@@ -45,5 +45,12 @@ export const getGuessFromId = async (guess_id: string) => {
 };
 
 /** Sends the JWT when present so the server can flag friends' guesses; strangers' guesses come back anonymized. */
-export const getAllGuessesForMovie = (movie_id: string) =>
-  apiClient<{ data: Guess[] }>(`/api/guesses/movie_id/${movie_id}`);
+export const getAllGuessesForMovie = (
+  movie_id: string,
+  opts?: { full?: boolean }
+) => {
+  const params = opts?.full ? "?full=1" : "";
+  return apiClient<{ data: Guess[] }>(
+    `/api/guesses/movie_id/${movie_id}${params}`
+  );
+};

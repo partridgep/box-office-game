@@ -44,6 +44,10 @@ const {
     getLobby,
     getMovieCompGroups,
     putMovieCompGroups,
+    getMovieCategoryMemberships,
+    putMovieCategoryMemberships,
+    getMovieBorrowedCategories,
+    putMovieBorrowedCategories,
 } = require('../controllers/categories');
 
 const router = express.Router();
@@ -66,6 +70,10 @@ router.delete('/categories/:id', removeCategory);
 router.put('/categories/:id/movies', putCategoryMovies);
 router.get('/movies/:movieId/comp-groups', getMovieCompGroups);
 router.put('/movies/:movieId/comp-groups', putMovieCompGroups);
+router.get('/movies/:movieId/categories', getMovieCategoryMemberships);
+router.put('/movies/:movieId/categories', putMovieCategoryMemberships);
+router.get('/movies/:movieId/borrowed-categories', getMovieBorrowedCategories);
+router.put('/movies/:movieId/borrowed-categories', putMovieBorrowedCategories);
 router.get('/movies/:movieId/box-office', getMovieBoxOffice);
 router.post('/movies/:movieId/box-office/refresh', refreshMovieBoxOffice);
 router.post('/movies/:movieId/box-office/international/refresh', refreshMovieInternationalBoxOffice);

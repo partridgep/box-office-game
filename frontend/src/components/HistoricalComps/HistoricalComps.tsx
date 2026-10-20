@@ -397,8 +397,8 @@ export default function HistoricalComps({
 
       {!hadReleasedComps ? (
         <p className="text-sm text-stone-500">
-          No comps yet. Add this movie to a category with other titles, or curate
-          comps in admin.
+          No comps yet. Add this movie to a category, borrow another category, or
+          curate comps in admin.
         </p>
       ) : !hasComps ? (
         <p className="text-sm text-stone-500">

@@ -14,6 +14,7 @@ import {
   FriendComparison,
 } from "../../components/GuessComparisonCards/GuessComparisonCards";
 import BoxOfficeJourneyChart from "../../components/BoxOfficeJourney/BoxOfficeJourneyChart";
+import VersusComps from "../../components/VersusComps/VersusComps";
 import SocialProof from "../../components/SocialProof/SocialProof";
 import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
@@ -344,6 +345,13 @@ export default function MovieDetails() {
                 userFinalInternationalPrediction={loggedGuess.final_international}
               />
             </section>
+
+            <VersusComps
+              movie={movie}
+              userGuess={loggedGuess}
+              groups={compGroups}
+              className={resultsPanel}
+            />
 
             <section
               className={`${resultsPanel} -mx-3 sm:mx-0 sm:overflow-hidden sm:p-0`}

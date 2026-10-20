@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  createCategory,
+  getBorrowedCategories,
   getCategories,
   getCompGroups,
+  getMovieCategoryMemberships,
   replaceCompGroups,
+  setBorrowedCategories,
+  setMovieCategoryMemberships,
 } from "../../services/categories.service";
 import { getSavedMovies } from "../../services/movies.service";
 import {
@@ -28,6 +33,10 @@ function newKey() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function categoryLabel(cat: Category) {
+  return cat.comp_label || cat.lobby_label || cat.slug;
+}
+
 export default function MovieCompsAdmin() {
   const { tmdbID } = useParams<{ tmdbID: string }>();
   const navigate = useNavigate();
@@ -35,6 +44,15 @@ export default function MovieCompsAdmin() {
   const [allMovies, setAllMovies] = useState<MovieData[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [groups, setGroups] = useState<DraftGroup[]>([]);
+  const [memberCategoryIds, setMemberCategoryIds] = useState<string[]>([]);
+  const [memberAddId, setMemberAddId] = useState("");
+  const [borrowedCategoryIds, setBorrowedCategoryIds] = useState<string[]>([]);
+  const [borrowAddId, setBorrowAddId] = useState("");
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newLobbyLabel, setNewLobbyLabel] = useState("");
+  const [newCompLabel, setNewCompLabel] = useState("");
+  const [newDisplayInLobby, setNewDisplayInLobby] = useState(true);
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,11 +73,16 @@ export default function MovieCompsAdmin() {
         setCategories(cats);
 
         const found =
-          movies.find((m) => String(m.tmdbID) === String(tmdbID)) || null;
+          movies.find((m: MovieData) => String(m.tmdbID) === String(tmdbID)) ||
+          null;
         setSubject(found);
 
         if (found?.id) {
-          const existing = await getCompGroups(found.id, { manualOnly: true });
+          const [existing, memberships, borrowed] = await Promise.all([
+            getCompGroups(found.id, { manualOnly: true }),
+            getMovieCategoryMemberships(found.id),
+            getBorrowedCategories(found.id),
+          ]);
           setGroups(
             existing.map((group) => ({
               key: group.id || newKey(),
@@ -71,6 +94,8 @@ export default function MovieCompsAdmin() {
               })),
             }))
           );
+          setMemberCategoryIds(memberships.map((link) => link.categoryId));
+          setBorrowedCategoryIds(borrowed.map((link) => link.categoryId));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load comps");
@@ -100,6 +125,119 @@ export default function MovieCompsAdmin() {
       )
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [allMovies, search, subject?.id]);
+
+  const categoryById = useMemo(() => {
+    const map = new Map<string, Category>();
+    for (const cat of categories) map.set(cat.id, cat);
+    return map;
+  }, [categories]);
+
+  const joinableCategories = useMemo(
+    () =>
+      categories
+        .filter((cat) => !memberCategoryIds.includes(cat.id))
+        .sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b))),
+    [categories, memberCategoryIds]
+  );
+
+  const borrowableCategories = useMemo(
+    () =>
+      categories
+        .filter(
+          (cat) =>
+            !borrowedCategoryIds.includes(cat.id) &&
+            !memberCategoryIds.includes(cat.id)
+        )
+        .sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b))),
+    [categories, borrowedCategoryIds, memberCategoryIds]
+  );
+
+  function addMemberCategory() {
+    if (!memberAddId) return;
+    setMemberCategoryIds((prev) =>
+      prev.includes(memberAddId) ? prev : [...prev, memberAddId]
+    );
+    // Membership supersedes borrow for the same category.
+    setBorrowedCategoryIds((prev) => prev.filter((id) => id !== memberAddId));
+    setMemberAddId("");
+  }
+
+  function removeMemberCategory(categoryId: string) {
+    setMemberCategoryIds((prev) => prev.filter((id) => id !== categoryId));
+  }
+
+  async function handleCreateCategory(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newLobbyLabel.trim() && !newCompLabel.trim()) {
+      setError("Provide a lobby label and/or comp label");
+      return;
+    }
+    setCreatingCategory(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const created = await createCategory({
+        lobby_label: newLobbyLabel.trim() || null,
+        comp_label: newCompLabel.trim() || null,
+        display_in_lobby: newDisplayInLobby,
+      });
+      setCategories((prev) =>
+        [...prev, created].sort(
+          (a, b) =>
+            (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+            categoryLabel(a).localeCompare(categoryLabel(b))
+        )
+      );
+      setMemberCategoryIds((prev) =>
+        prev.includes(created.id) ? prev : [...prev, created.id]
+      );
+      setBorrowedCategoryIds((prev) =>
+        prev.filter((id) => id !== created.id)
+      );
+      setNewLobbyLabel("");
+      setNewCompLabel("");
+      setNewDisplayInLobby(true);
+      setShowNewCategory(false);
+      setMessage(
+        `Created "${categoryLabel(created)}" and added this movie as a member (save to persist membership)`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to create category"
+      );
+    } finally {
+      setCreatingCategory(false);
+    }
+  }
+
+  function addBorrowedCategory() {
+    if (!borrowAddId) return;
+    if (memberCategoryIds.includes(borrowAddId)) {
+      setBorrowAddId("");
+      return;
+    }
+    setBorrowedCategoryIds((prev) =>
+      prev.includes(borrowAddId) ? prev : [...prev, borrowAddId]
+    );
+    setBorrowAddId("");
+  }
+
+  function removeBorrowedCategory(categoryId: string) {
+    setBorrowedCategoryIds((prev) => prev.filter((id) => id !== categoryId));
+  }
+
+  function moveBorrowedCategory(categoryId: string, direction: -1 | 1) {
+    setBorrowedCategoryIds((prev) => {
+      const index = prev.indexOf(categoryId);
+      if (index < 0) return prev;
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(index, 1);
+      next.splice(nextIndex, 0, item);
+      return next;
+    });
+  }
 
   function addGroup() {
     setGroups((prev) => [
@@ -189,7 +327,17 @@ export default function MovieCompsAdmin() {
           reason: item.reason.trim() || null,
         })),
       }));
-      const saved = await replaceCompGroups(subject.id, payload);
+      // Memberships first so borrowed save can drop overlapping category ids.
+      const memberships = await setMovieCategoryMemberships(
+        subject.id,
+        memberCategoryIds
+      );
+      setMemberCategoryIds(memberships.map((link) => link.categoryId));
+
+      const [saved, borrowed] = await Promise.all([
+        replaceCompGroups(subject.id, payload),
+        setBorrowedCategories(subject.id, borrowedCategoryIds),
+      ]);
       setGroups(
         saved.map((group) => ({
           key: group.id || newKey(),
@@ -201,7 +349,8 @@ export default function MovieCompsAdmin() {
           })),
         }))
       );
-      setMessage("Comp groups saved");
+      setBorrowedCategoryIds(borrowed.map((link) => link.categoryId));
+      setMessage("Comps saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save comps");
     } finally {
@@ -240,9 +389,8 @@ export default function MovieCompsAdmin() {
             Comps · {subject.title}
           </h1>
           <p className="text-sm text-stone-400 mt-1">
-            Curate extra comps here. Movies that share a category with this title
-            already appear automatically on the movie page (using the category&apos;s
-            comp label).
+            Join categories for lobby + peer comps, borrow categories for comps
+            only, or curate manual groups below.
           </p>
         </div>
         <button
@@ -265,14 +413,253 @@ export default function MovieCompsAdmin() {
         </div>
       )}
 
+      <section
+        className="rounded-2xl border border-cinema-800 bg-cinema-900/60 p-5 space-y-4"
+        aria-labelledby="member-categories-heading"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2
+              id="member-categories-heading"
+              className="text-sm font-semibold uppercase tracking-wider text-stone-300"
+            >
+              Category memberships
+            </h2>
+            <p className="text-sm text-stone-500 mt-1">
+              Add this movie to a category. It appears in that lobby section (when
+              enabled) and other members show as comps here. Order within a
+              category is edited on the category admin page.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowNewCategory((open) => !open)}
+            aria-expanded={showNewCategory}
+            className="rounded-xl border border-cinema-700 px-4 py-2 text-sm text-stone-200 hover:border-cinema-500"
+          >
+            {showNewCategory ? "Cancel" : "New Category"}
+          </button>
+        </div>
+
+        {showNewCategory && (
+          <form
+            onSubmit={handleCreateCategory}
+            className="rounded-xl border border-cinema-800 bg-cinema-950/50 p-4 space-y-3"
+          >
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+              Create category
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="text-stone-400">Lobby label</span>
+                <input
+                  value={newLobbyLabel}
+                  onChange={(e) => setNewLobbyLabel(e.target.value)}
+                  placeholder="MCU movies"
+                  className="w-full rounded-xl bg-cinema-950 border border-cinema-800 px-3 py-2 text-stone-100 outline-none focus:border-cinema-500"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-stone-400">Comp label</span>
+                <input
+                  value={newCompLabel}
+                  onChange={(e) => setNewCompLabel(e.target.value)}
+                  placeholder="Recent MCU movies"
+                  className="w-full rounded-xl bg-cinema-950 border border-cinema-800 px-3 py-2 text-stone-100 outline-none focus:border-cinema-500"
+                />
+              </label>
+            </div>
+            <label className="inline-flex items-start gap-2 text-sm text-stone-300">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={newDisplayInLobby}
+                onChange={(e) => setNewDisplayInLobby(e.target.checked)}
+              />
+              <span>
+                Display in Lobby
+                <span className="block text-xs text-stone-500 font-normal">
+                  Off hides this section in the lobby; comps stay active.
+                </span>
+              </span>
+            </label>
+            <button
+              type="submit"
+              disabled={creatingCategory}
+              className="rounded-xl bg-cinema-600 hover:bg-cinema-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-white"
+            >
+              {creatingCategory ? "Creating..." : "Create & add membership"}
+            </button>
+          </form>
+        )}
+
+        {memberCategoryIds.length === 0 ? (
+          <p className="text-sm text-stone-500">Not a member of any category.</p>
+        ) : (
+          <ul className="space-y-2">
+            {memberCategoryIds.map((categoryId) => {
+              const cat = categoryById.get(categoryId);
+              const label = cat ? categoryLabel(cat) : categoryId;
+              return (
+                <li
+                  key={categoryId}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-cinema-800 bg-cinema-950/50 px-3 py-2"
+                >
+                  <p className="text-sm text-stone-100">
+                    {label}
+                    {cat?.slug ? (
+                      <span className="text-stone-500"> · {cat.slug}</span>
+                    ) : null}
+                  </p>
+                  <div className="flex gap-1">
+                    <Link
+                      to={`/admin/categories/${categoryId}`}
+                      className="text-xs px-2 py-1 rounded border border-cinema-700 text-stone-200 hover:border-cinema-500"
+                    >
+                      View
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => removeMemberCategory(categoryId)}
+                      className="text-xs px-2 py-1 rounded border border-rose-500/40 text-rose-300"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <label className="flex-1 space-y-1 text-sm">
+            <span className="sr-only">Category to join</span>
+            <select
+              value={memberAddId}
+              onChange={(e) => setMemberAddId(e.target.value)}
+              className="w-full rounded-xl bg-cinema-950 border border-cinema-800 px-3 py-2 text-stone-100 outline-none focus:border-cinema-500"
+            >
+              <option value="">Select a category…</option>
+              {joinableCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {categoryLabel(cat)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={addMemberCategory}
+            disabled={!memberAddId}
+            className="rounded-xl border border-cinema-700 px-4 py-2 text-sm text-stone-200 hover:border-cinema-500 disabled:opacity-50"
+          >
+            Add to category
+          </button>
+        </div>
+      </section>
+
+      <section
+        className="rounded-2xl border border-cinema-800 bg-cinema-900/60 p-5 space-y-4"
+        aria-labelledby="borrowed-categories-heading"
+      >
+        <div>
+          <h2
+            id="borrowed-categories-heading"
+            className="text-sm font-semibold uppercase tracking-wider text-stone-300"
+          >
+            Borrowed categories
+          </h2>
+          <p className="text-sm text-stone-500 mt-1">
+            Show another category&apos;s members as comps on this movie without
+            joining that category (so it stays out of their lobby section and
+            peer lists).
+          </p>
+        </div>
+
+        {borrowedCategoryIds.length === 0 ? (
+          <p className="text-sm text-stone-500">No borrowed categories yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {borrowedCategoryIds.map((categoryId) => {
+              const cat = categoryById.get(categoryId);
+              const label = cat ? categoryLabel(cat) : categoryId;
+              return (
+                <li
+                  key={categoryId}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-cinema-800 bg-cinema-950/50 px-3 py-2"
+                >
+                  <p className="text-sm text-stone-100">
+                    {label}
+                    {cat?.slug ? (
+                      <span className="text-stone-500"> · {cat.slug}</span>
+                    ) : null}
+                  </p>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveBorrowedCategory(categoryId, -1)}
+                      className="text-xs px-2 py-1 rounded border border-cinema-700"
+                      aria-label={`Move ${label} up`}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveBorrowedCategory(categoryId, 1)}
+                      className="text-xs px-2 py-1 rounded border border-cinema-700"
+                      aria-label={`Move ${label} down`}
+                    >
+                      ↓
+                    </button>
+                    <Link
+                      to={`/admin/categories/${categoryId}`}
+                      className="text-xs px-2 py-1 rounded border border-cinema-700 text-stone-200 hover:border-cinema-500"
+                    >
+                      View
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => removeBorrowedCategory(categoryId)}
+                      className="text-xs px-2 py-1 rounded border border-rose-500/40 text-rose-300"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <label className="flex-1 space-y-1 text-sm">
+            <span className="sr-only">Category to borrow</span>
+            <select
+              value={borrowAddId}
+              onChange={(e) => setBorrowAddId(e.target.value)}
+              className="w-full rounded-xl bg-cinema-950 border border-cinema-800 px-3 py-2 text-stone-100 outline-none focus:border-cinema-500"
+            >
+              <option value="">Select a category…</option>
+              {borrowableCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {categoryLabel(cat)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={addBorrowedCategory}
+            disabled={!borrowAddId}
+            className="rounded-xl border border-cinema-700 px-4 py-2 text-sm text-stone-200 hover:border-cinema-500 disabled:opacity-50"
+          >
+            Add borrowed category
+          </button>
+        </div>
+      </section>
+
       <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={addGroup}
-          className="rounded-xl border border-cinema-700 px-4 py-2 text-sm text-stone-200 hover:border-cinema-500"
-        >
-          Add group
-        </button>
         <button
           type="button"
           onClick={handleSave}
@@ -280,6 +667,19 @@ export default function MovieCompsAdmin() {
           className="rounded-xl bg-cinema-600 hover:bg-cinema-500 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-white"
         >
           {saving ? "Saving..." : "Save comps"}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-300">
+          Manual groups
+        </h2>
+        <button
+          type="button"
+          onClick={addGroup}
+          className="rounded-xl border border-cinema-700 px-4 py-2 text-sm text-stone-200 hover:border-cinema-500"
+        >
+          Add group
         </button>
       </div>
 
