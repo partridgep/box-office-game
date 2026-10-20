@@ -119,6 +119,41 @@ export type Category = {
   movies?: LobbyMovie[];
 };
 
+export type AdminDayCount = {
+  day: string;
+  count: number;
+};
+
+export type AdminTopMovie = {
+  movieId: string;
+  guessCount: number;
+  title: string;
+  tmdbID: number | string | null;
+  year: number | null;
+  poster: string | null;
+};
+
+export type AdminEngagementStats = {
+  generatedAt: string;
+  guesses: {
+    total: number;
+    today: number;
+    last7d: number;
+    last30d: number;
+    byDay: AdminDayCount[];
+  };
+  users: {
+    total: number;
+    today: number;
+    last7d: number;
+    last30d: number;
+  };
+  movies: {
+    total: number;
+    topByGuesses: AdminTopMovie[];
+  };
+};
+
 export type LobbyMovie = {
   id: string;
   tmdbID: string | number;

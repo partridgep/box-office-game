@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
 import { library, IconProp } from "@fortawesome/fontawesome-svg-core";
 
+import { getAdminStats } from "../../services/admin.service";
 import {
   getCategories,
   createCategory,
@@ -14,7 +15,7 @@ import {
   updateAllMovies,
 } from "../../services/movies.service";
 import { useMovieStore } from "../../store/useMovieStore";
-import { Category, MovieData } from "../../types";
+import { AdminEngagementStats, Category, MovieData } from "../../types";
 
 library.add({ faArrowsRotate });
 
@@ -55,12 +56,136 @@ function formatReleased(released: MovieData["released"]) {
   });
 }
 
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number | string;
+  detail?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-cinema-800 bg-cinema-900/50 px-3 py-3">
+      <p className="text-[11px] uppercase tracking-wider text-stone-500">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-stone-100">
+        {value}
+      </p>
+      {detail ? (
+        <p className="mt-0.5 text-xs text-stone-500">{detail}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function formatSparkDay(day: string) {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function GuessesSparkline({
+  days,
+}: {
+  days: AdminEngagementStats["guesses"]["byDay"];
+}) {
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const max = Math.max(0, ...days.map((d) => d.count));
+  const total = days.reduce((sum, d) => sum + d.count, 0);
+  const hovered = days.find((d) => d.day === hoveredDay) ?? null;
+
+  if (days.length === 0) {
+    return (
+      <p className="text-xs text-stone-500">No guesses in the last 14 days.</p>
+    );
+  }
+
+  const first = days[0];
+  const last = days[days.length - 1];
+  const chartMax = Math.max(1, max);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-stone-500 leading-snug">
+        Each bar is one UTC day. Height = number of guesses submitted that day.
+        Hover a bar for the exact count.
+      </p>
+      <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums text-stone-400">
+        <span>
+          {hovered
+            ? `${formatSparkDay(hovered.day)} · ${hovered.count} guess${
+                hovered.count === 1 ? "" : "es"
+              }`
+            : `${total} total in range`}
+        </span>
+        <span>Peak {max}/day</span>
+      </div>
+      <div className="flex gap-2">
+        <div
+          className="flex w-6 shrink-0 flex-col justify-between py-0.5 text-[10px] tabular-nums text-stone-500"
+          aria-hidden
+        >
+          <span>{max}</span>
+          <span>0</span>
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div
+            className="flex h-14 items-end gap-0.5 border-b border-l border-cinema-800/80 pl-0.5"
+            role="img"
+            aria-label={`Guesses per day from ${formatSparkDay(first.day)} to ${formatSparkDay(last.day)}. Peak ${max} per day.`}
+          >
+            {days.map((d) => {
+              const height =
+                d.count === 0
+                  ? 2
+                  : Math.max(6, Math.round((d.count / chartMax) * 52));
+              const isActive = hoveredDay === d.day;
+              return (
+                <button
+                  key={d.day}
+                  type="button"
+                  className={`flex-1 min-w-0 rounded-t-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-cinema-400 ${
+                    d.count === 0
+                      ? "bg-cinema-800/50"
+                      : isActive
+                        ? "bg-cinema-400"
+                        : "bg-cinema-600/80 hover:bg-cinema-500"
+                  }`}
+                  style={{ height }}
+                  aria-label={`${formatSparkDay(d.day)}: ${d.count} guesses`}
+                  onMouseEnter={() => setHoveredDay(d.day)}
+                  onMouseLeave={() => setHoveredDay(null)}
+                  onFocus={() => setHoveredDay(d.day)}
+                  onBlur={() => setHoveredDay(null)}
+                />
+              );
+            })}
+          </div>
+          <div className="flex justify-between text-[10px] text-stone-500 pl-0.5">
+            <span>{formatSparkDay(first.day)}</span>
+            <span>{formatSparkDay(last.day)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminHome() {
   const navigate = useNavigate();
   const { movies, setMovies } = useMovieStore();
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [isUpdating, setIsUpdating] = useState(false);
+  const [stats, setStats] = useState<AdminEngagementStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -158,6 +283,29 @@ export default function AdminHome() {
       }
     }
     loadCategories();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatsLoading(true);
+    setStatsError(null);
+    getAdminStats()
+      .then((data) => {
+        if (!cancelled) setStats(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setStatsError(
+            err instanceof Error ? err.message : "Failed to load stats"
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -325,6 +473,121 @@ export default function AdminHome() {
           </button>
         </div>
       </div>
+
+      <section
+        className="space-y-3"
+        aria-labelledby="engagement-heading"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <h2
+            id="engagement-heading"
+            className="text-sm font-semibold uppercase tracking-wider text-stone-300"
+          >
+            Engagement
+          </h2>
+          {stats?.generatedAt ? (
+            <p className="text-[11px] text-stone-500">
+              As of {new Date(stats.generatedAt).toLocaleString()}
+            </p>
+          ) : null}
+        </div>
+
+        {statsLoading ? (
+          <p className="text-sm text-stone-500">Loading stats…</p>
+        ) : statsError ? (
+          <p className="text-sm text-rose-300" role="alert">
+            {statsError}
+          </p>
+        ) : stats ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <StatCard
+                label="Guesses today"
+                value={stats.guesses.today}
+                detail={`${stats.guesses.last7d} / 7d · ${stats.guesses.total} total`}
+              />
+              <StatCard
+                label="Guesses · 7d"
+                value={stats.guesses.last7d}
+                detail={`${stats.guesses.last30d} in 30d`}
+              />
+              <StatCard
+                label="New users today"
+                value={stats.users.today}
+                detail={`${stats.users.last7d} / 7d · ${stats.users.total} total`}
+              />
+              <StatCard
+                label="New users · 7d"
+                value={stats.users.last7d}
+                detail={`${stats.users.last30d} in 30d`}
+              />
+              <StatCard
+                label="Users"
+                value={stats.users.total}
+              />
+              <StatCard
+                label="Movies"
+                value={stats.movies.total}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-cinema-800 bg-cinema-900/40 p-3 space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                  Guesses per day · last 14 days
+                </h3>
+                <GuessesSparkline days={stats.guesses.byDay} />
+              </div>
+
+              <div className="rounded-xl border border-cinema-800 bg-cinema-900/40 p-3 space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                  Top movies by guesses
+                </h3>
+                <p className="text-[11px] text-stone-500">
+                  Upcoming + released in the last 7 days
+                </p>
+                {stats.movies.topByGuesses.length === 0 ? (
+                  <p className="text-xs text-stone-500">
+                    No guesses on recent or upcoming titles.
+                  </p>
+                ) : (
+                  <ol className="space-y-1">
+                    {stats.movies.topByGuesses.map((movie, index) => (
+                      <li key={movie.movieId}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (movie.tmdbID != null) {
+                              navigate(`/admin/movie/${movie.tmdbID}`);
+                            }
+                          }}
+                          className="w-full flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-cinema-950/80"
+                        >
+                          <span className="min-w-0 truncate text-stone-200">
+                            <span className="text-stone-500 mr-1.5 tabular-nums">
+                              {index + 1}.
+                            </span>
+                            {movie.title}
+                            {movie.year != null ? (
+                              <span className="text-stone-500">
+                                {" "}
+                                ({movie.year})
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="shrink-0 tabular-nums text-xs text-stone-400">
+                            {movie.guessCount}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-8">
         <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
