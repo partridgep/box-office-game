@@ -78,6 +78,9 @@ export const COMP_DENSITY_BAND_MIN = 8;
 /** Cap used when estimating acronym width for collision (matches max-w-[68px]). */
 const LABEL_MAX_WIDTH_PX = 68;
 
+/** Cluster chrome is slightly wider (matches max-w-[72px]). */
+const CLUSTER_LABEL_MAX_WIDTH_PX = 72;
+
 /** Horizontal padding on the acronym hit target (px-1.5 × 2). */
 const LABEL_PAD_PX = 12;
 
@@ -88,7 +91,34 @@ const CORNER_ARM_PX = 12;
 const CORNER_LABEL_GAP_PX = 2;
 
 /** Extra gap (track %) so labels don’t kiss. */
-const LABEL_COLLISION_PAD_PCT = 1.5;
+const LABEL_COLLISION_PAD_PCT = 4;
+
+/** Approx px per glyph at 9px medium — prefer over-estimate so we merge early. */
+const LABEL_GLYPH_PX = 7;
+
+/**
+ * Compact track label for a cluster. Prefer the shortest acronym so `(+N)`
+ * stays visible inside max-w-[72px]; fall back to `(+count)` when all leads
+ * are long (e.g. full titles used as labels).
+ */
+export function clusterCompactLabel(
+  members: Array<{ label: string; pos: number }>,
+): string {
+  if (members.length === 0) return "(+0)";
+  const lead = [...members].sort(
+    (a, b) =>
+      a.label.length - b.label.length ||
+      a.pos - b.pos ||
+      a.label.localeCompare(b.label),
+  )[0].label;
+  const extra = members.length - 1;
+  if (lead.length <= 6) return `${lead} (+${extra})`;
+  return `(+${members.length})`;
+}
+
+function isClusterItem(item: MarkerLayout): boolean {
+  return (item.clusterMembers?.length ?? 0) >= COMP_CLUSTER_MIN;
+}
 
 /** Largest band represented in the layout (cluster, stair, or 1). */
 export function maxBandSizeFromItems(items: MarkerLayout[]): number {
@@ -297,10 +327,11 @@ export function layoutCompMarkers(
 export function estimateLabelWidthPct(
   label: string,
   trackWidthPx: number,
+  maxWidthPx = LABEL_MAX_WIDTH_PX,
 ): number {
   const glyphPx = Math.min(
-    LABEL_MAX_WIDTH_PX,
-    Math.max(20, label.length * 6),
+    maxWidthPx,
+    Math.max(24, label.length * LABEL_GLYPH_PX),
   );
   const px = glyphPx + LABEL_PAD_PX;
   return (px / Math.max(trackWidthPx, 1)) * 100;
@@ -328,11 +359,15 @@ export function placedLabelBounds(
   trackWidthPx: number,
 ): { left: number; right: number } {
   const { marker, side, corner, clusterMembers, stackSize = 1 } = item;
-  const isCluster = (clusterMembers?.length ?? 0) >= COMP_CLUSTER_MIN;
+  const isCluster = isClusterItem(item);
   const label = isCluster
-    ? `${marker.label} +${clusterMembers!.length - 1}`
+    ? clusterCompactLabel(clusterMembers!)
     : marker.label;
-  const w = estimateLabelWidthPct(label, trackWidthPx);
+  const w = estimateLabelWidthPct(
+    label,
+    trackWidthPx,
+    isCluster ? CLUSTER_LABEL_MAX_WIDTH_PX : LABEL_MAX_WIDTH_PX,
+  );
   const armPct = pxToTrackPct(CORNER_ARM_PX + CORNER_LABEL_GAP_PX, trackWidthPx);
   const pos = marker.pos;
 
@@ -491,21 +526,25 @@ function placedLabelsOverlap(
   );
 }
 
-/** Atomic presentation groups (solo / fan pair / staircase) for merge passes. */
+/** Atomic presentation groups (solo / fan pair / staircase / cluster) for merge. */
 type LayoutUnit = {
   items: MarkerLayout[];
   markers: PositionedMarker[];
 };
 
+function unitMarkers(item: MarkerLayout): PositionedMarker[] {
+  if (isClusterItem(item) && item.clusterMembers) {
+    return item.clusterMembers;
+  }
+  return [item.marker];
+}
+
 /**
- * Group layout items into units so a fan pair or staircase merges as a whole
- * when any of its labels collide with a neighbor.
+ * Group layout items into units so a fan pair, staircase, or cluster merges
+ * as a whole when any of its labels collide with a neighbor.
  */
 function layoutUnits(items: MarkerLayout[]): LayoutUnit[] {
-  const labeled = items.filter(
-    (item) => (item.clusterMembers?.length ?? 0) < COMP_CLUSTER_MIN,
-  );
-  const sorted = [...labeled].sort(
+  const sorted = [...items].sort(
     (a, b) =>
       a.marker.pos - b.marker.pos ||
       (a.stackIndex ?? 0) - (b.stackIndex ?? 0) ||
@@ -515,12 +554,23 @@ function layoutUnits(items: MarkerLayout[]): LayoutUnit[] {
   let i = 0;
   while (i < sorted.length) {
     const item = sorted[i];
+
+    if (isClusterItem(item)) {
+      units.push({
+        items: [item],
+        markers: unitMarkers(item),
+      });
+      i++;
+      continue;
+    }
+
     const stackSize = item.stackSize ?? 1;
 
     if (stackSize >= COMP_STAIRCASE_SIZE) {
       const stair: MarkerLayout[] = [];
       while (
         i < sorted.length &&
+        !isClusterItem(sorted[i]) &&
         (sorted[i].stackSize ?? 1) >= COMP_STAIRCASE_SIZE &&
         Math.abs(sorted[i].marker.pos - item.marker.pos) < 1e-6
       ) {
@@ -539,6 +589,7 @@ function layoutUnits(items: MarkerLayout[]): LayoutUnit[] {
       item.corner &&
       item.side === "left" &&
       next &&
+      !isClusterItem(next) &&
       next.corner &&
       next.side === "right" &&
       (next.stackSize ?? 1) < COMP_STAIRCASE_SIZE
@@ -571,9 +622,9 @@ function unitsOverlap(
 }
 
 /**
- * Re-band labeled markers by estimated glyph overlap (not just value proximity).
- * Pass 1: centered bounds → fan / stair / cluster.
- * Pass 2+: if fanned labels still collide (common with two adjacent pairs),
+ * Re-band markers by estimated glyph overlap (not just value proximity).
+ * Pass 1: centered bounds on non-clusters → fan / stair / cluster (seeds kept).
+ * Pass 2+: if labels still collide — including cluster chrome vs neighbors —
  * merge those presentation units and escalate (stair or cluster).
  */
 export function resolveLabelCollisions(
@@ -582,21 +633,19 @@ export function resolveLabelCollisions(
 ): MarkerLayout[] {
   if (items.length <= 1 || trackWidthPx <= 0) return items;
 
-  const seedClusters = items.filter(
-    (item) => (item.clusterMembers?.length ?? 0) >= COMP_CLUSTER_MIN,
-  );
-  const labeled = items.filter(
-    (item) => (item.clusterMembers?.length ?? 0) < COMP_CLUSTER_MIN,
-  );
-  if (labeled.length <= 1) return items;
+  const seedClusters = items.filter(isClusterItem);
+  const labeled = items.filter((item) => !isClusterItem(item));
 
-  let resolved = layoutOverlapBands(
-    bandByBounds(
-      labeled.map((item) => item.marker),
-      (m) => centeredLabelBounds(m.pos, m.label, trackWidthPx),
-    ),
-    seedClusters,
-  );
+  let resolved: MarkerLayout[] =
+    labeled.length === 0
+      ? [...seedClusters]
+      : layoutOverlapBands(
+          bandByBounds(
+            labeled.map((item) => item.marker),
+            (m) => centeredLabelBounds(m.pos, m.label, trackWidthPx),
+          ),
+          seedClusters,
+        );
 
   for (let iter = 0; iter < 4; iter++) {
     const units = layoutUnits(resolved);
@@ -637,13 +686,11 @@ export function resolveLabelCollisions(
       groups.set(root, list);
     }
 
-    const keptClusters = resolved.filter(
-      (item) => (item.clusterMembers?.length ?? 0) >= COMP_CLUSTER_MIN,
-    );
+    // Every unit (including clusters) is in a group — do not re-seed old clusters.
     const forcedBands = [...groups.values()].map((g) =>
       [...g].sort((a, b) => a.pos - b.pos || a.label.localeCompare(b.label)),
     );
-    resolved = layoutOverlapBands(forcedBands, keptClusters);
+    resolved = layoutOverlapBands(forcedBands);
   }
 
   return resolved;
@@ -967,9 +1014,8 @@ export default function CompMarkers({
           : markerKey(marker);
         const displayName = marker.title ?? marker.label;
         const singleTooltip = `${displayName}: ${formatValue(marker.value)}`;
-        const extraCount = isCluster ? clusterMembers!.length - 1 : 0;
         const compactLabel = isCluster
-          ? `${marker.label} (+${extraCount})`
+          ? clusterCompactLabel(clusterMembers!)
           : marker.label;
         const clusterAria = isCluster
           ? `${clusterMembers!.length} comps: ${clusterMembers!
@@ -1184,7 +1230,7 @@ export default function CompMarkers({
                     style={
                       isOpen ? tooltipStyle : { transform: "translateX(-50%)" }
                     }
-                    className={`${tooltipBaseClass} ${tooltipClass} max-h-40 min-w-[9.5rem] max-w-[14rem] space-y-0.5 overflow-y-auto py-1 text-left whitespace-normal ${
+                    className={`${tooltipBaseClass} ${tooltipClass} max-h-40 min-w-[11rem] max-w-[18rem] space-y-0.5 overflow-y-auto py-1 text-left whitespace-normal ${
                       showTooltip
                         ? "pointer-events-auto opacity-100"
                         : "pointer-events-none opacity-0"
@@ -1192,13 +1238,15 @@ export default function CompMarkers({
                   >
                     {sortedCluster!.map((m) => {
                       const name = m.title ?? m.label;
+                      const amount = formatValue(m.value);
                       return (
                         <li key={markerKey(m)} role="option">
                           <button
                             type="button"
                             disabled={disabled}
                             tabIndex={showTooltip ? 0 : -1}
-                            className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 ${
+                            aria-label={`${name}, ${amount}`}
+                            className={`flex w-full items-baseline gap-1.5 rounded px-1.5 py-0.5 text-left text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 ${
                               isTicket
                                 ? "hover:bg-ticket-ink/10 focus-visible:ring-ticket-ink/40"
                                 : "hover:bg-cinema-800 focus-visible:ring-theater-gold/50"
@@ -1215,10 +1263,11 @@ export default function CompMarkers({
                               )
                             }
                           >
-                            <span className="font-semibold">{name}</span>
-                            <span className="opacity-70">
-                              {" "}
-                              · {formatValue(m.value)}
+                            <span className="min-w-0 flex-1 truncate font-semibold">
+                              {name}
+                            </span>
+                            <span className="shrink-0 opacity-70 tabular-nums">
+                              {amount}
                             </span>
                           </button>
                         </li>

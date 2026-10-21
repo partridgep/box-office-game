@@ -34,7 +34,7 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div
-      className={`min-h-screen overflow-x-hidden bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles["layout"]}`}
+      className={`min-h-screen overflow-x-hidden overscroll-x-none bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles["layout"]}`}
     >
       <header
         className={`fixed top-0 left-0 w-full z-50 backdrop-blur-md bg-cinema-950/80 px-6 py-4 flex items-center justify-between ${styles["header"]}`}
@@ -62,7 +62,7 @@ export default function Layout({ children }: LayoutProps) {
               location.pathname === "/" ? "text-rose-400" : "hover:text-white"
             }`}
           >
-            Lobby
+            Upcoming
           </button>
           <button
             type="button"

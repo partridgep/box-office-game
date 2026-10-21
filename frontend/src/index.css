@@ -578,6 +578,12 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Block horizontal overscroll from triggering browser back/forward (trackpad/touch). */
+html,
+body {
+  overscroll-behavior-x: none;
+}
+
 /* a {
   font-weight: 500;
   color: #646cff;

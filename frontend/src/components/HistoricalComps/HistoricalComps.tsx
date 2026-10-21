@@ -468,12 +468,16 @@ export function compsToMarkersByField(
   };
 
   const starred = starredIds.length > 0 ? new Set(starredIds) : null;
+  // Same CompMovie can appear in multiple category groups — slider gets one mark.
+  const seen = new Set<string>();
 
   for (const group of filterVisibleCompGroups(groups, hiddenIds)) {
     for (const movie of group.movies) {
       const id = movie.id;
+      if (seen.has(id)) continue;
       // Focus mode: starring filters the slider map without calling hide().
       if (starred && !starred.has(id)) continue;
+      seen.add(id);
 
       const metrics = getCompMetrics(movie);
       const label = compLabel(movie);

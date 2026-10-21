@@ -160,7 +160,7 @@ export default function MovieDetails() {
           type="button"
           onClick={() => navigate("/")}
           className="shrink-0 -ml-1 mt-0.5 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
-          aria-label="Back to lobby"
+          aria-label="Back to upcoming"
         >
           {/* Pixel-stepped arrow to match Ticketing’s bitmap look */}
           <svg
@@ -293,7 +293,7 @@ export default function MovieDetails() {
             This movie is not in the Arena yet.
           </p>
           <p className="text-sm text-ticket-ink/65 font-[Outfit,sans-serif]">
-            Browse upcoming titles from the lobby to make predictions.
+            Browse upcoming titles to make predictions.
           </p>
         </div>
       )}

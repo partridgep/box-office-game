@@ -1,102 +1,774 @@
-import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMovieStore } from '../../../store/useMovieStore';
-import { useGuessStore } from '../../../store/useGuessStore';
-import { updateAllMovies, getSavedMovies } from '../../../services/movies.service';
-import { getLobbySections } from '../../../services/categories.service';
-import { LobbyMovie, LobbySection, MovieData } from '../../../types';
-import { getPredictionAvailability } from "../../../utils/predictionWindows";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { Link } from "react-router-dom";
+import { useMovieStore } from "../../../store/useMovieStore";
+import { useGuessStore } from "../../../store/useGuessStore";
+import { useFriendsStore } from "../../../store/useFriendsStore";
+import {
+  getCompGroups,
+  getLobbySections,
+} from "../../../services/categories.service";
+import { getAllGuessesForMovie } from "../../../services/guesses.service";
+import { Guess, LobbyMovie, LobbySection, MovieData } from "../../../types";
+import {
+  getPredictionAvailability,
+  getPredictionWindows,
+} from "../../../utils/predictionWindows";
+import { formatMillions, formatMillionsShort } from "../../../utils/formatMoney";
+import { compsToMarkersByField } from "../../../components/HistoricalComps/HistoricalComps";
+import PredictButton, { AdmitOneStub } from "../../../components/PredictButton";
+import LetterboardHeading, {
+  backlightDelay,
+} from "../../../components/Letterboard/LetterboardHeading";
+import TicketStub from "../../../components/TicketStub/TicketStub";
+import { Check, Clock } from "lucide-react";
+import styles from "./CinemaLobby.module.css";
 
-import PredictButton, { AdmitOneStub } from '../../../components/PredictButton';
+const HERO_AUTOPLAY_MS = 6000;
+const POSTER_SHELF = "https://image.tmdb.org/t/p/w342";
+const POSTER_HERO = "https://image.tmdb.org/t/p/w1280";
+const POSTER_WASH = "https://image.tmdb.org/t/p/w185";
 
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons';
-import { library, IconProp } from '@fortawesome/fontawesome-svg-core';
-
-library.add({ faArrowsRotate });
-
- // @ts-ignore
-const refreshIcon : IconProp = "fa-solid fa-arrows-rotate"
+type CompOpeningRange = { low: number; high: number };
 
 function asMovieData(movie: LobbyMovie | MovieData): MovieData {
   return movie as MovieData;
 }
 
-function MovieCard({
+function movieKey(movie: LobbyMovie | MovieData) {
+  return movie.id || movie.imdbID || String(movie.tmdbID);
+}
+
+function formatOpens(released: Date | string | null | undefined) {
+  if (!released) return "Date TBD";
+  const date = new Date(released);
+  if (Number.isNaN(date.getTime())) return "Date TBD";
+  return `Opens ${date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })}`;
+}
+
+function formatMoneyTag(n: number) {
+  return `$${formatMillionsShort(n, true)}`;
+}
+
+function formatCompRange(range: CompOpeningRange) {
+  if (range.low === range.high) return formatMoneyTag(range.low);
+  return `${formatMoneyTag(range.low)}–${formatMoneyTag(range.high)}`;
+}
+
+function finiteMoney(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  return Number(value);
+}
+
+function formatDomIntlLine(prefix: string, domestic: number | null, international: number | null) {
+  if (domestic != null && international != null) {
+    return `${prefix} ${formatMoneyTag(domestic)} DOM + ${formatMoneyTag(international)} INTL`;
+  }
+  if (domestic != null) return `${prefix} ${formatMoneyTag(domestic)} DOM`;
+  if (international != null) return `${prefix} ${formatMoneyTag(international)} INTL`;
+  return null;
+}
+
+/**
+ * Multi-line prediction badge, e.g.:
+ * OW $85M DOM + $110M INTL
+ * FINAL $300M DOM + $450M INTL
+ * RT 78%
+ */
+function formatPredictionBadgeLines(guess: Guess | undefined | null): string[] {
+  if (!guess) return [];
+  const lines: string[] = [];
+
+  const opening = formatDomIntlLine(
+    "OW",
+    finiteMoney(guess.domestic_opening),
+    finiteMoney(guess.international_opening)
+  );
+  if (opening) lines.push(opening);
+
+  const finale = formatDomIntlLine(
+    "FINAL",
+    finiteMoney(guess.final_domestic),
+    finiteMoney(guess.final_international)
+  );
+  if (finale) lines.push(finale);
+
+  const rt = finiteMoney(guess.rotten_tomatoes_score);
+  if (rt != null) lines.push(`RT ${Math.round(rt)}%`);
+
+  return lines;
+}
+
+function PredictionBadge({
+  lines,
+  className = "",
+}: {
+  lines: string[];
+  className?: string;
+}) {
+  if (lines.length === 0) return null;
+  return (
+    <span
+      className={`flex flex-col gap-0.5 rounded-sm bg-cinema-950/85 px-1.5 py-1 text-left font-semibold leading-snug tracking-wide text-theater-gold ring-1 ring-theater-gold/40 ${className}`}
+    >
+      {lines.map((line) => (
+        <span key={line} className="tabular-nums">
+          {line}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Domestic-opening span from historical comps (released titles only). */
+function domesticOpeningRangeFromGroups(
+  groups: Awaited<ReturnType<typeof getCompGroups>>
+): CompOpeningRange | null {
+  const values = compsToMarkersByField(groups)
+    .domesticOpening.map((m) => m.value)
+    // Ignore near-zero / junk parses so the hero never shows "$0M".
+    .filter((v) => Number.isFinite(v) && v >= 1)
+    .sort((a, b) => a - b);
+  if (values.length === 0) return null;
+  return { low: values[0], high: values[values.length - 1] };
+}
+
+function formatCallDeadline(movie: MovieData) {
+  const { domesticOpening } = getPredictionAvailability(movie);
+  if (!domesticOpening) return null;
+  const { boxOfficeCutoff } = getPredictionWindows(movie);
+  const when = boxOfficeCutoff.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  return `Call domestic opening before ${when}`;
+}
+
+const CLOSING_SOON_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isOpeningThisMonth(movie: MovieData, now = new Date()) {
+  if (!movie.released) return false;
+  const released = new Date(movie.released);
+  if (Number.isNaN(released.getTime())) return false;
+  return (
+    released.getFullYear() === now.getFullYear() &&
+    released.getMonth() === now.getMonth()
+  );
+}
+
+/** Soonest cutoff among windows that are still open. */
+function soonestOpenCutoff(movie: MovieData): Date | null {
+  const availability = getPredictionAvailability(movie);
+  const { boxOfficeCutoff, rottenTomatoesCutoff } = getPredictionWindows(movie);
+  const open: number[] = [];
+  if (availability.domesticOpening) open.push(boxOfficeCutoff.getTime());
+  if (availability.rottenTomatoes) open.push(rottenTomatoesCutoff.getTime());
+  if (open.length === 0) return null;
+  return new Date(Math.min(...open));
+}
+
+function isClosingSoon(movie: MovieData, now = Date.now()) {
+  const cutoff = soonestOpenCutoff(movie);
+  if (!cutoff) return false;
+  const remaining = cutoff.getTime() - now;
+  return remaining > 0 && remaining <= CLOSING_SOON_MS;
+}
+
+function formatDaysLeft(movie: MovieData): string | null {
+  const cutoff = soonestOpenCutoff(asMovieData(movie));
+  if (!cutoff) return null;
+  const ms = cutoff.getTime() - Date.now();
+  if (ms <= 0) return null;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const hourMs = 60 * 60 * 1000;
+  if (ms < dayMs) {
+    const hours = Math.max(1, Math.ceil(ms / hourMs));
+    return hours === 1 ? "1h left" : `${hours}h left`;
+  }
+  const days = Math.ceil(ms / dayMs);
+  return days === 1 ? "1 day left" : `${days} days left`;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function TitleCard({
   movie,
-  guessed,
-  onSelect,
+  density = "shelf",
 }: {
   movie: LobbyMovie | MovieData;
-  guessed: boolean;
-  onSelect: () => void;
+  density?: "shelf" | "grid";
 }) {
-  return (
-    <div
-      onClick={onSelect}
-      className="group bg-cinema-900 border border-cinema-800 hover:border-cinema-700 rounded-2xl overflow-hidden shadow-lg cursor-pointer flex flex-col transition-all duration-300 transform hover:-translate-y-1"
-    >
-      <div className="relative aspect-2/3 w-full overflow-hidden bg-cinema-950">
-        <img
-          src={`https://image.tmdb.org/t/p/original${movie.poster}`}
-          alt={movie.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
-        <div className="absolute inset-0 bg-linear-to-t from-cinema-950 via-transparent opacity-60" />
+  const guess = useGuessStore((state) =>
+    movie.id ? state.guesses[String(movie.id)] : undefined
+  );
+  const to = movie.tmdbID ? `/movie/${movie.tmdbID}` : undefined;
+  const daysLeft = formatDaysLeft(asMovieData(movie));
+  const callLines = formatPredictionBadgeLines(guess);
 
-        {guessed ? (
-          <div className="absolute top-3 right-3 bg-emerald-500/90 backdrop-blur-md text-emerald-950 text-xs font-bold px-2 py-0.5 rounded-full shadow border border-emerald-400/30">
-            Guessed ✓
-          </div>
+  const className = [
+    "group block rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-theater-gold",
+    density === "grid" ? "w-full" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const metaBits = [formatOpens(movie.released), daysLeft].filter(Boolean);
+  const ariaBits = [
+    movie.title,
+    formatOpens(movie.released),
+    daysLeft,
+    callLines.length ? `You predicted ${callLines.join(". ")}` : null,
+  ].filter(Boolean);
+
+  const body = (
+    <>
+      <div className="relative aspect-2/3 overflow-hidden rounded-md bg-cinema-900 ring-1 ring-cinema-800/80 transition duration-300 group-hover:ring-theater-gold/40 group-hover:shadow-[0_12px_28px_rgba(0,0,0,0.45)]">
+        {movie.poster ? (
+          <img
+            src={`${POSTER_SHELF}${movie.poster}`}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          />
         ) : (
-          <div className="absolute top-3 right-3 bg-cinema-900/80 backdrop-blur-md text-stone-300 text-xs font-medium px-2 py-0.5 rounded-full border border-cinema-700">
-            Pending
+          <div className="flex h-full items-center justify-center bg-cinema-900 text-xs text-stone-500">
+            No poster
           </div>
         )}
-
-        <div className="absolute bottom-3 left-3 right-3">
-          <span className="text-xs font-semibold px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-lg backdrop-blur-md">
-            {movie.year} • {movie.rated || "NR"}
-          </span>
-        </div>
+        <PredictionBadge
+          lines={callLines}
+          className="absolute left-2 top-2 max-w-[calc(100%-1rem)] text-[0.6rem]"
+        />
       </div>
+      <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-stone-100 transition-colors group-hover:text-theater-gold">
+        {movie.title}
+      </p>
+      <p className="mt-0.5 text-xs text-stone-500">
+        {metaBits.join(" · ")}
+      </p>
+    </>
+  );
 
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-        <div>
-          <h3 className="font-bold text-white text-base group-hover:text-rose-400 transition-colors line-clamp-1">
-            {movie.title}
-          </h3>
-          <p className="text-xs text-stone-400 line-clamp-2 mt-1">
-            {movie.plot}
-          </p>
-        </div>
-
-        <div className="pt-2 border-t border-cinema-800 flex items-center justify-between text-xs text-stone-400">
-          <span>
-            Release:{" "}
-            {movie.released
-              ? new Date(movie.released).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                })
-              : "TBD"}
-          </span>
-          <span className="text-rose-400 font-semibold group-hover:translate-x-1 transition-transform">
-            Predict →
-          </span>
-        </div>
+  if (!to) {
+    return (
+      <div className={`${className} opacity-60`} aria-disabled="true">
+        {body}
       </div>
+    );
+  }
+
+  return (
+    <Link to={to} className={className} aria-label={ariaBits.join(". ")}>
+      {body}
+    </Link>
+  );
+}
+
+function MovieShelf({
+  id,
+  title,
+  movies,
+}: {
+  id: string;
+  title: string;
+  movies: Array<LobbyMovie | MovieData>;
+}) {
+  if (movies.length === 0) return null;
+
+  const headingId = `shelf-${id}`;
+
+  return (
+    <section className="space-y-4" aria-labelledby={headingId}>
+      <h2
+        id={headingId}
+        className="text-left font-marquee text-2xl uppercase tracking-wide text-white sm:text-3xl"
+      >
+        {title}
+      </h2>
+      <ul className={styles.shelfScroller} role="list">
+        {movies.map((movie) => (
+          <li key={movieKey(movie)} className={styles.shelfItem}>
+            <TitleCard movie={movie} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const ACTIVITY_MOVIE_LIMIT = 8;
+const ACTIVITY_CHIP_LIMIT = 3;
+
+type FriendActivity = {
+  id: string;
+  name: string;
+  movieTitle: string;
+  tmdbID: string;
+  domesticOpening: number | null;
+  updatedAt: string;
+};
+
+function HowItWorksBeat() {
+  const steps = [
+    "Pick a title",
+    "Lock your opening weekend & final box office calls + Rotten Tomatoes score",
+    "See how you stack when it opens",
+  ];
+
+  return (
+    <section
+      className="max-w-lg"
+      aria-label="How it works"
+      style={backlightDelay("HOW IT WORKS")}
+    >
+      <div className="backlit-scope">
+        <LetterboardHeading as="h2" className="text-left">
+          HOW IT WORKS
+        </LetterboardHeading>
+      </div>
+      <TicketStub footer="ADMIT ONE · FIRST CALL" className="mt-4 rounded-r">
+        <ol className="m-0 list-none space-y-3 p-0 text-left text-base leading-snug">
+          {steps.map((step, index) => (
+            <li key={step} className="flex gap-3">
+              <span
+                className="w-6 shrink-0 tabular-nums text-ticket-ink/55"
+                aria-hidden="true"
+              >
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+      </TicketStub>
+    </section>
+  );
+}
+
+function FriendActivityStrip({ movies }: { movies: MovieData[] }) {
+  const following = useFriendsStore((state) => state.following);
+  const followingLoaded = useFriendsStore((state) => state.loaded);
+  const friendsVersion = useFriendsStore((state) => state.version);
+  const [items, setItems] = useState<FriendActivity[]>([]);
+
+  const movieIdsKey = useMemo(
+    () =>
+      movies
+        .filter((movie) => movie.id)
+        .slice(0, ACTIVITY_MOVIE_LIMIT)
+        .map((movie) => String(movie.id))
+        .join(","),
+    [movies]
+  );
+
+  useEffect(() => {
+    if (!followingLoaded || following.length === 0 || !movieIdsKey) {
+      setItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    const byId = new Map(
+      movies
+        .filter((movie) => movie.id)
+        .map((movie) => [String(movie.id), movie] as const)
+    );
+    const ids = movieIdsKey.split(",");
+
+    async function loadActivity() {
+      const batches = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const response = await getAllGuessesForMovie(id);
+            return (response.data ?? []).filter((guess) => guess.is_friend);
+          } catch {
+            return [] as Guess[];
+          }
+        })
+      );
+      if (cancelled) return;
+
+      const flat: FriendActivity[] = [];
+      for (const guess of batches.flat()) {
+        const movie = byId.get(String(guess.movie_id));
+        if (!movie?.tmdbID) continue;
+        flat.push({
+          id: guess.id,
+          name: guess.guess_user?.name?.trim() || "Friend",
+          movieTitle: movie.title,
+          tmdbID: String(movie.tmdbID),
+          domesticOpening:
+            guess.domestic_opening != null &&
+            Number.isFinite(Number(guess.domestic_opening))
+              ? Number(guess.domestic_opening)
+              : null,
+          updatedAt: guess.updatedAt || guess.createdAt,
+        });
+      }
+
+      flat.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+
+      const seen = new Set<string>();
+      const unique = flat.filter((item) => {
+        const key = `${item.name}:${item.tmdbID}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setItems(unique.slice(0, ACTIVITY_CHIP_LIMIT));
+    }
+
+    loadActivity();
+    return () => {
+      cancelled = true;
+    };
+  }, [followingLoaded, following.length, friendsVersion, movieIdsKey, movies]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div
+      className="flex gap-2 overflow-x-auto pb-1 scrollbar-none"
+      role="status"
+      aria-label="Recent friend predictions"
+    >
+      {items.map((item) => (
+        <Link
+          key={item.id}
+          to={`/movie/${item.tmdbID}`}
+          className="shrink-0 rounded-md border border-cinema-800/80 bg-cinema-900/70 px-3 py-1.5 text-xs text-stone-400 transition-colors hover:border-theater-gold/35 hover:text-stone-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold"
+        >
+          <span className="font-semibold text-theater-gold">{item.name}</span>
+          {" locked "}
+          {item.domesticOpening != null ? (
+            <span className="font-semibold tabular-nums text-stone-100">
+              {formatMillions(item.domesticOpening)}
+            </span>
+          ) : (
+            "a call"
+          )}
+          {" on "}
+          <span className="text-stone-200">{item.movieTitle}</span>
+        </Link>
+      ))}
     </div>
   );
 }
 
-export function CinemaLobby() {
-  const navigate = useNavigate();
-  const { movies, setMovies } = useMovieStore();
+function FeaturedHero({
+  movies,
+  compRanges,
+}: {
+  movies: MovieData[];
+  compRanges: Record<string, CompOpeningRange | null>;
+}) {
   const guesses = useGuessStore((state) => state.guesses);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const [autoplayPaused, setAutoplayPaused] = useState(false);
+  const userPausedRef = useRef(false);
 
-  const [heroIndex, setHeroIndex] = useState(0);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const goTo = useCallback((next: number, behavior: ScrollBehavior = "smooth") => {
+    const scroller = scrollerRef.current;
+    if (!scroller || movies.length === 0) return;
+    const clamped = ((next % movies.length) + movies.length) % movies.length;
+    const width = scroller.clientWidth;
+    scroller.scrollTo({ left: clamped * width, behavior });
+    setIndex(clamped);
+  }, [movies.length]);
+
+  const pauseAutoplay = useCallback(() => {
+    userPausedRef.current = true;
+    setAutoplayPaused(true);
+  }, []);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const width = scroller.clientWidth || 1;
+        const next = Math.round(scroller.scrollLeft / width);
+        setIndex((prev) => (next === prev ? prev : next));
+      });
+    };
+
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      scroller.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (movies.length <= 1 || autoplayPaused) return;
+    if (prefersReducedMotion()) return;
+
+    const timer = window.setInterval(() => {
+      if (userPausedRef.current) return;
+      setIndex((prev) => {
+        const next = (prev + 1) % movies.length;
+        const scroller = scrollerRef.current;
+        if (scroller) {
+          scroller.scrollTo({
+            left: next * scroller.clientWidth,
+            behavior: "smooth",
+          });
+        }
+        return next;
+      });
+    }, HERO_AUTOPLAY_MS);
+
+    return () => window.clearInterval(timer);
+  }, [movies.length, autoplayPaused]);
+
+  const indexRef = useRef(index);
+  indexRef.current = index;
+
+  useEffect(() => {
+    const onResize = () => goTo(indexRef.current, "auto");
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [goTo]);
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (movies.length <= 1) return;
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      pauseAutoplay();
+      goTo(index + 1);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      pauseAutoplay();
+      goTo(index - 1);
+    }
+  };
+
+  const active = movies[index] ?? movies[0];
+
+  return (
+    <section
+      className={styles.heroBleed}
+      aria-roledescription="carousel"
+      aria-label="Featured upcoming movies"
+      onKeyDown={onKeyDown}
+    >
+      {/* Stub sits outside the scroller so it stays pinned while slides swipe. */}
+      <div className="admit-ticket-scope relative">
+        <AdmitOneStub className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 rounded-none sm:w-12" />
+
+        <div
+          ref={scrollerRef}
+          className={styles.heroScroller}
+          tabIndex={0}
+          role="group"
+          aria-label="Swipe or use arrow keys to browse featured titles"
+          onPointerDown={pauseAutoplay}
+          onTouchStart={pauseAutoplay}
+          onFocus={pauseAutoplay}
+        >
+          {movies.map((movie, slideIndex) => {
+            const guess = movie.id ? guesses[String(movie.id)] : undefined;
+            const callLines = formatPredictionBadgeLines(guess);
+            const isActive = slideIndex === index;
+            const callDeadline = formatCallDeadline(movie);
+            const compRange = movie.id ? compRanges[movie.id] : null;
+            const rangeLabel =
+              compRange != null ? formatCompRange(compRange) : null;
+            return (
+              <article
+                key={movieKey(movie)}
+                className={styles.heroSlide}
+                aria-roledescription="slide"
+                aria-label={`${slideIndex + 1} of ${movies.length}`}
+                aria-hidden={!isActive}
+                ref={(node) => {
+                  if (!node) return;
+                  if (isActive) node.removeAttribute("inert");
+                  else node.setAttribute("inert", "");
+                }}
+              >
+                {/* Mobile: full-bleed poster cover. Desktop: soft wash only — artwork stays inset. */}
+                <div className="absolute inset-0 lg:hidden" aria-hidden="true">
+                  {movie.poster ? (
+                    <img
+                      src={`${POSTER_HERO}${movie.poster}`}
+                      alt=""
+                      className="h-full w-full object-cover object-top"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-cinema-900" />
+                  )}
+                  <div className="absolute inset-0 bg-linear-to-t from-cinema-950 via-cinema-950/35 to-cinema-950/10" />
+                  <div className="absolute inset-0 bg-linear-to-r from-cinema-950/55 via-transparent to-cinema-950/25" />
+                </div>
+
+                <div className="absolute inset-0 hidden bg-cinema-950 lg:block" aria-hidden="true">
+                  {movie.poster ? (
+                    <img
+                      src={`${POSTER_WASH}${movie.poster}`}
+                      alt=""
+                      className="h-full w-full scale-110 object-cover opacity-90 blur-lg"
+                      draggable={false}
+                    />
+                  ) : null}
+                  <div className="absolute inset-0 bg-cinema-950/55" />
+                  <div className="absolute inset-0 bg-linear-to-r from-cinema-950/80 via-cinema-950/40 to-cinema-950/70" />
+                </div>
+
+                <div className="relative z-5 flex h-full min-h-[inherit] flex-col justify-end px-5 pb-16 pr-14 pt-24 sm:px-8 sm:pr-20 sm:pb-20 lg:justify-center lg:px-12 lg:py-8 lg:pr-24">
+                  <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6 lg:flex-row lg:items-center lg:gap-12 xl:gap-16">
+                    {movie.poster ? (
+                      <div className="hidden w-72 shrink-0 xl:w-86 lg:block">
+                        <div className="relative aspect-2/3 overflow-hidden rounded-lg shadow-2xl ring-1 ring-theater-gold/25">
+                          <img
+                            src={`${POSTER_HERO}${movie.poster}`}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            draggable={false}
+                          />
+                          <PredictionBadge
+                            lines={callLines}
+                            className="absolute left-3 top-3 max-w-[calc(100%-1.5rem)] text-[0.65rem]"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="flex min-w-0 flex-1 flex-col gap-6 text-left sm:gap-7 lg:gap-10">
+                      <div className="max-w-3xl rounded-lg bg-linear-to-r from-cinema-950/45 via-cinema-950/35 to-transparent px-3 py-3 sm:px-4 sm:py-3.5 lg:from-cinema-950/60 lg:via-cinema-950/35">
+                        <div className="space-y-2">
+                          <h2
+                            className="font-marquee text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl lg:text-6xl xl:text-7xl"
+                            id={isActive ? "lobby-hero-title" : undefined}
+                          >
+                            {movie.title}
+                          </h2>
+                          <p className="text-sm text-stone-200 sm:text-base">
+                            {formatOpens(movie.released)}
+                          </p>
+                          {callDeadline ? (
+                            <p className="flex max-w-xl items-center gap-2 text-sm leading-snug text-stone-200 sm:text-base">
+                              <Clock
+                                size={14}
+                                className="shrink-0 text-stone-300"
+                                aria-hidden="true"
+                              />
+                              <span>{callDeadline}</span>
+                            </p>
+                          ) : null}
+                          {rangeLabel ? (
+                            <p className="text-sm leading-snug text-stone-200 sm:text-base">
+                              Comps suggest{" "}
+                              <span className="font-semibold text-theater-gold">
+                                {rangeLabel}
+                              </span>
+                            </p>
+                          ) : null}
+                          {callLines.length > 0 ? (
+                            <div className="mt-3 space-y-0.5 rounded-md border border-theater-gold/80 bg-theater-gold/20 p-2 text-xs font-semibold tracking-wide text-theater-gold backdrop-blur-sm sm:text-sm lg:backdrop-blur-none">
+                              <p className="mb-1 flex items-center gap-1.5 text-[0.65rem] uppercase tracking-[0.2em] text-theater-gold/90">
+                                <Check
+                                  size={14}
+                                  className="shrink-0 text-theater-gold"
+                                  aria-hidden="true"
+                                />
+                                You predicted
+                              </p>
+                              {callLines.map((line) => (
+                                <p key={line} className="tabular-nums">
+                                  {line}
+                                </p>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="w-full max-w-md sm:max-w-lg md:max-w-2xl lg:mt-1 lg:max-w-2xl">
+                        <PredictButton
+                          to={movie.tmdbID ? `/movie/${movie.tmdbID}` : undefined}
+                          movieTitle={movie.title}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      {movies.length > 1 && (
+        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 sm:bottom-4">
+          {movies.map((movie, idx) => (
+            <button
+              key={movieKey(movie)}
+              type="button"
+              onClick={() => {
+                pauseAutoplay();
+                goTo(idx);
+              }}
+              aria-label={`Show ${movie.title}`}
+              aria-current={idx === index ? "true" : undefined}
+              className={`h-2.5 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold ${
+                idx === index
+                  ? "w-7 bg-theater-gold"
+                  : "w-2.5 bg-stone-500/70 hover:bg-stone-300"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {active
+          ? [
+              active.title,
+              formatOpens(active.released),
+              formatCallDeadline(active),
+              active.id && compRanges[active.id]
+                ? `Comps suggest ${formatCompRange(compRanges[active.id]!)}`
+                : null,
+              (() => {
+                const lines = formatPredictionBadgeLines(
+                  active.id ? guesses[String(active.id)] : undefined
+                );
+                return lines.length ? `Your call ${lines.join(". ")}` : null;
+              })(),
+            ]
+              .filter(Boolean)
+              .join(". ")
+          : ""}
+      </div>
+    </section>
+  );
+}
+
+export function CinemaLobby() {
+  const { movies } = useMovieStore();
+  const guesses = useGuessStore((state) => state.guesses);
   const [lobbySections, setLobbySections] = useState<LobbySection[]>([]);
 
   const movieList = useMemo(() => {
@@ -135,26 +807,36 @@ export function CinemaLobby() {
       .filter((section) => section.movies.length > 0);
   }, [lobbySections, moviesById]);
 
-  const categorizedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const section of openSectionMovies) {
-      for (const movie of section.movies) {
-        if (movie.id) ids.add(String(movie.id));
-      }
-    }
-    return ids;
-  }, [openSectionMovies]);
-
-  const moreUpcoming = useMemo(
+  const openingThisMonth = useMemo(
     () =>
-      movieList.filter(
-        (movie) => !movie.id || !categorizedIds.has(String(movie.id))
-      ),
-    [movieList, categorizedIds]
+      movieList
+        .filter((movie) => isOpeningThisMonth(movie))
+        .sort((a, b) => {
+          const aTime = a.released ? new Date(a.released).getTime() : 0;
+          const bTime = b.released ? new Date(b.released).getTime() : 0;
+          return aTime - bTime;
+        }),
+    [movieList]
+  );
+
+  const closingSoon = useMemo(
+    () =>
+      movieList
+        .filter((movie) => isClosingSoon(movie))
+        .sort((a, b) => {
+          const aCut = soonestOpenCutoff(a)?.getTime() ?? Number.POSITIVE_INFINITY;
+          const bCut = soonestOpenCutoff(b)?.getTime() ?? Number.POSITIVE_INFINITY;
+          return aCut - bCut;
+        }),
+    [movieList]
   );
 
   const featuredMovies = movieList.slice(0, 5);
-  const activeMovie = featuredMovies[heroIndex] || movieList[0];
+  const featuredIdsKey = featuredMovies.map((m) => m.id).filter(Boolean).join(",");
+
+  const [compRanges, setCompRanges] = useState<
+    Record<string, CompOpeningRange | null>
+  >({});
 
   useEffect(() => {
     async function loadLobby() {
@@ -169,192 +851,100 @@ export function CinemaLobby() {
   }, []);
 
   useEffect(() => {
-    if (featuredMovies.length <= 1) return;
-    const interval = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % featuredMovies.length);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [featuredMovies.length]);
+    let cancelled = false;
+    const ids = featuredIdsKey ? featuredIdsKey.split(",") : [];
 
-  const hasGuessed = (movieId: string) => {
-    const guessArray = Array.isArray(guesses) ? guesses : [guesses];
-    return guessArray.some((g) => g && g.movie_id === movieId);
-  };
-
-  const onSavedMovieSelect = (movie: LobbyMovie | MovieData) => {
-    navigate(`/movie/${movie.tmdbID}`);
-  };
-
-  const handleUpdateAllMovies = async () => {
-    setIsUpdating(true);
-    try {
-      await updateAllMovies();
-      const [updatedMovies, sections] = await Promise.all([
-        getSavedMovies(),
-        getLobbySections(),
-      ]);
-      setMovies(updatedMovies);
-      setLobbySections(sections);
-    } catch (error) {
-      console.error('Error updating movies:', error);
-    } finally {
-      setIsUpdating(false);
+    if (ids.length === 0) {
+      setCompRanges({});
+      return;
     }
-  };
 
-  const renderMovieGrid = (list: Array<LobbyMovie | MovieData>) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-      {list.map((movie) => {
-        const guessed = movie.id ? hasGuessed(String(movie.id)) : false;
-        return (
-          <MovieCard
-            key={movie.id || movie.imdbID || String(movie.tmdbID)}
-            movie={movie}
-            guessed={guessed}
-            onSelect={() => onSavedMovieSelect(movie)}
-          />
-        );
-      })}
-    </div>
-  );
+    async function loadCompRanges() {
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const groups = await getCompGroups(id);
+            return [id, domesticOpeningRangeFromGroups(groups)] as const;
+          } catch (error) {
+            console.error(`Error fetching comps for hero movie ${id}:`, error);
+            return [id, null] as const;
+          }
+        })
+      );
+      if (cancelled) return;
+      const next: Record<string, CompOpeningRange | null> = {};
+      for (const [id, range] of entries) next[id] = range;
+      setCompRanges(next);
+    }
+
+    loadCompRanges();
+    return () => {
+      cancelled = true;
+    };
+  }, [featuredIdsKey]);
+
+  const hasAnyGuess = Object.keys(guesses).length > 0;
 
   return (
-    <div className="min-h-screen bg-cinema-950 text-stone-100 flex flex-col">
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-12">
-        {activeMovie && (
-          <section className="relative rounded-3xl border border-theater-gold/30 bg-cinema-900 shadow-2xl">
-            {/* Clipping lives here, not on the section, so the stub can tear off past the card's edge. */}
-            <div className="absolute inset-0 z-0 overflow-hidden rounded-3xl">
-              <img
-                src={`https://image.tmdb.org/t/p/w92${activeMovie.poster}`}
-                alt={activeMovie.title}
-                className="w-full h-full object-cover object-center filter blur-2xl opacity-30 scale-110 transform"
-              />
-              <div className="absolute inset-0 bg-linear-to-t from-stone-950 via-theater-gold/10 to-transparent" />
-            </div>
+    <div className="text-stone-100">
+      <h1 className="sr-only">Upcoming</h1>
 
-            <div className="admit-ticket-scope relative z-5 grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 pr-16 sm:p-10 sm:pr-24 lg:p-12 lg:pr-28 items-center">
-              <AdmitOneStub className="absolute inset-y-0 right-0 w-10 sm:w-14 rounded-r-3xl" />
-              <div className="lg:col-span-5 flex justify-center">
-                <div className="relative group w-48 sm:w-64 block aspect-2/3 rounded-lg overflow-hidden shadow-2xl border border-yellow-900/40">
-                  <img
-                    src={`https://image.tmdb.org/t/p/original${activeMovie.poster}`}
-                    alt={activeMovie.title}
-                    className="w-full h-full object-cover object-center transform group-hover:scale-105 transition-transform duration-500"
-                  />
-                  {activeMovie.id && hasGuessed(activeMovie.id) && (
-                    <div className="absolute top-3 right-3 bg-emerald-500/90 backdrop-blur-md text-emerald-950 text-xs font-bold px-2.5 py-1 rounded-full shadow-lg border border-emerald-400/30">
-                      Predicted
-                    </div>
-                  )}
-                </div>
-              </div>
+      {featuredMovies.length > 0 && (
+        <FeaturedHero movies={featuredMovies} compRanges={compRanges} />
+      )}
 
-              <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-                <div className="inline-flex items-center space-x-2 bg-theater-gold/10 border border-theater-gold/20 px-3 py-1 rounded-full">
-                  <span className="w-2 h-2 rounded-full bg-theater-gold" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-theater-gold">Coming Soon</span>
-                </div>
-
-                <div className="space-y-1">
-                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
-                    {activeMovie.title}
-                  </h1>
-                  <p className="text-stone-400 text-sm sm:text-base line-clamp-2 max-w-xl mt-2 mb-0">
-                    {activeMovie.director ? `Directed by ${activeMovie.director}` : 'Director information not available.'}
-                  </p>
-                  <p className="text-stone-400 text-sm sm:text-base line-clamp-2 max-w-xl mt-1">
-                    {activeMovie.actors ? `Starring ${activeMovie.actors}` : 'Cast information not available.'}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 text-xs sm:text-sm text-slate-300">
-                  <div className="bg-cinema-900/80 border border-cinema-800/50 px-3 py-1.5 rounded-xl">
-                    Release <span className="font-semibold text-white">{activeMovie.released ? new Date(activeMovie.released).toLocaleDateString() : 'N/A'}</span>
-                  </div>
-                  <div className="bg-cinema-900/80 border border-cinema-800/50 px-3 py-1.5 rounded-xl">
-                    Budget <span className="font-semibold text-white">{activeMovie.budget || 'Information not available'}</span>
-                  </div>
-                </div>
-
-                <PredictButton
-                  to={activeMovie.tmdbID ? `/movie/${activeMovie.tmdbID}` : undefined}
-                  movieTitle={activeMovie.title}
-                />
-              </div>
-            </div>
-
-            {featuredMovies.length > 1 && (
-              <div className="absolute bottom-4 right-16 sm:right-20 z-5 flex space-x-2">
-                {featuredMovies.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setHeroIndex(idx)}
-                    className={`w-2.5 h-2.5 rounded-full transition-all ${
-                      idx === heroIndex ? 'bg-theater-gold w-6' : 'bg-slate-700 hover:bg-slate-600'
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        <div className="flex flex-col sm:flex-row text-left items-start sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Now Booking</h2>
-            <p className="text-sm text-stone-400">Pick a movie to forecast performance.</p>
-          </div>
-
-          <button
-            onClick={handleUpdateAllMovies}
-            disabled={isUpdating}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg ${
-              isUpdating
-                ? 'bg-slate-800 text-stone-400 cursor-not-allowed border border-cinema-700'
-                : 'bg-cinema-600 hover:bg-cinema-500 text-white'
-            }`}
-          >
-            <FontAwesomeIcon icon={refreshIcon} size="sm" spin={isUpdating} />
-            <span>{isUpdating ? 'Updating All Data...' : 'Update All Data'}</span>
-          </button>
-        </div>
+      <div className="mx-auto mt-10 w-full max-w-7xl space-y-12 px-0 sm:mt-12 sm:space-y-14">
+        {!hasAnyGuess && <HowItWorksBeat />}
 
         {movieList.length === 0 ? (
-          <div className="text-center py-16 bg-cinema-900/50 border border-cinema-800 rounded-3xl">
-            <p className="text-stone-400">No saved movies found in the database.</p>
-          </div>
+          <p className="py-16 text-center text-stone-400">
+            Nothing&apos;s open for predictions right now.
+          </p>
         ) : (
-          <div className="space-y-12">
+          <>
+            <FriendActivityStrip movies={movieList} />
+
+            <MovieShelf
+              id="opening-this-month"
+              title="Opening this Month"
+              movies={openingThisMonth}
+            />
+            <MovieShelf
+              id="closing-soon"
+              title="Predictions Closing soon"
+              movies={closingSoon}
+            />
+
             {openSectionMovies.map((section) => (
-              <section key={section.id} className="space-y-6">
-                <div className="text-left">
-                  <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                    {section.label}
-                  </h3>
-                </div>
-                {renderMovieGrid(section.movies)}
-              </section>
+              <MovieShelf
+                key={section.id}
+                id={section.id}
+                title={section.label}
+                movies={section.movies}
+              />
             ))}
 
-            {moreUpcoming.length > 0 && (
-              <section className="space-y-6">
-                <div className="text-left">
-                  <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                    {openSectionMovies.length > 0 ? "More upcoming" : "Upcoming Releases"}
-                  </h3>
-                  <p className="text-sm text-stone-400">
-                    {openSectionMovies.length > 0
-                      ? "Titles not yet placed in a lobby category."
-                      : "Pick a movie to forecast performance."}
-                  </p>
-                </div>
-                {renderMovieGrid(moreUpcoming)}
-              </section>
-            )}
-          </div>
+            <section className="space-y-4" aria-labelledby="all-upcoming-heading">
+              <h2
+                id="all-upcoming-heading"
+                className="text-left font-marquee text-2xl uppercase tracking-wide text-white sm:text-3xl"
+              >
+                All upcoming
+              </h2>
+              <ul
+                className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-4 md:grid-cols-4 lg:grid-cols-5"
+                role="list"
+              >
+                {movieList.map((movie) => (
+                  <li key={movieKey(movie)}>
+                    <TitleCard movie={movie} density="grid" />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
         )}
-      </main>
+      </div>
     </div>
   );
 }

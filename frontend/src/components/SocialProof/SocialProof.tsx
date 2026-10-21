@@ -350,7 +350,7 @@ export default function SocialProof({
           {revealGuesses ? (
             <tr className="text-[11px] uppercase tracking-wider text-stone-400 border-b border-stone-700/60">
               <th scope="col" className={`${stickyWho} font-medium`}>
-                User
+                Player
               </th>
               {metricHeaders}
               {showSegmentRank && (

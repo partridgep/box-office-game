@@ -84,7 +84,7 @@ export default function FollowInvite() {
         <h1 className="font-marquee text-3xl uppercase text-theater-gold">Invite not found</h1>
         <p className="text-stone-300">{loadError}</p>
         <Link to="/" className="inline-block text-theater-gold underline underline-offset-4">
-          Back to the lobby
+          Back to upcoming
         </Link>
       </div>
     );

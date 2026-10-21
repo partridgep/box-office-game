@@ -1,0 +1,89 @@
+/* Break out of Layout's padded max-width column for a true edge-to-edge hero. */
+.heroBleed {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+.heroScroller {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  /* Keep edge swipes from chaining into browser back/forward navigation. */
+  overscroll-behavior-x: none;
+  scrollbar-width: none;
+}
+
+.heroScroller::-webkit-scrollbar {
+  display: none;
+}
+
+.heroSlide {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  /* Mobile: tall immersive cover. Desktop height is set below from poster. */
+  min-height: min(85dvh, 40rem);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.shelfScroller {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: none;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-theater-gold, #c9a227) 40%, transparent) transparent;
+}
+
+.shelfScroller::-webkit-scrollbar {
+  height: 6px;
+}
+
+.shelfScroller::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-theater-gold, #c9a227) 35%, transparent);
+  border-radius: 999px;
+}
+
+.shelfItem {
+  flex: 0 0 auto;
+  width: 7.5rem;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 640px) {
+  .shelfItem {
+    width: 9rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .shelfItem {
+    width: 10rem;
+  }
+
+  /* Desktop: height tracks the inset poster (~20rem × 3/2) plus vertical padding. */
+  .heroSlide {
+    min-height: 32rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .heroSlide {
+    min-height: 36rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroScroller {
+    scroll-behavior: auto;
+  }
+}
