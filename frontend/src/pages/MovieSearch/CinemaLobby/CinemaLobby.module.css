@@ -32,16 +32,71 @@
   scroll-snap-stop: always;
 }
 
+.posterTrack {
+  position: relative;
+}
+
 .shelfScroller {
+  position: relative;
   display: flex;
   gap: 0.75rem;
   overflow-x: auto;
-  padding-bottom: 0.5rem;
+  /*
+   * Inset the track so hover ring + focus outline aren't clipped by overflow.
+   * Negative margin keeps posters optically aligned with the section heading.
+   */
+  padding: 0.5rem 0.5rem 0.625rem;
+  margin-inline: -0.5rem;
   scroll-snap-type: x proximity;
+  scroll-padding-inline: 0.5rem;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: none;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--color-theater-gold, #c9a227) 40%, transparent) transparent;
+}
+
+/* Host for the shared magnet so it stays a valid <ul> child. */
+.shelfMagnetItem {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* Shared lobby light that lerps between neighboring posters in a shelf. */
+.shelfMagnet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: 0.375rem;
+  /* Ring alpha is driven in JS (--magnet-ring) so it can dim mid-slide. */
+  box-shadow: 0 0 0 2px
+    rgb(230 197 103 / calc(0.4 * var(--magnet-ring, 1)));
+  opacity: 0;
+  overflow: hidden;
+  will-change: transform, width, height, opacity;
+}
+
+.shelfMagnetSpotlight {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 95% 75% at 50% 100%,
+    color-mix(
+      in srgb,
+      color-mix(in srgb, white 80%, var(--color-theater-gold, #e6c567) 20%) 22%,
+      transparent
+    ),
+    transparent 68%
+  );
 }
 
 .shelfScroller::-webkit-scrollbar {
@@ -82,8 +137,55 @@
   }
 }
 
+/* Lobby light on a one-sheet: soft gold wash from below + slight brighten. */
+.titleCardImg {
+  transition: filter 320ms ease;
+}
+
+.titleCardSpotlight {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 95% 75% at 50% 100%,
+    color-mix(
+      in srgb,
+      color-mix(in srgb, white 80%, var(--color-theater-gold, #e6c567) 20%) 22%,
+      transparent
+    ),
+    transparent 68%
+  );
+  transition: opacity 320ms ease;
+}
+
+:global(.group:hover) .titleCardImg,
+:global(.group:focus-visible) .titleCardImg {
+  filter: brightness(1.08);
+}
+
+:global(.group:hover) .titleCardSpotlight,
+:global(.group:focus-visible) .titleCardSpotlight {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .heroScroller {
     scroll-behavior: auto;
+  }
+
+  .titleCardImg,
+  .titleCardSpotlight {
+    transition: none;
+  }
+
+  :global(.group:hover) .titleCardImg,
+  :global(.group:focus-visible) .titleCardImg {
+    filter: none;
+  }
+
+  :global(.group:hover) .titleCardSpotlight,
+  :global(.group:focus-visible) .titleCardSpotlight {
+    opacity: 0;
   }
 }

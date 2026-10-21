@@ -1,19 +1,52 @@
-import { ReactNode, useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Loader2, Users } from "lucide-react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Clapperboard, Loader2, UserRound, Users } from "lucide-react";
 import { useUserStore } from "../../store/useUserStore";
 import { useFriendsStore } from "../../store/useFriendsStore";
-import FriendsDialog from "../Friends/FriendsDialog";
 import RecoverAccount from "../RecoverAccount/RecoverAccount";
+import InviteDialog from "../Friends/InviteDialog";
+import BrandMark from "./BrandMark";
 import styles from "./Layout.module.css";
 
 interface LayoutProps {
   children: ReactNode;
 }
 
+type BottomTab = "upcoming" | "friends" | "you";
+
+const DESKTOP_MQ = "(min-width: 768px)";
+
+function isUpcomingPath(pathname: string) {
+  return pathname === "/" || pathname.startsWith("/movie");
+}
+
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(DESKTOP_MQ).matches : true
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_MQ);
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  return isDesktop;
+}
+
 export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const isDesktop = useIsDesktop();
   const user = useUserStore((state) => state.user);
   const sessionStatus = useUserStore((state) => state.sessionStatus);
   const sessionMessage = useUserStore((state) => state.sessionMessage);
@@ -21,10 +54,29 @@ export default function Layout({ children }: LayoutProps) {
   const openRestoreAccess = useUserStore((state) => state.openRestoreAccess);
   const closeRestoreAccess = useUserStore((state) => state.closeRestoreAccess);
   const logout = useUserStore((state) => state.logout);
-  const [showingFriends, setShowingFriends] = useState(false);
+
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [flickerKey, setFlickerKey] = useState(0);
+  const [flickerTab, setFlickerTab] = useState<BottomTab | null>(null);
+
+  const accountMenuId = useId();
+  const accountPanelRef = useRef<HTMLDivElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+  const youPanelRef = useRef<HTMLDivElement>(null);
+  const youTriggerRef = useRef<HTMLButtonElement>(null);
+
   const followingCount = useFriendsStore((state) => state.following.length);
   const followingLoaded = useFriendsStore((state) => state.loaded);
   const loadFollowing = useFriendsStore((state) => state.loadFollowing);
+
+  const signedIn = sessionStatus === "ready" && Boolean(user);
+  const upcomingActive = isUpcomingPath(location.pathname) && !accountOpen;
+  const friendsActive = location.pathname.startsWith("/friends");
+  const youActive =
+    accountOpen ||
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/follow");
 
   useEffect(() => {
     if (sessionStatus === "ready" && user && !followingLoaded) {
@@ -32,125 +84,205 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [sessionStatus, user, followingLoaded, loadFollowing]);
 
-  return (
-    <div
-      className={`min-h-screen overflow-x-hidden overscroll-x-none bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles["layout"]}`}
-    >
-      <header
-        className={`fixed top-0 left-0 w-full z-50 backdrop-blur-md bg-cinema-950/80 px-6 py-4 flex items-center justify-between ${styles["header"]}`}
+  // One bulb flicker on the newly active bottom tab after a route change.
+  useEffect(() => {
+    let tab: BottomTab = "upcoming";
+    if (location.pathname.startsWith("/friends")) {
+      tab = "friends";
+    } else if (
+      location.pathname.startsWith("/admin") ||
+      location.pathname.startsWith("/follow")
+    ) {
+      tab = "you";
+    } else if (isUpcomingPath(location.pathname)) {
+      tab = "upcoming";
+    }
+    setFlickerTab(tab);
+    setFlickerKey((k) => k + 1);
+    setAccountOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        accountPanelRef.current?.contains(target) ||
+        accountTriggerRef.current?.contains(target) ||
+        youPanelRef.current?.contains(target) ||
+        youTriggerRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setAccountOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setAccountOpen(false);
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
+
+  function goUpcoming() {
+    setAccountOpen(false);
+    navigate("/");
+  }
+
+  function goFriends() {
+    setAccountOpen(false);
+    navigate("/friends");
+  }
+
+  function toggleAccount() {
+    if (!signedIn) {
+      openRestoreAccess();
+      return;
+    }
+    setAccountOpen((open) => !open);
+  }
+
+  function renderAccountActions(
+    panelRef: RefObject<HTMLDivElement>,
+    { openUp = false }: { openUp?: boolean } = {}
+  ) {
+    if (!signedIn || !user) return null;
+    return (
+      <div
+        ref={panelRef}
+        id={accountMenuId}
+        className={`${styles.accountPanel} ${openUp ? styles.accountPanelUp : ""}`}
+        role="menu"
+        aria-label="Account"
       >
+        <p
+          className="px-2.5 py-1.5 text-xs text-stone-500 truncate"
+          role="presentation"
+        >
+          {user.name}
+        </p>
         <button
           type="button"
-          className="flex items-center space-x-3 cursor-pointer rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-theater-gold"
-          onClick={() => navigate("/")}
+          role="menuitem"
+          onClick={() => {
+            setAccountOpen(false);
+            setInviteOpen(true);
+          }}
         >
-          <div className="w-9 h-9 rounded-xl bg-linear-to-tr from-indigo-500 to-rose-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <span className="text-lg font-black text-white" aria-hidden>
-              🎬
-            </span>
-          </div>
-          <span className="text-xl font-bold tracking-tight bg-linear-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            BoxOffice<span className="text-rose-400">Guesser</span>
-          </span>
+          Invite
+        </button>
+        <Link
+          role="menuitem"
+          to="/admin"
+          onClick={() => setAccountOpen(false)}
+        >
+          Admin
+        </Link>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            setAccountOpen(false);
+            logout();
+          }}
+        >
+          Log out
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`min-h-screen overflow-x-hidden overscroll-x-none bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles.layout}`}
+    >
+      <header className={styles.topRail}>
+        <button
+          type="button"
+          className={styles.brandButton}
+          onClick={goUpcoming}
+          aria-label="Box Office Guesser home"
+        >
+          <BrandMark className="size-10 shrink-0 md:size-11" />
+          <span className={styles.wordmark}>Box Office Guesser</span>
         </button>
 
-        <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-slate-300">
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className={`transition-colors ${
-              location.pathname === "/" ? "text-rose-400" : "hover:text-white"
-            }`}
-          >
-            Upcoming
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/leaderboard")}
-            className={`transition-colors ${
-              location.pathname === "/leaderboard"
-                ? "text-rose-400"
-                : "hover:text-white"
-            }`}
-          >
-            Leaderboard
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/challenges")}
-            className={`transition-colors ${
-              location.pathname === "/challenges"
-                ? "text-rose-400"
-                : "hover:text-white"
-            }`}
-          >
-            Challenges
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/admin")}
-            className={`transition-colors ${
-              location.pathname.startsWith("/admin")
-                ? "text-rose-400"
-                : "text-stone-500 hover:text-stone-300"
-            }`}
-          >
-            Admin
-          </button>
-        </nav>
-
-        <div className="flex items-center space-x-4">
-          {sessionStatus === "booting" ? (
-            <div
-              className="flex items-center gap-2 bg-cinema-900 px-3 py-1.5 rounded-full text-sm text-stone-400"
-              role="status"
-              aria-live="polite"
+        {isDesktop ? (
+          <nav className={styles.desktopNav} aria-label="Primary">
+            <button
+              type="button"
+              onClick={goUpcoming}
+              className={`${styles.navLink} ${
+                location.pathname === "/" ? styles.navLinkActive : ""
+              }`}
+              aria-current={location.pathname === "/" ? "page" : undefined}
             >
+              Upcoming
+            </button>
+            <button
+              type="button"
+              onClick={goFriends}
+              className={`${styles.navLink} ${
+                friendsActive ? styles.navLinkActive : ""
+              }`}
+              aria-current={friendsActive ? "page" : undefined}
+            >
+              Friends
+              {signedIn && followingLoaded ? (
+                <span className="ml-1 tabular-nums text-stone-500">
+                  {followingCount}
+                </span>
+              ) : null}
+            </button>
+          </nav>
+        ) : null}
+
+        <div className={styles.accountCluster}>
+          {sessionStatus === "booting" ? (
+            <div className={styles.sessionPill} role="status" aria-live="polite">
               <Loader2 size={14} className="animate-spin" aria-hidden />
-              Reconnecting…
+              <span className="hidden sm:inline">Reconnecting…</span>
             </div>
-          ) : sessionStatus === "ready" && user ? (
-            <div className="flex items-center space-x-3 bg-cinema-900 px-3 py-1.5 rounded-full">
-              <span className="text-sm font-medium text-slate-200 hidden sm:inline">
-                {user.name}
-              </span>
+          ) : null}
+
+          {isDesktop && sessionStatus !== "booting" && signedIn && user ? (
+            <div className={styles.accountMenu}>
               <button
+                ref={accountTriggerRef}
                 type="button"
-                onClick={() => setShowingFriends(true)}
-                aria-haspopup="dialog"
-                className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm text-stone-300 hover:text-theater-gold focus-visible:outline-2 focus-visible:outline-theater-gold transition-colors"
+                className={styles.accountTrigger}
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                aria-controls={accountMenuId}
+                onClick={toggleAccount}
               >
-                <Users size={16} aria-hidden />
-                Friends
-                {followingLoaded && (
-                  <span className="min-w-5 rounded-full bg-cinema-700 px-1.5 text-xs tabular-nums text-stone-200">
-                    <span className="sr-only">, following </span>
-                    {followingCount}
-                  </span>
-                )}
+                <UserRound size={15} aria-hidden />
+                <span className={styles.accountName}>{user.name}</span>
               </button>
-              <button
-                type="button"
-                onClick={logout}
-                className="text-xs text-stone-400 hover:text-rose-400 border-l border-cinema-700 pl-3 transition-colors"
-              >
-                Log out
-              </button>
+              {accountOpen ? renderAccountActions(accountPanelRef) : null}
             </div>
-          ) : (
+          ) : null}
+
+          {isDesktop && sessionStatus !== "booting" && !signedIn ? (
             <button
               type="button"
               onClick={() => openRestoreAccess()}
-              className="bg-cinema-600 hover:bg-cinema-500 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg shadow-cinema-600/30 transition-all"
+              className={styles.restoreButton}
             >
               Restore Access
             </button>
-          )}
+          ) : null}
         </div>
       </header>
 
       {restoreAccessOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-cinema-950/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-cinema-950/80 backdrop-blur-sm p-4">
           <div className="bg-cinema-900 border border-cinema-800 rounded-3xl p-6 max-w-md w-full shadow-2xl">
             <RecoverAccount
               message={sessionMessage}
@@ -160,13 +292,94 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       )}
 
-      {showingFriends && user && sessionStatus === "ready" && (
-        <FriendsDialog onClose={() => setShowingFriends(false)} />
+      {inviteOpen && signedIn && (
+        <InviteDialog onClose={() => setInviteOpen(false)} />
       )}
 
-      <main className="pt-18 flex-1 max-w-screen-2xl w-full mx-auto px-4 sm:px-6 pb-8">
-        {children}
-      </main>
+      <main className={styles.main}>{children}</main>
+
+      {!isDesktop ? (
+        <nav className={styles.bottomBar} aria-label="Primary">
+          <button
+            type="button"
+            className={`${styles.bottomItem} ${
+              upcomingActive ? styles.bottomItemActive : ""
+            }`}
+            onClick={goUpcoming}
+            aria-current={upcomingActive ? "page" : undefined}
+          >
+            <span className={styles.bottomIconWrap}>
+              <Clapperboard size={20} strokeWidth={1.75} aria-hidden />
+              {upcomingActive ? (
+                <span
+                  key={`upcoming-${flickerKey}`}
+                  className={`${styles.bulb} ${
+                    flickerTab === "upcoming" ? styles.bulbFlicker : ""
+                  }`}
+                  aria-hidden
+                />
+              ) : null}
+            </span>
+            <span className={styles.bottomLabel}>Upcoming</span>
+          </button>
+
+          <button
+            type="button"
+            className={`${styles.bottomItem} ${
+              friendsActive ? styles.bottomItemActive : ""
+            }`}
+            onClick={goFriends}
+            aria-current={friendsActive ? "page" : undefined}
+          >
+            <span className={styles.bottomIconWrap}>
+              <Users size={20} strokeWidth={1.75} aria-hidden />
+              {friendsActive ? (
+                <span
+                  key={`friends-${flickerKey}`}
+                  className={`${styles.bulb} ${
+                    flickerTab === "friends" ? styles.bulbFlicker : ""
+                  }`}
+                  aria-hidden
+                />
+              ) : null}
+            </span>
+            <span className={styles.bottomLabel}>Friends</span>
+          </button>
+
+          <div className="relative">
+            <button
+              ref={youTriggerRef}
+              type="button"
+              className={`${styles.bottomItem} w-full ${
+                youActive ? styles.bottomItemActive : ""
+              }`}
+              onClick={toggleAccount}
+              aria-haspopup={signedIn ? "menu" : undefined}
+              aria-expanded={signedIn ? accountOpen : undefined}
+              aria-controls={signedIn ? accountMenuId : undefined}
+            >
+              <span className={styles.bottomIconWrap}>
+                <UserRound size={20} strokeWidth={1.75} aria-hidden />
+                {youActive ? (
+                  <span
+                    key={`you-${flickerKey}`}
+                    className={`${styles.bulb} ${
+                      flickerTab === "you" ? styles.bulbFlicker : ""
+                    }`}
+                    aria-hidden
+                  />
+                ) : null}
+              </span>
+              <span className={styles.bottomLabel}>
+                {signedIn ? "You" : "Sign in"}
+              </span>
+            </button>
+            {accountOpen && signedIn
+              ? renderAccountActions(youPanelRef, { openUp: true })
+              : null}
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }

@@ -4,18 +4,19 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
+  type PointerEvent,
 } from "react";
 import { Link } from "react-router-dom";
 import { useMovieStore } from "../../../store/useMovieStore";
 import { useGuessStore } from "../../../store/useGuessStore";
-import { useFriendsStore } from "../../../store/useFriendsStore";
 import {
   getCompGroups,
   getLobbySections,
 } from "../../../services/categories.service";
-import { getAllGuessesForMovie } from "../../../services/guesses.service";
 import { Guess, LobbyMovie, LobbySection, MovieData } from "../../../types";
+import { useFriendActivity } from "../../../components/Friends/useFriendActivity";
 import {
   getPredictionAvailability,
   getPredictionWindows,
@@ -108,22 +109,60 @@ function formatPredictionBadgeLines(guess: Guess | undefined | null): string[] {
   return lines;
 }
 
+function PredictionBadgeLine({
+  line,
+  slashSep = false,
+}: {
+  line: string;
+  slashSep?: boolean;
+}) {
+  const display = slashSep ? line.replace(/ \+ /g, "/") : line;
+  const match = display.match(/^(OW|FINAL|RT)\s+(.*)$/);
+  if (!match) {
+    return <span className="tabular-nums">{display}</span>;
+  }
+  return (
+    <span className="tabular-nums">
+      <span className="font-extrabold">{match[1]}</span> {match[2]}
+    </span>
+  );
+}
+
 function PredictionBadge({
   lines,
   className = "",
+  compact = false,
 }: {
   lines: string[];
   className?: string;
+  compact?: boolean;
 }) {
   if (lines.length === 0) return null;
   return (
     <span
-      className={`flex flex-col gap-0.5 rounded-sm bg-cinema-950/85 px-1.5 py-1 text-left font-semibold leading-snug tracking-wide text-theater-gold ring-1 ring-theater-gold/40 ${className}`}
+      className={[
+        "flex w-full flex-col gap-0.5 rounded-md border border-theater-gold/80 text-left font-semibold tracking-wide text-theater-gold backdrop-blur-sm",
+        compact
+          ? "bg-cinema-950/90 p-2 text-[0.6rem] leading-snug"
+          : "bg-theater-gold/20 p-2 text-xs sm:text-sm",
+        className,
+      ].join(" ")}
     >
+      <span
+        className={[
+          "mb-0.5 flex items-center gap-1 uppercase tracking-[0.2em] text-theater-gold/90",
+          compact ? "text-[0.55rem]" : "text-[0.65rem]",
+        ].join(" ")}
+      >
+        <Check
+          size={compact ? 10 : 14}
+          className="shrink-0 text-theater-gold"
+          aria-hidden="true"
+        />
+        You predicted
+      </span>
       {lines.map((line) => (
-        <span key={line} className="tabular-nums">
-          {line}
-        </span>
+        <PredictionBadgeLine key={line} line={line} slashSep={compact} />
       ))}
     </span>
   );
@@ -205,9 +244,12 @@ function prefersReducedMotion() {
 function TitleCard({
   movie,
   density = "shelf",
+  magnetic = false,
 }: {
   movie: LobbyMovie | MovieData;
   density?: "shelf" | "grid";
+  /** Spotlight/ring come from the shelf magnet instead of local hover. */
+  magnetic?: boolean;
 }) {
   const guess = useGuessStore((state) =>
     movie.id ? state.guesses[String(movie.id)] : undefined
@@ -228,35 +270,66 @@ function TitleCard({
     movie.title,
     formatOpens(movie.released),
     daysLeft,
-    callLines.length ? `You predicted ${callLines.join(". ")}` : null,
+    callLines.length
+      ? `You predicted ${callLines.map((l) => l.replace(/ \+ /g, "/")).join(". ")}`
+      : null,
   ].filter(Boolean);
+
+  const frameClass = magnetic
+    ? "relative rounded-md bg-cinema-900 ring-1 ring-cinema-800/80"
+    : "relative rounded-md bg-cinema-900 ring-1 ring-cinema-800/80 transition-[box-shadow,ring-color,ring-width] duration-[320ms] ease-in-out group-hover:ring-2 group-hover:ring-theater-gold/40 group-focus-visible:ring-2 group-focus-visible:ring-theater-gold/40";
 
   const body = (
     <>
-      <div className="relative aspect-2/3 overflow-hidden rounded-md bg-cinema-900 ring-1 ring-cinema-800/80 transition duration-300 group-hover:ring-theater-gold/40 group-hover:shadow-[0_12px_28px_rgba(0,0,0,0.45)]">
-        {movie.poster ? (
-          <img
-            src={`${POSTER_SHELF}${movie.poster}`}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center bg-cinema-900 text-xs text-stone-500">
-            No poster
-          </div>
-        )}
+      <div className={frameClass}>
+        <div
+          className="aspect-2/3 overflow-hidden rounded-md"
+          data-shelf-poster={magnetic ? "" : undefined}
+        >
+          {movie.poster ? (
+            <img
+              src={`${POSTER_SHELF}${movie.poster}`}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className={`${magnetic ? "" : styles.titleCardImg} h-full w-full object-cover`}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-cinema-900 text-xs text-stone-500">
+              No poster
+            </div>
+          )}
+          {!magnetic && (
+            <div className={styles.titleCardSpotlight} aria-hidden="true" />
+          )}
+        </div>
+        {/* Outside overflow-hidden so scale grows evenly from center. */}
         <PredictionBadge
           lines={callLines}
-          className="absolute left-2 top-2 max-w-[calc(100%-1rem)] text-[0.6rem]"
+          compact
+          className={[
+            "absolute left-1 top-1 z-10 max-w-[calc(100%-0.5rem)] origin-center",
+            "transition-transform duration-320 ease-in-out",
+            "group-hover:scale-[1.08]",
+            "group-focus-visible:scale-[1.08]",
+            "group-hover:translate-y-[-6.5px]",
+            "group-focus-visible:translate-y-[-6.5px]",
+            "motion-reduce:transition-none",
+            "motion-reduce:group-hover:scale-100",
+            "motion-reduce:group-focus-visible:scale-100",
+            "motion-reduce:group-hover:translate-y-0",
+            "motion-reduce:group-focus-visible:translate-y-0",
+          ].join(" ")}
         />
       </div>
-      <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-stone-100 transition-colors group-hover:text-theater-gold">
+      <p className="mt-2 line-clamp-2 text-left text-sm font-semibold leading-snug text-stone-100 transition-colors duration-100 group-hover:text-yellow-200 group-focus-visible:text-theater-gold">
         {movie.title}
       </p>
-      <p className="mt-0.5 text-xs text-stone-500">
-        {metaBits.join(" · ")}
+      <p className="mt-0.5 text-left text-xs text-stone-400">
+        {metaBits[0]}
+        <span className="ml-0.5 text-stone-500">
+          {metaBits[1] ? ` (${metaBits[1]})` : ""}
+        </span>
       </p>
     </>
   );
@@ -276,6 +349,194 @@ function TitleCard({
   );
 }
 
+type MagnetRect = { x: number; y: number; w: number; h: number };
+
+function measurePosterFrame(
+  track: HTMLElement,
+  item: HTMLElement
+): MagnetRect | null {
+  const poster = item.querySelector("[data-shelf-poster]");
+  if (!(poster instanceof HTMLElement)) return null;
+  const pr = poster.getBoundingClientRect();
+  const tr = track.getBoundingClientRect();
+  if (pr.width < 1 || pr.height < 1) return null;
+  return {
+    x: pr.left - tr.left + track.scrollLeft,
+    y: pr.top - tr.top + track.scrollTop,
+    w: pr.width,
+    h: pr.height,
+  };
+}
+
+function useMagneticPosterTrack(
+  itemCount: number,
+  {
+    /** Per-frame lerp toward the active poster (higher = snappier). */
+    lerp: lerpSpeed = 0.22,
+    /** Per-frame opacity fade in/out. */
+    fade: fadeSpeed = 0.28,
+  }: { lerp?: number; fade?: number } = {}
+) {
+  const trackRef = useRef<HTMLUListElement>(null);
+  const magnetRef = useRef<HTMLDivElement>(null);
+  const targetRef = useRef<MagnetRect | null>(null);
+  const currentRef = useRef<MagnetRect | null>(null);
+  const opacityRef = useRef(0);
+  const activeItemRef = useRef<HTMLElement | null>(null);
+  const rafRef = useRef(0);
+  const lerpSpeedRef = useRef(lerpSpeed);
+  const fadeSpeedRef = useRef(fadeSpeed);
+  lerpSpeedRef.current = lerpSpeed;
+  fadeSpeedRef.current = fadeSpeed;
+
+  const stopLoop = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
+  }, []);
+
+  const paintMagnet = useCallback(() => {
+    const el = magnetRef.current;
+    const cur = currentRef.current;
+    const target = targetRef.current;
+    if (!el || !cur) {
+      if (el) {
+        el.style.opacity = "0";
+        el.style.setProperty("--magnet-ring", "0");
+      }
+      return;
+    }
+    el.style.width = `${cur.w}px`;
+    el.style.height = `${cur.h}px`;
+    el.style.transform = `translate(${cur.x}px, ${cur.y}px)`;
+    el.style.opacity = String(opacityRef.current);
+
+    // Ring only reads near settle; mid-slide stays nearly invisible.
+    let ring = 1;
+    if (target) {
+      const dist = Math.hypot(target.x - cur.x, target.y - cur.y);
+      const span = Math.max(cur.w * 0.45, 24);
+      const travel = Math.min(1, dist / span);
+      // Steep falloff: bright only at the start/end of a hop.
+      ring = Math.pow(1 - travel, 5);
+    } else {
+      ring = opacityRef.current;
+    }
+    el.style.setProperty("--magnet-ring", String(ring));
+  }, []);
+
+  const tick = useCallback(() => {
+    const reduced = prefersReducedMotion();
+    const target = targetRef.current;
+    const lerp = reduced ? 1 : lerpSpeedRef.current;
+    const fade = reduced ? 1 : fadeSpeedRef.current;
+
+    if (!target) {
+      opacityRef.current += (0 - opacityRef.current) * fade;
+      paintMagnet();
+      if (opacityRef.current > 0.01) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        opacityRef.current = 0;
+        currentRef.current = null;
+        paintMagnet();
+        rafRef.current = 0;
+      }
+      return;
+    }
+
+    if (!currentRef.current) {
+      currentRef.current = { ...target };
+    } else {
+      const cur = currentRef.current;
+      cur.x += (target.x - cur.x) * lerp;
+      cur.y += (target.y - cur.y) * lerp;
+      cur.w += (target.w - cur.w) * lerp;
+      cur.h += (target.h - cur.h) * lerp;
+    }
+    opacityRef.current += (1 - opacityRef.current) * fade;
+    paintMagnet();
+    rafRef.current = requestAnimationFrame(tick);
+  }, [paintMagnet]);
+
+  const ensureLoop = useCallback(() => {
+    if (!rafRef.current) rafRef.current = requestAnimationFrame(tick);
+  }, [tick]);
+
+  const moveToItem = useCallback(
+    (item: HTMLElement | null) => {
+      const track = trackRef.current;
+      if (!track || !item) {
+        activeItemRef.current = null;
+        targetRef.current = null;
+        ensureLoop();
+        return;
+      }
+      const next = measurePosterFrame(track, item);
+      if (!next) return;
+      activeItemRef.current = item;
+      targetRef.current = next;
+      ensureLoop();
+    },
+    [ensureLoop]
+  );
+
+  useEffect(() => () => stopLoop(), [stopLoop]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const onScroll = () => {
+      if (!activeItemRef.current) return;
+      const next = measurePosterFrame(track, activeItemRef.current);
+      if (next) {
+        targetRef.current = next;
+        ensureLoop();
+      }
+    };
+
+    track.addEventListener("scroll", onScroll, { passive: true });
+    return () => track.removeEventListener("scroll", onScroll);
+  }, [ensureLoop, itemCount]);
+
+  const trackProps = {
+    onPointerOver: (event: PointerEvent<HTMLUListElement>) => {
+      const item = (event.target as HTMLElement | null)?.closest(
+        "[data-shelf-item]"
+      );
+      if (!(item instanceof HTMLElement)) return;
+      if (!trackRef.current?.contains(item)) return;
+      if (item === activeItemRef.current) return;
+      moveToItem(item);
+    },
+    onPointerLeave: () => moveToItem(null),
+    onFocusCapture: (event: FocusEvent<HTMLUListElement>) => {
+      const item = (event.target as HTMLElement | null)?.closest(
+        "[data-shelf-item]"
+      );
+      if (!(item instanceof HTMLElement)) return;
+      moveToItem(item);
+    },
+    onBlurCapture: (event: FocusEvent<HTMLUListElement>) => {
+      const next = event.relatedTarget as Node | null;
+      if (next && trackRef.current?.contains(next)) return;
+      moveToItem(null);
+    },
+  };
+
+  const magnet = (
+    <li className={styles.shelfMagnetItem} aria-hidden="true">
+      <div ref={magnetRef} className={styles.shelfMagnet}>
+        <div className={styles.shelfMagnetSpotlight} />
+      </div>
+    </li>
+  );
+
+  return { trackRef, trackProps, magnet };
+}
+
 function MovieShelf({
   id,
   title,
@@ -285,6 +546,8 @@ function MovieShelf({
   title: string;
   movies: Array<LobbyMovie | MovieData>;
 }) {
+  const { trackRef, trackProps, magnet } = useMagneticPosterTrack(movies.length);
+
   if (movies.length === 0) return null;
 
   const headingId = `shelf-${id}`;
@@ -297,10 +560,20 @@ function MovieShelf({
       >
         {title}
       </h2>
-      <ul className={styles.shelfScroller} role="list">
+      <ul
+        ref={trackRef}
+        className={styles.shelfScroller}
+        role="list"
+        {...trackProps}
+      >
+        {magnet}
         {movies.map((movie) => (
-          <li key={movieKey(movie)} className={styles.shelfItem}>
-            <TitleCard movie={movie} />
+          <li
+            key={movieKey(movie)}
+            className={styles.shelfItem}
+            data-shelf-item=""
+          >
+            <TitleCard movie={movie} magnetic />
           </li>
         ))}
       </ul>
@@ -308,17 +581,37 @@ function MovieShelf({
   );
 }
 
-const ACTIVITY_MOVIE_LIMIT = 8;
-const ACTIVITY_CHIP_LIMIT = 3;
+function UpcomingGrid({ movies }: { movies: MovieData[] }) {
+  // Snappier than shelves — grid hops often span a full row.
+  const { trackRef, trackProps, magnet } = useMagneticPosterTrack(
+    movies.length,
+    { lerp: 0.42, fade: 0.4 }
+  );
 
-type FriendActivity = {
-  id: string;
-  name: string;
-  movieTitle: string;
-  tmdbID: string;
-  domesticOpening: number | null;
-  updatedAt: string;
-};
+  return (
+    <section className="space-y-4" aria-labelledby="all-upcoming-heading">
+      <h2
+        id="all-upcoming-heading"
+        className="text-left font-marquee text-2xl uppercase tracking-wide text-white sm:text-3xl"
+      >
+        All upcoming
+      </h2>
+      <ul
+        ref={trackRef}
+        className={`${styles.posterTrack} grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-4 md:grid-cols-4 lg:grid-cols-5`}
+        role="list"
+        {...trackProps}
+      >
+        {magnet}
+        {movies.map((movie) => (
+          <li key={movieKey(movie)} data-shelf-item="">
+            <TitleCard movie={movie} density="grid" magnetic />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function HowItWorksBeat() {
   const steps = [
@@ -358,115 +651,43 @@ function HowItWorksBeat() {
 }
 
 function FriendActivityStrip({ movies }: { movies: MovieData[] }) {
-  const following = useFriendsStore((state) => state.following);
-  const followingLoaded = useFriendsStore((state) => state.loaded);
-  const friendsVersion = useFriendsStore((state) => state.version);
-  const [items, setItems] = useState<FriendActivity[]>([]);
-
-  const movieIdsKey = useMemo(
-    () =>
-      movies
-        .filter((movie) => movie.id)
-        .slice(0, ACTIVITY_MOVIE_LIMIT)
-        .map((movie) => String(movie.id))
-        .join(","),
-    [movies]
-  );
-
-  useEffect(() => {
-    if (!followingLoaded || following.length === 0 || !movieIdsKey) {
-      setItems([]);
-      return;
-    }
-
-    let cancelled = false;
-    const byId = new Map(
-      movies
-        .filter((movie) => movie.id)
-        .map((movie) => [String(movie.id), movie] as const)
-    );
-    const ids = movieIdsKey.split(",");
-
-    async function loadActivity() {
-      const batches = await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const response = await getAllGuessesForMovie(id);
-            return (response.data ?? []).filter((guess) => guess.is_friend);
-          } catch {
-            return [] as Guess[];
-          }
-        })
-      );
-      if (cancelled) return;
-
-      const flat: FriendActivity[] = [];
-      for (const guess of batches.flat()) {
-        const movie = byId.get(String(guess.movie_id));
-        if (!movie?.tmdbID) continue;
-        flat.push({
-          id: guess.id,
-          name: guess.guess_user?.name?.trim() || "Friend",
-          movieTitle: movie.title,
-          tmdbID: String(movie.tmdbID),
-          domesticOpening:
-            guess.domestic_opening != null &&
-            Number.isFinite(Number(guess.domestic_opening))
-              ? Number(guess.domestic_opening)
-              : null,
-          updatedAt: guess.updatedAt || guess.createdAt,
-        });
-      }
-
-      flat.sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      );
-
-      const seen = new Set<string>();
-      const unique = flat.filter((item) => {
-        const key = `${item.name}:${item.tmdbID}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      setItems(unique.slice(0, ACTIVITY_CHIP_LIMIT));
-    }
-
-    loadActivity();
-    return () => {
-      cancelled = true;
-    };
-  }, [followingLoaded, following.length, friendsVersion, movieIdsKey, movies]);
+  const { items } = useFriendActivity(movies, { limit: 3, movieScan: 8 });
 
   if (items.length === 0) return null;
 
   return (
-    <div
-      className="flex gap-2 overflow-x-auto pb-1 scrollbar-none"
-      role="status"
-      aria-label="Recent friend predictions"
-    >
-      {items.map((item) => (
-        <Link
-          key={item.id}
-          to={`/movie/${item.tmdbID}`}
-          className="shrink-0 rounded-md border border-cinema-800/80 bg-cinema-900/70 px-3 py-1.5 text-xs text-stone-400 transition-colors hover:border-theater-gold/35 hover:text-stone-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold"
-        >
-          <span className="font-semibold text-theater-gold">{item.name}</span>
-          {" locked "}
-          {item.domesticOpening != null ? (
-            <span className="font-semibold tabular-nums text-stone-100">
-              {formatMillions(item.domesticOpening)}
-            </span>
-          ) : (
-            "a call"
-          )}
-          {" on "}
-          <span className="text-stone-200">{item.movieTitle}</span>
-        </Link>
-      ))}
+    <div className="flex items-center gap-2">
+      <div
+        className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-none"
+        role="status"
+        aria-label="Recent friend predictions"
+      >
+        {items.map((item) => (
+          <Link
+            key={item.id}
+            to={`/movie/${item.tmdbID}`}
+            className="shrink-0 rounded-md border border-cinema-800/80 bg-cinema-900/70 px-3 py-1.5 text-xs text-stone-400 transition-colors hover:border-theater-gold/35 hover:text-stone-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold"
+          >
+            <span className="font-semibold text-theater-gold">{item.name}</span>
+            {" locked "}
+            {item.domesticOpening != null ? (
+              <span className="font-semibold tabular-nums text-stone-100">
+                {formatMillions(item.domesticOpening)}
+              </span>
+            ) : (
+              "a call"
+            )}
+            {" on "}
+            <span className="text-stone-200">{item.movieTitle}</span>
+          </Link>
+        ))}
+      </div>
+      <Link
+        to="/friends"
+        className="shrink-0 text-xs font-medium text-theater-gold/80 hover:text-theater-gold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold"
+      >
+        All
+      </Link>
     </div>
   );
 }
@@ -483,20 +704,36 @@ function FeaturedHero({
   const [index, setIndex] = useState(0);
   const [autoplayPaused, setAutoplayPaused] = useState(false);
   const userPausedRef = useRef(false);
+  const programmaticScrollRef = useRef(false);
+  const clearProgrammaticTimerRef = useRef(0);
+
+  const pauseAutoplay = useCallback(() => {
+    userPausedRef.current = true;
+    setAutoplayPaused(true);
+  }, []);
 
   const goTo = useCallback((next: number, behavior: ScrollBehavior = "smooth") => {
     const scroller = scrollerRef.current;
     if (!scroller || movies.length === 0) return;
     const clamped = ((next % movies.length) + movies.length) % movies.length;
     const width = scroller.clientWidth;
+
+    programmaticScrollRef.current = true;
+    window.clearTimeout(clearProgrammaticTimerRef.current);
+    const release = () => {
+      programmaticScrollRef.current = false;
+    };
+    const onScrollEnd = () => {
+      release();
+      scroller.removeEventListener("scrollend", onScrollEnd);
+    };
+    scroller.addEventListener("scrollend", onScrollEnd);
+    // Fallback when scrollend isn't fired (reduced-motion / older engines).
+    clearProgrammaticTimerRef.current = window.setTimeout(release, behavior === "auto" ? 50 : 850);
+
     scroller.scrollTo({ left: clamped * width, behavior });
     setIndex(clamped);
   }, [movies.length]);
-
-  const pauseAutoplay = useCallback(() => {
-    userPausedRef.current = true;
-    setAutoplayPaused(true);
-  }, []);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -504,6 +741,9 @@ function FeaturedHero({
 
     let frame = 0;
     const onScroll = () => {
+      if (!programmaticScrollRef.current) {
+        pauseAutoplay();
+      }
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const width = scroller.clientWidth || 1;
@@ -515,9 +755,13 @@ function FeaturedHero({
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
+      window.clearTimeout(clearProgrammaticTimerRef.current);
       scroller.removeEventListener("scroll", onScroll);
     };
-  }, []);
+  }, [pauseAutoplay]);
+
+  const indexRef = useRef(index);
+  indexRef.current = index;
 
   useEffect(() => {
     if (movies.length <= 1 || autoplayPaused) return;
@@ -525,24 +769,11 @@ function FeaturedHero({
 
     const timer = window.setInterval(() => {
       if (userPausedRef.current) return;
-      setIndex((prev) => {
-        const next = (prev + 1) % movies.length;
-        const scroller = scrollerRef.current;
-        if (scroller) {
-          scroller.scrollTo({
-            left: next * scroller.clientWidth,
-            behavior: "smooth",
-          });
-        }
-        return next;
-      });
+      goTo(indexRef.current + 1);
     }, HERO_AUTOPLAY_MS);
 
     return () => window.clearInterval(timer);
-  }, [movies.length, autoplayPaused]);
-
-  const indexRef = useRef(index);
-  indexRef.current = index;
+  }, [movies.length, autoplayPaused, goTo]);
 
   useEffect(() => {
     const onResize = () => goTo(indexRef.current, "auto");
@@ -584,6 +815,7 @@ function FeaturedHero({
           aria-label="Swipe or use arrow keys to browse featured titles"
           onPointerDown={pauseAutoplay}
           onTouchStart={pauseAutoplay}
+          onWheel={pauseAutoplay}
           onFocus={pauseAutoplay}
         >
           {movies.map((movie, slideIndex) => {
@@ -636,7 +868,7 @@ function FeaturedHero({
                   <div className="absolute inset-0 bg-linear-to-r from-cinema-950/80 via-cinema-950/40 to-cinema-950/70" />
                 </div>
 
-                <div className="relative z-5 flex h-full min-h-[inherit] flex-col justify-end px-5 pb-16 pr-14 pt-24 sm:px-8 sm:pr-20 sm:pb-20 lg:justify-center lg:px-12 lg:py-8 lg:pr-24">
+                <div className="relative z-5 flex h-full min-h-[inherit] flex-col justify-end px-5 pb-20 pr-14 pt-16 sm:px-8 sm:pr-20 sm:pb-20 lg:justify-center lg:px-12 lg:py-8 lg:pr-24">
                   <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6 lg:flex-row lg:items-center lg:gap-12 xl:gap-16">
                     {movie.poster ? (
                       <div className="hidden w-72 shrink-0 xl:w-86 lg:block">
@@ -649,7 +881,8 @@ function FeaturedHero({
                           />
                           <PredictionBadge
                             lines={callLines}
-                            className="absolute left-3 top-3 max-w-[calc(100%-1.5rem)] text-[0.65rem]"
+                            compact
+                            className="absolute left-3 top-3 max-w-[calc(100%-1.5rem)]"
                           />
                         </div>
                       </div>
@@ -685,23 +918,10 @@ function FeaturedHero({
                               </span>
                             </p>
                           ) : null}
-                          {callLines.length > 0 ? (
-                            <div className="mt-3 space-y-0.5 rounded-md border border-theater-gold/80 bg-theater-gold/20 p-2 text-xs font-semibold tracking-wide text-theater-gold backdrop-blur-sm sm:text-sm lg:backdrop-blur-none">
-                              <p className="mb-1 flex items-center gap-1.5 text-[0.65rem] uppercase tracking-[0.2em] text-theater-gold/90">
-                                <Check
-                                  size={14}
-                                  className="shrink-0 text-theater-gold"
-                                  aria-hidden="true"
-                                />
-                                You predicted
-                              </p>
-                              {callLines.map((line) => (
-                                <p key={line} className="tabular-nums">
-                                  {line}
-                                </p>
-                              ))}
-                            </div>
-                          ) : null}
+                          <PredictionBadge
+                            lines={callLines}
+                            className="mt-3 lg:backdrop-blur-none"
+                          />
                         </div>
                       </div>
 
@@ -924,24 +1144,7 @@ export function CinemaLobby() {
               />
             ))}
 
-            <section className="space-y-4" aria-labelledby="all-upcoming-heading">
-              <h2
-                id="all-upcoming-heading"
-                className="text-left font-marquee text-2xl uppercase tracking-wide text-white sm:text-3xl"
-              >
-                All upcoming
-              </h2>
-              <ul
-                className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 sm:gap-x-4 md:grid-cols-4 lg:grid-cols-5"
-                role="list"
-              >
-                {movieList.map((movie) => (
-                  <li key={movieKey(movie)}>
-                    <TitleCard movie={movie} density="grid" />
-                  </li>
-                ))}
-              </ul>
-            </section>
+            <UpcomingGrid movies={movieList} />
           </>
         )}
       </div>

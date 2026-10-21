@@ -55,7 +55,9 @@ export default function FollowInvite() {
   }, [code, user?.id]);
 
   useEffect(() => {
-    document.title = player ? `Follow ${player.name} · BoxOfficeGuesser` : "Friend invite · BoxOfficeGuesser";
+    document.title = player
+      ? `Follow ${player.name} · Box Office Guesser`
+      : "Friend invite · Box Office Guesser";
   }, [player]);
 
   const hasPlayer = Boolean(player);

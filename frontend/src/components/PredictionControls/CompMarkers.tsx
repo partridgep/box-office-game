@@ -23,24 +23,35 @@ type PositionedMarker = CompMarker & { pos: number };
 export type LabelSide = "center" | "left" | "right";
 
 /**
- * One entry per visible control. Singles/pairs keep one control per marker;
- * bands of 3 use a vertical staircase; unstarred 4+ collapse to a cluster list.
+ * One entry per visible control. `marker.pos` is always the true value
+ * position on the track. Labels sit under that tick unless fanned; clusters
+ * use range chrome + a midpoint label.
  */
 export type MarkerLayout = {
   marker: PositionedMarker;
-  /** False for non-leaders in a staircase (tick is shared visually). */
+  /**
+   * Label anchor. Defaults to `marker.pos` (under the tick).
+   * Clusters set this to the range midpoint.
+   */
+  labelPos?: number;
   showTick: boolean;
+  /** False when collision demoted this label (tick stays). Default true. */
+  showLabel?: boolean;
   side: LabelSide;
   /** L-shaped tick arm when a pair is extremely close */
   corner: boolean;
   /**
-   * When set (length >= COMP_CLUSTER_MIN), this control is a cluster: one tick,
-   * compact label, and a popover listing every member.
+   * When set (length >= COMP_CLUSTER_MIN), this control is a cluster: range
+   * chrome, compact label, and a popover listing every member.
    */
   clusterMembers?: PositionedMarker[];
-  /** Vertical stack index within a 3-comp staircase (0 = under tick). */
+  /** True-pos left edge of cluster range chrome. */
+  rangeStart?: number;
+  /** True-pos right edge of cluster range chrome. */
+  rangeEnd?: number;
+  /** Vertical offset index when multiple labels share the exact same tick x. */
   stackIndex?: number;
-  /** Stair size; set for staircase bands (typically 3). */
+  /** Size of a same-x vertical stack (rare). */
   stackSize?: number;
 };
 
@@ -51,15 +62,18 @@ export type LayoutItem = MarkerLayout;
 export const COMP_BAND_THRESHOLD = 10;
 
 /**
- * Max span (last − first pos) for one band. Without this, single-linkage
- * chaining pulls distant comps into one mega-cluster ($5M…$45M).
+ * Max span (last − first true pos) for one band / cluster / stair.
+ * Collision merges must not exceed this — otherwise demote labels instead.
  */
-export const COMP_BAND_MAX_SPAN = 12;
+export const COMP_BAND_MAX_SPAN = 8;
 
 /** Below this gap, pairs get an L-arm so labels can fan farther out. */
 export const COMP_CORNER_THRESHOLD = 4;
 
-/** Bands this size use a labeled vertical staircase (not a list). */
+/**
+ * Bands of this size (and up to CLUSTER_MIN - 1) fan outer labels left/right
+ * instead of stacking in a shared midpoint column.
+ */
 export const COMP_STAIRCASE_SIZE = 3;
 
 /** Unstarred bands at or above this become a +N cluster popover. */
@@ -81,8 +95,8 @@ const LABEL_MAX_WIDTH_PX = 68;
 /** Cluster chrome is slightly wider (matches max-w-[72px]). */
 const CLUSTER_LABEL_MAX_WIDTH_PX = 72;
 
-/** Horizontal padding on the acronym hit target (px-1.5 × 2). */
-const LABEL_PAD_PX = 12;
+/** Padding used for collision width estimates (hit target still uses px-1.5). */
+const LABEL_ESTIMATE_PAD_PX = 8;
 
 /** Horizontal L-arm length — identical on left and right. */
 const CORNER_ARM_PX = 12;
@@ -90,11 +104,38 @@ const CORNER_ARM_PX = 12;
 /** Extra gap past the L-arm before the acronym starts. */
 const CORNER_LABEL_GAP_PX = 2;
 
-/** Extra gap (track %) so labels don’t kiss. */
-const LABEL_COLLISION_PAD_PCT = 4;
+/** Extra gap (track %) so labels don’t kiss — keep tight to avoid false demotions. */
+const LABEL_COLLISION_PAD_PCT = 1;
 
-/** Approx px per glyph at 9px medium — prefer over-estimate so we merge early. */
-const LABEL_GLYPH_PX = 7;
+/** Approx px per glyph at 9px medium (slight under-estimate; prefer show over hide). */
+const LABEL_GLYPH_PX = 5.5;
+
+/** Min glyph width for short acronyms (was 24 — too wide for "BT"/"AB"). */
+const LABEL_MIN_GLYPH_PX = 14;
+
+/** Max vertical nudge rows under a tick before we demote instead. */
+const LABEL_STACK_MAX = 3;
+
+/** Don't fan labels longer than this — they drift too far from their tick. */
+const LABEL_FAN_MAX_CHARS = 6;
+
+/** Soft-fan only when ticks are this close (track %). Wider → center + stack. */
+const LABEL_FAN_MAX_GAP = COMP_CORNER_THRESHOLD;
+
+function labelIsShort(label: string): boolean {
+  return label.length <= LABEL_FAN_MAX_CHARS;
+}
+
+/** True when a pair may soft-fan (short acronyms + very tight gap). */
+function canSoftFanPair(a: PositionedMarker, b: PositionedMarker): boolean {
+  const left = a.pos <= b.pos ? a : b;
+  const right = a.pos <= b.pos ? b : a;
+  return (
+    labelIsShort(left.label) &&
+    labelIsShort(right.label) &&
+    right.pos - left.pos <= LABEL_FAN_MAX_GAP
+  );
+}
 
 /**
  * Compact track label for a cluster. Prefer the shortest acronym so `(+N)`
@@ -118,6 +159,37 @@ export function clusterCompactLabel(
 
 function isClusterItem(item: MarkerLayout): boolean {
   return (item.clusterMembers?.length ?? 0) >= COMP_CLUSTER_MIN;
+}
+
+function labelAnchor(item: MarkerLayout): number {
+  return item.labelPos ?? item.marker.pos;
+}
+
+function itemShowsLabel(item: MarkerLayout): boolean {
+  return item.showLabel !== false;
+}
+
+/** True-pos span of a marker set (assumes unsorted ok). */
+export function markersSpan(markers: Array<{ pos: number }>): number {
+  if (markers.length <= 1) return 0;
+  let min = markers[0].pos;
+  let max = markers[0].pos;
+  for (let i = 1; i < markers.length; i++) {
+    min = Math.min(min, markers[i].pos);
+    max = Math.max(max, markers[i].pos);
+  }
+  return max - min;
+}
+
+function midPos(markers: Array<{ pos: number }>): number {
+  if (markers.length === 0) return 0;
+  return markers.reduce((sum, m) => sum + m.pos, 0) / markers.length;
+}
+
+function sortedByPos(markers: PositionedMarker[]): PositionedMarker[] {
+  return [...markers].sort(
+    (a, b) => a.pos - b.pos || a.label.localeCompare(b.label),
+  );
 }
 
 /** Largest band represented in the layout (cluster, stair, or 1). */
@@ -198,16 +270,35 @@ export function splitBandByMaxSpan(
 }
 
 /**
- * Layout each marker with its own position. Nearby markers share presentation:
- * pairs fan; 3 → labeled staircase; unstarred 4+ → cluster list. Starred comps
- * are pulled out of unstarred clusters (1 solo / 2 fan / 3+ staircase).
- * Adjacency chains are split when their span exceeds `maxSpan`.
+ * Push a band with every label centered under its own tick. Soft fan / stack
+ * happen later in resolveLabelCollisions so long labels never drift away.
+ */
+function pushCenteredPack(
+  items: MarkerLayout[],
+  band: PositionedMarker[],
+): void {
+  for (const m of sortedByPos(band)) {
+    items.push({
+      marker: m,
+      showTick: true,
+      showLabel: true,
+      side: "center",
+      corner: false,
+    });
+  }
+}
+
+/**
+ * Layout each marker at its true track position. Labels start centered under
+ * their ticks; collision resolution may soft-fan short pairs or stack rows.
+ * Unstarred 4+ → range cluster. Starred comps are pulled out of unstarred
+ * clusters. Chains split when span exceeds `maxSpan`.
  */
 export function layoutCompMarkers(
   markers: CompMarker[],
   getPos: (value: number) => number,
   bandThreshold = COMP_BAND_THRESHOLD,
-  cornerThreshold = COMP_CORNER_THRESHOLD,
+  _cornerThreshold = COMP_CORNER_THRESHOLD,
   maxSpan = COMP_BAND_MAX_SPAN,
 ): MarkerLayout[] {
   if (markers.length === 0) return [];
@@ -236,82 +327,40 @@ export function layoutCompMarkers(
 
   const items: MarkerLayout[] = [];
 
-  const pushPairOrSolo = (band: PositionedMarker[]) => {
-    if (band.length === 0) return;
-    if (band.length === 2) {
-      const gap = band[1].pos - band[0].pos;
-      const corner = gap <= cornerThreshold;
-      items.push({
-        marker: band[0],
-        showTick: true,
-        side: "left",
-        corner,
-      });
-      items.push({
-        marker: band[1],
-        showTick: true,
-        side: "right",
-        corner,
-      });
-      return;
-    }
+  /** Dense unstarred band → one range control (true min→max) + droplist. */
+  const pushCluster = (band: PositionedMarker[]) => {
+    const members = sortedByPos(band);
+    const column = midPos(members);
     items.push({
-      marker: band[0],
+      marker: members[0],
+      labelPos: column,
       showTick: true,
+      showLabel: true,
       side: "center",
       corner: false,
+      clusterMembers: members,
+      rangeStart: members[0].pos,
+      rangeEnd: members[members.length - 1].pos,
     });
   };
 
-  /** Labeled vertical staircase — shared x so long acronyms don’t overlap sideways. */
-  const pushStaircase = (band: PositionedMarker[]) => {
-    const avgPos =
-      band.reduce((sum, m) => sum + m.pos, 0) / band.length;
-    for (let i = 0; i < band.length; i++) {
-      items.push({
-        marker: { ...band[i], pos: avgPos },
-        showTick: i === 0,
-        side: "center",
-        corner: false,
-        stackIndex: i,
-        stackSize: band.length,
-      });
-    }
-  };
-
-  /** Unstarred: 1–2 fan/solo; 3 staircase; 4+ cluster list. */
+  /** Unstarred: 1–3 centered under ticks; 4+ range cluster. */
   const pushUnstarredBand = (band: PositionedMarker[]) => {
     if (band.length === 0) return;
     if (band.length >= COMP_CLUSTER_MIN) {
-      const avgPos =
-        band.reduce((sum, m) => sum + m.pos, 0) / band.length;
-      items.push({
-        marker: { ...band[0], pos: avgPos },
-        showTick: true,
-        side: "center",
-        corner: false,
-        clusterMembers: band,
-      });
+      pushCluster(band);
       return;
     }
-    if (band.length >= COMP_STAIRCASE_SIZE) {
-      pushStaircase(band);
-      return;
-    }
-    pushPairOrSolo(band);
+    pushCenteredPack(items, band);
   };
 
   /**
-   * Starred: stay labeled & emphasized — 1 solo, 2 fan, 3+ staircase
-   * (bounded by STARRED_COMPS_MAX so this stays readable).
+   * Starred: stay labeled & emphasized — centered under ticks (no cluster).
+   * Bounded by STARRED_COMPS_MAX so this stays readable.
    */
   const pushStarredBand = (band: PositionedMarker[]) => {
     if (band.length === 0) return;
-    if (band.length >= COMP_STAIRCASE_SIZE) {
-      pushStaircase(band);
-      return;
-    }
-    pushPairOrSolo(band);
+    pushCenteredPack(items, band);
   };
 
   for (const band of bands) {
@@ -323,7 +372,7 @@ export function layoutCompMarkers(
   return items;
 }
 
-/** Estimate acronym width as % of track (9px font + hit padding). */
+/** Estimate acronym width as % of track (9px font + estimate padding). */
 export function estimateLabelWidthPct(
   label: string,
   trackWidthPx: number,
@@ -331,9 +380,9 @@ export function estimateLabelWidthPct(
 ): number {
   const glyphPx = Math.min(
     maxWidthPx,
-    Math.max(24, label.length * LABEL_GLYPH_PX),
+    Math.max(LABEL_MIN_GLYPH_PX, label.length * LABEL_GLYPH_PX),
   );
-  const px = glyphPx + LABEL_PAD_PX;
+  const px = glyphPx + LABEL_ESTIMATE_PAD_PX;
   return (px / Math.max(trackWidthPx, 1)) * 100;
 }
 
@@ -352,13 +401,17 @@ function centeredLabelBounds(
 
 /**
  * Where the acronym actually paints after left/right fan + L-arm offset.
- * Staircases / clusters sit centered on their shared tick.
+ * Stairs / clusters use `labelPos` (shared column); ticks stay at `marker.pos`.
  */
 export function placedLabelBounds(
   item: MarkerLayout,
   trackWidthPx: number,
 ): { left: number; right: number } {
-  const { marker, side, corner, clusterMembers, stackSize = 1 } = item;
+  if (!itemShowsLabel(item)) {
+    const p = item.marker.pos;
+    return { left: p, right: p };
+  }
+  const { marker, side, corner, clusterMembers } = item;
   const isCluster = isClusterItem(item);
   const label = isCluster
     ? clusterCompactLabel(clusterMembers!)
@@ -369,9 +422,9 @@ export function placedLabelBounds(
     isCluster ? CLUSTER_LABEL_MAX_WIDTH_PX : LABEL_MAX_WIDTH_PX,
   );
   const armPct = pxToTrackPct(CORNER_ARM_PX + CORNER_LABEL_GAP_PX, trackWidthPx);
-  const pos = marker.pos;
+  const pos = labelAnchor(item);
 
-  if (isCluster || stackSize >= COMP_STAIRCASE_SIZE || side === "center") {
+  if (isCluster || side === "center") {
     return { left: pos - w / 2, right: pos + w / 2 };
   }
 
@@ -398,7 +451,7 @@ export function placedLabelBounds(
 }
 
 function markerIdentity(m: PositionedMarker): string {
-  return m.id ?? `${m.label}-${m.value}-${m.pos}`;
+  return m.id ?? `${m.label}-${m.value}`;
 }
 
 /** Single-linkage bands from an arbitrary left/right bounds getter. */
@@ -433,62 +486,34 @@ function bandByBounds(
 function layoutOverlapBands(
   bands: PositionedMarker[][],
   priorClusters: MarkerLayout[] = [],
+  maxSpan = COMP_BAND_MAX_SPAN,
 ): MarkerLayout[] {
   const resolved: MarkerLayout[] = [...priorClusters];
 
   for (const band of bands) {
-    if (band.length === 1) {
-      resolved.push({
-        marker: band[0],
-        showTick: true,
-        side: "center",
-        corner: false,
-      });
-      continue;
-    }
+    // Respect fidelity span even if glyph banding chained them.
+    const pieces = splitBandByMaxSpan(sortedByPos(band), maxSpan);
+    for (const piece of pieces) {
+      const allStarred = piece.every((m) => m.starred);
+      if (!allStarred && piece.length >= COMP_CLUSTER_MIN) {
+        const members = sortedByPos(piece);
+        const column = midPos(members);
+        resolved.push({
+          marker: members[0],
+          labelPos: column,
+          showTick: true,
+          showLabel: true,
+          side: "center",
+          corner: false,
+          clusterMembers: members,
+          rangeStart: members[0].pos,
+          rangeEnd: members[members.length - 1].pos,
+        });
+        continue;
+      }
 
-    if (band.length === 2) {
-      // Collision pairs always get L-arms so labels seat past the arm tips.
-      resolved.push({
-        marker: band[0],
-        showTick: true,
-        side: "left",
-        corner: true,
-      });
-      resolved.push({
-        marker: band[1],
-        showTick: true,
-        side: "right",
-        corner: true,
-      });
-      continue;
-    }
-
-    const allStarred = band.every((m) => m.starred);
-    if (!allStarred && band.length >= COMP_CLUSTER_MIN) {
-      const avgPos =
-        band.reduce((sum, m) => sum + m.pos, 0) / band.length;
-      resolved.push({
-        marker: { ...band[0], pos: avgPos },
-        showTick: true,
-        side: "center",
-        corner: false,
-        clusterMembers: band,
-      });
-      continue;
-    }
-
-    const avgPos =
-      band.reduce((sum, m) => sum + m.pos, 0) / band.length;
-    for (let i = 0; i < band.length; i++) {
-      resolved.push({
-        marker: { ...band[i], pos: avgPos },
-        showTick: i === 0,
-        side: "center",
-        corner: false,
-        stackIndex: i,
-        stackSize: band.length,
-      });
+      // 1–3 (or starred 4+): labels centered under each tick.
+      pushCenteredPack(resolved, piece);
     }
   }
 
@@ -500,23 +525,19 @@ function layoutOverlapBands(
 }
 
 /**
- * True when two layout items’ painted labels overlap horizontally.
- * Items in the same staircase share an x and stack vertically — skip those.
+ * True when two layout items’ painted labels overlap in the same row.
+ * Different stackIndex rows are vertically separated — readable, not a clash.
+ * Demoted (tick-only) items do not collide.
  */
 function placedLabelsOverlap(
   a: MarkerLayout,
   b: MarkerLayout,
   trackWidthPx: number,
 ): boolean {
-  const aStairs = (a.stackSize ?? 1) >= COMP_STAIRCASE_SIZE;
-  const bStairs = (b.stackSize ?? 1) >= COMP_STAIRCASE_SIZE;
-  if (
-    aStairs &&
-    bStairs &&
-    Math.abs(a.marker.pos - b.marker.pos) < 1e-6
-  ) {
-    return false;
-  }
+  if (!itemShowsLabel(a) || !itemShowsLabel(b)) return false;
+
+  // Vertically nudged labels (under own ticks) don’t fight each other.
+  if ((a.stackIndex ?? 0) !== (b.stackIndex ?? 0)) return false;
 
   const ab = placedLabelBounds(a, trackWidthPx);
   const bb = placedLabelBounds(b, trackWidthPx);
@@ -524,6 +545,23 @@ function placedLabelsOverlap(
     ab.left < bb.right + LABEL_COLLISION_PAD_PCT &&
     bb.left < ab.right + LABEL_COLLISION_PAD_PCT
   );
+}
+
+function demoteScore(item: MarkerLayout): number {
+  // Higher = more OK to demote / nudge. No center bias — empty middles looked wrong.
+  let score = 0;
+  if (item.marker.starred) score -= 100;
+  if (isClusterItem(item)) score -= 40;
+  score += item.marker.label.length;
+  score += item.marker.pos * 0.01;
+  return score;
+}
+
+function pickCollisionVictim(a: MarkerLayout, b: MarkerLayout): "a" | "b" {
+  if (a.marker.starred !== b.marker.starred) {
+    return a.marker.starred ? "b" : "a";
+  }
+  return demoteScore(a) >= demoteScore(b) ? "a" : "b";
 }
 
 /** Atomic presentation groups (solo / fan pair / staircase / cluster) for merge. */
@@ -540,8 +578,8 @@ function unitMarkers(item: MarkerLayout): PositionedMarker[] {
 }
 
 /**
- * Group layout items into units so a fan pair, staircase, or cluster merges
- * as a whole when any of its labels collide with a neighbor.
+ * Group layout items into units so a fan pair or cluster merges as a whole
+ * when any of its labels collide with a neighbor.
  */
 function layoutUnits(items: MarkerLayout[]): LayoutUnit[] {
   const sorted = [...items].sort(
@@ -564,26 +602,6 @@ function layoutUnits(items: MarkerLayout[]): LayoutUnit[] {
       continue;
     }
 
-    const stackSize = item.stackSize ?? 1;
-
-    if (stackSize >= COMP_STAIRCASE_SIZE) {
-      const stair: MarkerLayout[] = [];
-      while (
-        i < sorted.length &&
-        !isClusterItem(sorted[i]) &&
-        (sorted[i].stackSize ?? 1) >= COMP_STAIRCASE_SIZE &&
-        Math.abs(sorted[i].marker.pos - item.marker.pos) < 1e-6
-      ) {
-        stair.push(sorted[i]);
-        i++;
-      }
-      units.push({
-        items: stair,
-        markers: stair.map((s) => s.marker),
-      });
-      continue;
-    }
-
     const next = sorted[i + 1];
     if (
       item.corner &&
@@ -591,8 +609,7 @@ function layoutUnits(items: MarkerLayout[]): LayoutUnit[] {
       next &&
       !isClusterItem(next) &&
       next.corner &&
-      next.side === "right" &&
-      (next.stackSize ?? 1) < COMP_STAIRCASE_SIZE
+      next.side === "right"
     ) {
       units.push({
         items: [item, next],
@@ -622,14 +639,129 @@ function unitsOverlap(
 }
 
 /**
+ * When labels still overlap after fanning: nudge the weaker one down a row
+ * under its own tick (keeps the acronym visible) before demoting.
+ */
+function stackUnderTickCollisions(
+  items: MarkerLayout[],
+  trackWidthPx: number,
+): MarkerLayout[] {
+  const result = items.map((item) => ({
+    ...item,
+    stackIndex: item.stackIndex ?? 0,
+    stackSize: Math.max(item.stackSize ?? 1, (item.stackIndex ?? 0) + 1),
+  }));
+
+  for (let iter = 0; iter < 8; iter++) {
+    let stacked = false;
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        if (!placedLabelsOverlap(result[i], result[j], trackWidthPx)) continue;
+        if (isClusterItem(result[i]) || isClusterItem(result[j])) continue;
+
+        const which = pickCollisionVictim(result[i], result[j]);
+        const victim = which === "a" ? i : j;
+        const cur = result[victim].stackIndex ?? 0;
+        if (cur >= LABEL_STACK_MAX - 1) continue;
+
+        const next = cur + 1;
+        result[victim] = {
+          ...result[victim],
+          stackIndex: next,
+          stackSize: Math.max(result[victim].stackSize ?? 1, next + 1),
+        };
+        stacked = true;
+      }
+    }
+    if (!stacked) break;
+  }
+
+  return result;
+}
+
+/**
+ * Last resort: hide the weaker label when glyphs still overlap after fan + stack.
+ * Tick stays. Prefer keeping starred, clusters, and shorter acronyms.
+ */
+function demoteCollidingLabels(
+  items: MarkerLayout[],
+  trackWidthPx: number,
+): MarkerLayout[] {
+  const result = items.map((item) => ({ ...item }));
+
+  for (let iter = 0; iter < 8; iter++) {
+    let demoted = false;
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        if (!placedLabelsOverlap(result[i], result[j], trackWidthPx)) continue;
+        const which = pickCollisionVictim(result[i], result[j]);
+        const victim = which === "a" ? i : j;
+        if (!itemShowsLabel(result[victim])) continue;
+        result[victim] = { ...result[victim], showLabel: false };
+        demoted = true;
+      }
+    }
+    if (!demoted) break;
+  }
+
+  return result;
+}
+
+/**
+ * Soft-fan only for short, very tight centered pairs: near edge hugs the tick
+ * (corner: false) so labels don’t drift past an L-arm. Long labels stay centered
+ * and rely on stacking instead.
+ */
+function softFanShortCollisions(
+  items: MarkerLayout[],
+  trackWidthPx: number,
+): MarkerLayout[] {
+  const result = items.map((item) => ({ ...item }));
+
+  for (let iter = 0; iter < 4; iter++) {
+    let fanned = false;
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        const a = result[i];
+        const b = result[j];
+        if (isClusterItem(a) || isClusterItem(b)) continue;
+        if (!itemShowsLabel(a) || !itemShowsLabel(b)) continue;
+        if (a.side !== "center" || b.side !== "center") continue;
+        if (!placedLabelsOverlap(a, b, trackWidthPx)) continue;
+        if (!canSoftFanPair(a.marker, b.marker)) continue;
+
+        const left = a.marker.pos <= b.marker.pos ? i : j;
+        const right = left === i ? j : i;
+        result[left] = {
+          ...result[left],
+          side: "left",
+          corner: false,
+          labelPos: undefined,
+        };
+        result[right] = {
+          ...result[right],
+          side: "right",
+          corner: false,
+          labelPos: undefined,
+        };
+        fanned = true;
+      }
+    }
+    if (!fanned) break;
+  }
+
+  return result;
+}
+
+/**
  * Re-band markers by estimated glyph overlap (not just value proximity).
- * Pass 1: centered bounds on non-clusters → fan / stair / cluster (seeds kept).
- * Pass 2+: if labels still collide — including cluster chrome vs neighbors —
- * merge those presentation units and escalate (stair or cluster).
+ * Merges only when combined true-pos span ≤ COMP_BAND_MAX_SPAN. Remaining
+ * collisions: stack under tick → soft-fan short pairs → demote.
  */
 export function resolveLabelCollisions(
   items: MarkerLayout[],
   trackWidthPx: number,
+  maxSpan = COMP_BAND_MAX_SPAN,
 ): MarkerLayout[] {
   if (items.length <= 1 || trackWidthPx <= 0) return items;
 
@@ -645,6 +777,7 @@ export function resolveLabelCollisions(
             (m) => centeredLabelBounds(m.pos, m.label, trackWidthPx),
           ),
           seedClusters,
+          maxSpan,
         );
 
   for (let iter = 0; iter < 4; iter++) {
@@ -663,16 +796,18 @@ export function resolveLabelCollisions(
       if (a !== b) parent[b] = a;
     };
 
-    let anyOverlap = false;
+    let anyMerge = false;
     for (let i = 0; i < units.length; i++) {
       for (let j = i + 1; j < units.length; j++) {
-        if (unitsOverlap(units[i], units[j], trackWidthPx)) {
-          unite(i, j);
-          anyOverlap = true;
-        }
+        if (!unitsOverlap(units[i], units[j], trackWidthPx)) continue;
+        const combined = [...units[i].markers, ...units[j].markers];
+        // Only merge when the true-value span stays within the fidelity cap.
+        if (markersSpan(combined) > maxSpan) continue;
+        unite(i, j);
+        anyMerge = true;
       }
     }
-    if (!anyOverlap) break;
+    if (!anyMerge) break;
 
     const groups = new Map<number, PositionedMarker[]>();
     for (let i = 0; i < units.length; i++) {
@@ -686,14 +821,15 @@ export function resolveLabelCollisions(
       groups.set(root, list);
     }
 
-    // Every unit (including clusters) is in a group — do not re-seed old clusters.
-    const forcedBands = [...groups.values()].map((g) =>
-      [...g].sort((a, b) => a.pos - b.pos || a.label.localeCompare(b.label)),
-    );
-    resolved = layoutOverlapBands(forcedBands);
+    const forcedBands = [...groups.values()].map((g) => sortedByPos(g));
+    resolved = layoutOverlapBands(forcedBands, [], maxSpan);
   }
 
-  return resolved;
+  // Prefer keeping labels under ticks: stack first, soft-fan only short/tight.
+  resolved = stackUnderTickCollisions(resolved, trackWidthPx);
+  resolved = softFanShortCollisions(resolved, trackWidthPx);
+  resolved = stackUnderTickCollisions(resolved, trackWidthPx);
+  return demoteCollidingLabels(resolved, trackWidthPx);
 }
 
 const TOOLTIP_EDGE_PAD = 8;
@@ -933,14 +1069,13 @@ export default function CompMarkers({
   );
   const densityMode = shouldUseDensityMode(markers.length, items);
   const anyStarredLabel = items.some((it) => it.marker.starred);
-  const anyStaircase = items.some(
-    (it) => (it.stackSize ?? 1) >= COMP_STAIRCASE_SIZE,
+  const anyVisibleLabel = items.some(
+    (it) => itemShowsLabel(it) && (!densityMode || it.marker.starred || isClusterItem(it)),
   );
   const maxStack = items.reduce(
     (max, it) => Math.max(max, it.stackSize ?? 1),
     1,
   );
-  // Tick + gap + stacked acronyms (stairs of 3, or up to star cap).
   const stackLabelStart =
     TICK_HEIGHT_PX +
     (anyStarredLabel ? STARRED_LABEL_GAP_PX : LABEL_GAP_PX);
@@ -948,9 +1083,8 @@ export default function CompMarkers({
     maxStack > 1
       ? stackLabelStart + maxStack * 12
       : stackLabelStart + 12;
-  // Ticks-only map: shorter row — unless starred / staircase force labels.
   const rowHeight =
-    densityMode && !anyStarredLabel && !anyStaircase
+    densityMode && !anyStarredLabel && !anyVisibleLabel
       ? 14
       : Math.max(MARKERS_ROW_HEIGHT_PX, stackRowHeight);
 
@@ -998,17 +1132,24 @@ export default function CompMarkers({
           side,
           corner,
           clusterMembers,
+          rangeStart,
+          rangeEnd,
           stackIndex = 0,
           stackSize = 1,
         } = item;
         const isCluster =
           (clusterMembers?.length ?? 0) >= COMP_CLUSTER_MIN;
-        const isStairs = stackSize >= COMP_STAIRCASE_SIZE;
         const isStarred = Boolean(marker.starred);
-        // Starred comps keep a permanent acronym even in density mode.
-        // Staircases (3 close comps) keep acronyms unless density is on.
-        const showLabel = !densityMode || isStarred;
-        const ticksOnlyChrome = densityMode && !isStarred;
+        const columnPos = labelAnchor(item);
+        // Group sits on the tick (true pos) except clusters (range midpoint).
+        const groupPos = isCluster ? columnPos : marker.pos;
+        const labelOffsetPx =
+          ((columnPos - groupPos) / 100) * trackWidthPx;
+        // Starred / clusters keep labels in density mode; demotion may hide.
+        const layoutWantsLabel = itemShowsLabel(item);
+        const showLabel =
+          layoutWantsLabel && (!densityMode || isStarred || isCluster);
+        const ticksOnlyChrome = !showLabel;
         const key = isCluster
           ? clusterKey(clusterMembers!)
           : markerKey(marker);
@@ -1017,8 +1158,15 @@ export default function CompMarkers({
         const compactLabel = isCluster
           ? clusterCompactLabel(clusterMembers!)
           : marker.label;
+        const clusterByPos = isCluster
+          ? sortedByPos(clusterMembers!)
+          : null;
         const clusterAria = isCluster
-          ? `${clusterMembers!.length} comps: ${clusterMembers!
+          ? `${clusterByPos!.length} comps from ${formatValue(
+              clusterByPos![0].value,
+            )} to ${formatValue(
+              clusterByPos![clusterByPos!.length - 1].value,
+            )}: ${clusterByPos!
               .map((m) => `${m.title ?? m.label} ${formatValue(m.value)}`)
               .join(", ")}`
           : isStarred
@@ -1026,6 +1174,21 @@ export default function CompMarkers({
             : singleTooltip;
         const isOpen = openKey === key;
         const showTooltip = isOpen && tooltipReady;
+
+        const hasRange =
+          isCluster &&
+          rangeStart != null &&
+          rangeEnd != null &&
+          rangeEnd - rangeStart > 0.05;
+        const rangeLeftPx = hasRange
+          ? ((rangeStart! - groupPos) / 100) * trackWidthPx
+          : 0;
+        const rangeWidthPx = hasRange
+          ? Math.max(
+              ((rangeEnd! - rangeStart!) / 100) * trackWidthPx,
+              4,
+            )
+          : 0;
 
         // Corner pairs: seat labels at the outer tip of equal-length L-arms.
         // Non-corner pairs: hang near the tick (original fan).
@@ -1040,28 +1203,33 @@ export default function CompMarkers({
                 : "left-0 -translate-x-1.5 text-left"
               : "left-0 -translate-x-1/2 text-center";
 
-        const labelTransform =
+        const fanTransform =
           side === "left" && corner
             ? `translateX(calc(-100% - ${CORNER_ARM_PX + CORNER_LABEL_GAP_PX}px))`
             : side === "right" && corner
               ? `translateX(${CORNER_ARM_PX + CORNER_LABEL_GAP_PX}px)`
               : undefined;
 
-        // Density ticks-only: tip anchors to the tick; labeled (incl. starred) use acronym.
+        // Clusters: label sits at range midpoint (labelOffset from groupPos).
+        const labelTransform =
+          labelOffsetPx !== 0
+            ? fanTransform
+              ? `translateX(${labelOffsetPx}px) ${fanTransform}`
+              : `translateX(${labelOffsetPx}px) translateX(-50%)`
+            : fanTransform;
+
         const tipPosClass = ticksOnlyChrome
           ? "left-0 -translate-x-1/2 text-center"
           : labelPosClass;
-        const tipTransform = ticksOnlyChrome ? undefined : labelTransform;
+        const tipTransform = ticksOnlyChrome
+          ? undefined
+          : labelTransform;
 
-        // Original tick height; starred titles get extra gap under the mark / L-arm.
         const baseLabelTop =
           TICK_HEIGHT_PX + (isStarred ? STARRED_LABEL_GAP_PX : LABEL_GAP_PX);
-        const labelTop = isStairs
-          ? baseLabelTop + stackIndex * 12
-          : baseLabelTop;
+        const labelTop =
+          stackSize > 1 ? baseLabelTop + stackIndex * 12 : baseLabelTop;
         const tipAnchorTop = ticksOnlyChrome ? 0 : labelTop;
-        // Clusters keep a slightly wider mark; starred match normal tick thickness.
-        const tickWide = isCluster;
         const markColorClass = isStarred ? starredTickClass : tickClass;
 
         const onTriggerBlur = (
@@ -1091,10 +1259,9 @@ export default function CompMarkers({
             key={key}
             className="absolute top-0 w-0 group"
             style={{
-              left: `${marker.pos}%`,
+              left: `${groupPos}%`,
               height: hitH,
               transition: positionTransition,
-              // Open tip must win over sibling ticks (their groups create stacking contexts).
               zIndex: isOpen ? 40 : isStarred ? 2 : 1,
             }}
             onMouseEnter={(e) =>
@@ -1108,7 +1275,6 @@ export default function CompMarkers({
               type="button"
               disabled={disabled}
               onClick={(e) => {
-                // Clicks on overflowing chrome above the gate must not steal the slider.
                 if (!allowsTooltipAt(e.clientX, e.clientY)) return;
                 if (isCluster) {
                   openTooltip(key);
@@ -1123,7 +1289,6 @@ export default function CompMarkers({
                   e.currentTarget.parentElement,
                 )
               }
-              // Wider hit target in ticks-only mode — no acronym to aim at.
               className={
                 ticksOnlyChrome
                   ? "absolute -left-2.5 top-0 z-0 h-3.5 w-5"
@@ -1135,23 +1300,48 @@ export default function CompMarkers({
               aria-haspopup={isCluster ? "listbox" : undefined}
               aria-controls={isCluster && isOpen ? `${key}-list` : undefined}
             >
-              {/*
-                Original h-2 tick. L-arms: same length from the value line center
-                outward; labels sit past the arm tip so left/right match.
-              */}
-              <span
-                className={`absolute top-0 z-0 h-2 -translate-x-1/2 transition-[colors,opacity] ${
-                  ticksOnlyChrome ? "left-1/2" : "left-0"
-                } ${
-                  tickWide ? "w-1 rounded-sm" : "w-0.5"
-                } ${markColorClass} ${showTick ? "opacity-100" : "opacity-0"}`}
-                style={
-                  positionTransitionMs > 0 && transitionsReady
-                    ? { transitionDuration: `${positionTransitionMs}ms` }
-                    : undefined
-                }
-                aria-hidden
-              />
+              {/* Range chrome: bar + member ticks at true positions (no end caps). */}
+              {hasRange ? (
+                <>
+                  <span
+                    className={`absolute top-1 z-0 h-0.5 rounded-full transition-colors ${markColorClass} ${
+                      showTick ? "opacity-100" : "opacity-0"
+                    }`}
+                    style={{
+                      left: rangeLeftPx,
+                      width: rangeWidthPx,
+                      transitionDuration:
+                        positionTransitionMs > 0 && transitionsReady
+                          ? `${positionTransitionMs}ms`
+                          : undefined,
+                    }}
+                    aria-hidden
+                  />
+                  {clusterMembers!.map((m) => (
+                    <span
+                      key={markerKey(m)}
+                      className={`absolute top-0 z-0 h-2 w-0.5 -translate-x-1/2 transition-colors ${markColorClass}`}
+                      style={{
+                        left:
+                          ((m.pos - groupPos) / 100) * trackWidthPx,
+                      }}
+                      aria-hidden
+                    />
+                  ))}
+                </>
+              ) : (
+                <span
+                  className={`absolute top-0 z-0 h-2 w-0.5 -translate-x-1/2 transition-[colors,opacity] ${
+                    ticksOnlyChrome ? "left-1/2" : "left-0"
+                  } ${markColorClass} ${showTick ? "opacity-100" : "opacity-0"}`}
+                  style={
+                    positionTransitionMs > 0 && transitionsReady
+                      ? { transitionDuration: `${positionTransitionMs}ms` }
+                      : undefined
+                  }
+                  aria-hidden
+                />
+              )}
               {showLabel && corner && side === "left" && showTick && (
                 <span
                   className={`absolute left-0 top-2 z-0 h-0.5 -translate-x-full transition-colors ${markColorClass}`}
@@ -1180,7 +1370,6 @@ export default function CompMarkers({
                         : undefined,
                   }}
                 >
-                  {/* Horizontal padding = larger onSelect hit target beside the acronym. */}
                   <span
                     className={`relative inline-block px-1.5 ${
                       isCluster ? "max-w-[72px]" : "max-w-[68px]"
@@ -1192,10 +1381,6 @@ export default function CompMarkers({
               )}
             </button>
 
-            {/*
-              Tip layer must not steal clicks from the acronym (same spot, higher z).
-              Only the open cluster list re-enables pointer events.
-            */}
             <span
               className={`pointer-events-none absolute left-0 z-20 text-[9px] leading-none ${tipPosClass}`}
               style={{
@@ -1203,10 +1388,6 @@ export default function CompMarkers({
                 transform: tipTransform,
               }}
             >
-              {/*
-                Invisible sizer: matches acronym when labeled; tick-sized in
-                density ticks-only so bottom-full sits just above the mark.
-              */}
               <span
                 className={`relative inline-block ${
                   ticksOnlyChrome

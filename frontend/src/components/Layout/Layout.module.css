@@ -1,52 +1,355 @@
 .layout {
-    position: relative;
+  position: relative;
 }
 
-/* .header {
-    width: 100vw;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-sizing: border-box;
-    position: sticky;
-    top: 0;
-    left: 0;
-    padding: 1rem 2rem;
-    color: rgba(255, 255, 255, 0.87);
-    background-color: #8585853f;
-    backdrop-filter: blur(20px);
-    z-index: 10;
-} */
-
-.header h1 {
-    font-size: 2rem;
+.topRail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.75rem;
+  padding: 0.6rem 1rem;
+  padding-top: max(0.6rem, env(safe-area-inset-top));
+  background: color-mix(in srgb, var(--color-cinema-950) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-theater-gold) 14%, transparent);
 }
 
-.user-greeting {
-    text-align: end;
-    width: min-content;
-    margin-left: auto;
+@media (min-width: 768px) {
+  .topRail {
+    min-height: 4.25rem;
+    padding-inline: 1.5rem;
+  }
 }
 
-.user-greeting div {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
+.brandButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  border-radius: 0.5rem;
+  cursor: pointer;
 }
 
-.user-greeting p {
-    display: inline-block;
-    width: max-content;
+.brandButton:focus-visible {
+  outline: 2px solid var(--color-theater-gold);
+  outline-offset: 4px;
 }
 
-.user-greeting button {
-    width: max-content;
+.wordmark {
+  font-family: var(--font-marquee);
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #f5f0e8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(58vw, 16rem);
 }
 
-/* main {
-    padding: 2rem;
-    max-width: 1280px;
-    margin: 0 auto;
-} */
+@media (min-width: 640px) {
+  .wordmark {
+    font-size: 1.45rem;
+    letter-spacing: 0.06em;
+    max-width: none;
+  }
+}
+
+.desktopNav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.navLink {
+  position: relative;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a8a29e;
+  border-radius: 0.375rem;
+  transition: color 160ms ease;
+}
+
+.navLink:hover {
+  color: #fafaf9;
+}
+
+.navLink:focus-visible {
+  outline: 2px solid var(--color-theater-gold);
+  outline-offset: 2px;
+}
+
+.navLinkActive {
+  color: var(--color-theater-gold);
+}
+
+.navLinkActive::after {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.15rem;
+  height: 1.5px;
+  background: var(--color-theater-gold);
+  border-radius: 1px;
+}
+
+.accountCluster {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.accountMenu {
+  position: relative;
+}
+
+.accountTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 11rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8125rem;
+  color: #e7e5e4;
+  border: 1px solid color-mix(in srgb, var(--color-theater-gold) 18%, transparent);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--color-cinema-900) 80%, transparent);
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.accountTrigger:hover {
+  border-color: color-mix(in srgb, var(--color-theater-gold) 45%, transparent);
+  color: var(--color-theater-gold);
+}
+
+.accountTrigger:focus-visible {
+  outline: 2px solid var(--color-theater-gold);
+  outline-offset: 2px;
+}
+
+.accountName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountPanel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 60;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in srgb, var(--color-theater-gold) 20%, transparent);
+  background: var(--color-cinema-900);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.accountPanelUp {
+  top: auto;
+  bottom: calc(100% + 0.4rem);
+}
+
+.accountPanel button,
+.accountPanel a {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.8125rem;
+  color: #d6d3d1;
+  border-radius: 0.375rem;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.accountPanel button:hover,
+.accountPanel a:hover {
+  background: var(--color-cinema-800);
+  color: #fafaf9;
+}
+
+.accountPanel button:focus-visible,
+.accountPanel a:focus-visible {
+  outline: 2px solid var(--color-theater-gold);
+  outline-offset: 1px;
+}
+
+.restoreButton {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fafaf9;
+  background: var(--color-cinema-600);
+  border-radius: 0.5rem;
+  transition: background 160ms ease;
+}
+
+.restoreButton:hover {
+  background: var(--color-cinema-500);
+}
+
+.restoreButton:focus-visible {
+  outline: 2px solid var(--color-theater-gold);
+  outline-offset: 2px;
+}
+
+.sessionPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  color: #a8a29e;
+  background: var(--color-cinema-900);
+  border-radius: 999px;
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 96rem;
+  margin-inline: auto;
+  padding: 4.25rem 1rem 5.75rem;
+}
+
+@media (min-width: 640px) {
+  .main {
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .main {
+    padding-top: 4.75rem;
+    padding-bottom: 2rem;
+  }
+}
+
+/* —— Mobile bottom bar —— */
+
+.bottomBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--color-cinema-950) 94%, transparent);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid color-mix(in srgb, var(--color-theater-gold) 18%, transparent);
+}
+
+.bottomItem {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 3rem;
+  padding: 0.35rem 0.25rem;
+  border-radius: 0.5rem;
+  color: #a8a29e;
+  transition: color 160ms ease;
+}
+
+.bottomItem:hover {
+  color: #e7e5e4;
+}
+
+.bottomItem:focus-visible {
+  outline: 2px solid var(--color-theater-gold);
+  outline-offset: 2px;
+}
+
+.bottomItemActive {
+  color: var(--color-theater-gold);
+}
+
+.bottomIconWrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.bottomLabel {
+  font-family: var(--font-marquee);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bulb {
+  position: absolute;
+  top: -0.15rem;
+  right: -0.2rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--color-theater-gold);
+  box-shadow: 0 0 0 1px var(--color-cinema-950);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.bulbFlicker {
+  animation: bulb-flicker 520ms ease-out 1;
+}
+
+@keyframes bulb-flicker {
+  0% {
+    opacity: 0.25;
+    transform: scale(0.85);
+    box-shadow: 0 0 0 1px var(--color-cinema-950);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.15);
+    box-shadow:
+      0 0 0 1px var(--color-cinema-950),
+      0 0 8px 2px color-mix(in srgb, var(--color-theater-gold) 70%, transparent);
+  }
+  36% {
+    opacity: 0.2;
+    transform: scale(0.9);
+    box-shadow: 0 0 0 1px var(--color-cinema-950);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow:
+      0 0 0 1px var(--color-cinema-950),
+      0 0 6px 1px color-mix(in srgb, var(--color-theater-gold) 55%, transparent);
+  }
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+    box-shadow: 0 0 0 1px var(--color-cinema-950);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bulbFlicker {
+    animation: none;
+  }
+}

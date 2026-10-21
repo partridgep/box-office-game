@@ -15,15 +15,17 @@ type Lookup =
   | { state: "found"; player: FriendPreview; justFollowed?: boolean }
   | { state: "error"; message: string };
 
-const sectionHeading = "text-xs font-semibold uppercase tracking-[0.2em] text-stone-400 mb-2";
+const sectionHeading =
+  "text-xs font-semibold uppercase tracking-[0.2em] text-stone-400 mb-2";
 const iconButton =
   "inline-flex items-center gap-1.5 rounded-lg border border-stone-600/60 px-3 py-2 text-sm text-stone-200 hover:border-theater-gold/60 hover:text-theater-gold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold transition-colors";
 const primaryButton =
   "inline-flex items-center justify-center gap-1.5 rounded-lg bg-theater-gold px-4 py-2 text-sm font-semibold text-cinema-950 hover:bg-theater-gold/90 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold";
 
-export default function FriendsDialog({ onClose }: { onClose: () => void }) {
+/** Share code / follow-by-code utility. Following list lives on the Friends page. */
+export default function InviteDialog({ onClose }: { onClose: () => void }) {
   const user = useUserStore((s) => s.user);
-  const { following, loaded, loadFollowing, follow, unfollow } = useFriendsStore();
+  const { follow } = useFriendsStore();
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
@@ -35,7 +37,6 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
   const [showQr, setShowQr] = useState(false);
   const [code, setCode] = useState("");
   const [lookup, setLookup] = useState<Lookup>({ state: "idle" });
-  const [listError, setListError] = useState("");
   const [busyCode, setBusyCode] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
@@ -45,12 +46,6 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
     dialogRef.current?.showModal();
   }, []);
 
-  useEffect(() => {
-    if (!loaded) {
-      loadFollowing().catch((err) => setListError(friendlyFriendError(err)));
-    }
-  }, [loaded, loadFollowing]);
-
   if (!user) return null;
 
   const inviteLink = inviteLinkFor(user.short_id);
@@ -58,14 +53,18 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
 
   async function handleCopy(text: string, key: string, what: string) {
     const ok = await copy(text, key);
-    setAnnouncement(ok ? `${what} copied` : `Couldn't copy. Select the ${what.toLowerCase()} and copy it manually.`);
+    setAnnouncement(
+      ok
+        ? `${what} copied`
+        : `Couldn't copy. Select the ${what.toLowerCase()} and copy it manually.`
+    );
   }
 
   async function handleShare() {
     try {
       await navigator.share({
-        title: "Follow me on BoxOfficeGuesser",
-        text: `Follow ${user!.name} on BoxOfficeGuesser and compare box office predictions.`,
+        title: "Follow me on Box Office Guesser",
+        text: `Follow ${user!.name} on Box Office Guesser and compare box office predictions.`,
         url: inviteLink,
       });
     } catch {
@@ -77,7 +76,10 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     const trimmed = code.trim();
     if (!trimmed) {
-      setLookup({ state: "error", message: "Enter a friend code, like GUY417." });
+      setLookup({
+        state: "error",
+        message: "Enter a friend code, like GUY417.",
+      });
       return;
     }
     setLookup({ state: "loading" });
@@ -100,7 +102,11 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
       await follow(player.short_id);
       setLookup({
         state: "found",
-        player: { ...player, is_following: true, followers_count: player.followers_count + 1 },
+        player: {
+          ...player,
+          is_following: true,
+          followers_count: player.followers_count + 1,
+        },
         justFollowed: true,
       });
       setAnnouncement(`Now following ${player.name}`);
@@ -108,28 +114,6 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
       const message = friendlyFriendError(err);
       setLookup({ state: "error", message });
       setAnnouncement(message);
-    } finally {
-      setBusyCode(null);
-    }
-  }
-
-  async function handleUnfollow(name: string, short_id: string) {
-    setBusyCode(short_id);
-    try {
-      await unfollow(short_id);
-      setAnnouncement(`Unfollowed ${name}`);
-      if (lookup.state === "found" && lookup.player.short_id === short_id) {
-        setLookup({
-          state: "found",
-          player: {
-            ...lookup.player,
-            is_following: false,
-            followers_count: Math.max(0, lookup.player.followers_count - 1),
-          },
-        });
-      }
-    } catch (err) {
-      setListError(friendlyFriendError(err));
     } finally {
       setBusyCode(null);
     }
@@ -147,18 +131,21 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
       <div className="p-6 space-y-7 text-left">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id={headingId} className="font-marquee text-3xl uppercase tracking-wide text-theater-gold">
-              Friends
+            <h2
+              id={headingId}
+              className="font-marquee text-3xl uppercase tracking-wide text-theater-gold"
+            >
+              Invite
             </h2>
             <p className="text-sm text-stone-400 mt-1">
-              Follow players to see their predictions next to yours.
+              Share your code or follow someone by theirs.
             </p>
           </div>
           <button
             type="button"
             onClick={() => dialogRef.current?.close()}
             className="rounded-lg p-2 text-stone-400 hover:text-stone-100 hover:bg-cinema-800 focus-visible:outline-2 focus-visible:outline-theater-gold"
-            aria-label="Close friends"
+            aria-label="Close invite"
           >
             <X size={20} aria-hidden />
           </button>
@@ -179,14 +166,22 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
                 onClick={() => handleCopy(user.short_id, "code", "Friend code")}
                 className="inline-flex items-center gap-1.5 rounded-md border border-ticket-ink/40 px-3 py-1.5 text-sm font-medium hover:bg-ticket-ink/10 focus-visible:outline-2 focus-visible:outline-ticket-ink"
               >
-                {copied === "code" ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+                {copied === "code" ? (
+                  <Check size={16} aria-hidden />
+                ) : (
+                  <Copy size={16} aria-hidden />
+                )}
                 {copied === "code" ? "Copied" : "Copy code"}
               </button>
             </div>
           </div>
 
-          <label htmlFor={`${headingId}-link`} className="block text-sm text-stone-300 mt-4 mb-1">
-            Invite link — anyone who opens it can follow you, and you'll follow them back.
+          <label
+            htmlFor={`${headingId}-link`}
+            className="block text-sm text-stone-300 mt-4 mb-1"
+          >
+            Invite link — anyone who opens it can follow you, and you&apos;ll
+            follow them back.
           </label>
           <div className="flex flex-wrap gap-2">
             <input
@@ -197,8 +192,16 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
               onFocus={(e) => e.target.select()}
               className="min-w-0 flex-1 rounded-lg border border-stone-600/60 bg-cinema-950/60 px-3 py-2 text-sm text-stone-200 focus-visible:outline-2 focus-visible:outline-theater-gold"
             />
-            <button type="button" onClick={() => handleCopy(inviteLink, "link", "Invite link")} className={iconButton}>
-              {copied === "link" ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+            <button
+              type="button"
+              onClick={() => handleCopy(inviteLink, "link", "Invite link")}
+              className={iconButton}
+            >
+              {copied === "link" ? (
+                <Check size={16} aria-hidden />
+              ) : (
+                <Copy size={16} aria-hidden />
+              )}
               {copied === "link" ? "Copied" : "Copy"}
             </button>
             {canShare && (
@@ -259,10 +262,16 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
               autoCapitalize="characters"
               spellCheck={false}
               aria-invalid={lookup.state === "error"}
-              aria-describedby={lookup.state === "error" ? codeErrorId : undefined}
+              aria-describedby={
+                lookup.state === "error" ? codeErrorId : undefined
+              }
               className="min-w-0 flex-1 rounded-lg border border-stone-600/60 bg-cinema-950/60 px-3 py-2 font-marquee uppercase tracking-[0.15em] text-stone-100 placeholder:text-stone-500 placeholder:tracking-normal focus-visible:outline-2 focus-visible:outline-theater-gold"
             />
-            <button type="submit" className={primaryButton} disabled={lookup.state === "loading"}>
+            <button
+              type="submit"
+              className={primaryButton}
+              disabled={lookup.state === "loading"}
+            >
               {lookup.state === "loading" ? (
                 <Loader2 size={16} className="animate-spin" aria-hidden />
               ) : (
@@ -282,7 +291,7 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
             <div className="relative mt-3 flex items-center justify-between gap-4 rounded-xl border border-stone-700/60 bg-cinema-950/50 p-4">
               <PlayerPreview player={found.player} />
               {found.player.is_self ? (
-                <p className="shrink-0 text-sm text-stone-400">That's you!</p>
+                <p className="shrink-0 text-sm text-stone-400">That&apos;s you!</p>
               ) : found.player.is_following ? (
                 found.justFollowed ? (
                   <FollowStamp className="shrink-0 text-theater-gold text-sm" />
@@ -296,48 +305,13 @@ export default function FriendsDialog({ onClose }: { onClose: () => void }) {
                   disabled={busyCode === found.player.short_id}
                   className={`${primaryButton} shrink-0`}
                 >
-                  {busyCode === found.player.short_id && <Loader2 size={16} className="animate-spin" aria-hidden />}
+                  {busyCode === found.player.short_id && (
+                    <Loader2 size={16} className="animate-spin" aria-hidden />
+                  )}
                   Follow
                 </button>
               )}
             </div>
-          )}
-        </section>
-
-        <section aria-labelledby={`${headingId}-following`}>
-          <h3 id={`${headingId}-following`} className={sectionHeading}>
-            Following{loaded ? ` (${following.length})` : ""}
-          </h3>
-          {listError ? (
-            <p className="text-sm text-cinema-200">{listError}</p>
-          ) : !loaded ? (
-            <p className="text-sm text-stone-400 inline-flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin" aria-hidden /> Loading…
-            </p>
-          ) : following.length === 0 ? (
-            <p className="text-sm text-stone-400">
-              You're not following anyone yet. Share your code or enter a friend's above.
-            </p>
-          ) : (
-            <ul className="divide-y divide-stone-800">
-              {following.map((f) => (
-                <li key={f.short_id} className="flex items-center justify-between gap-3 py-2">
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-stone-100">{f.name}</span>
-                    <span className="block text-xs uppercase tracking-[0.2em] text-stone-500">{f.short_id}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleUnfollow(f.name, f.short_id)}
-                    disabled={busyCode === f.short_id}
-                    aria-label={`Unfollow ${f.name}`}
-                    className="text-xs text-stone-400 hover:text-cinema-200 rounded-md px-2 py-1 focus-visible:outline-2 focus-visible:outline-theater-gold disabled:opacity-50"
-                  >
-                    Unfollow
-                  </button>
-                </li>
-              ))}
-            </ul>
           )}
         </section>
       </div>
