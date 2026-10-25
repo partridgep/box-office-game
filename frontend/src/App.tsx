@@ -15,6 +15,9 @@ function App() {
   const loadUser = useUserStore((state) => state.loadUser);
 
   const setGuesses = useGuessStore((state) => state.setGuesses);
+  const applyRunPhasesFromGuesses = useMovieStore(
+    (state) => state.applyRunPhasesFromGuesses
+  );
 
   // load movies on initial mount
   useEffect(() => {
@@ -48,6 +51,7 @@ function App() {
         console.log("Loaded guesses:", response);
         if (response.status === 200) {
           setGuesses(response.data);
+          applyRunPhasesFromGuesses(response.data);
         }
       } catch (err) {
         console.error("Error loading guesses:", err);
@@ -55,7 +59,7 @@ function App() {
     };
 
     fetchGuesses();
-  }, [user, setGuesses]);
+  }, [user, setGuesses, applyRunPhasesFromGuesses]);
 
 
 

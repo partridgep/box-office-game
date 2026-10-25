@@ -1,3 +1,5 @@
+export type RunPhase = "not_opened" | "tracking" | "finished";
+
 export type MovieData = {
   actors: string,
   awards: string | null,
@@ -30,6 +32,30 @@ export type MovieData = {
   writer: string,
   year: number,
   id: string | null,
+  /** Theatrical run grouping: not_opened | tracking | finished */
+  runPhase?: RunPhase | null,
+  runPhaseAt?: string | null,
+  /** Newest domestic weekly period gross (dollars), from GET /api/guesses. */
+  latestWeeklyGross?: number | null,
+};
+
+/** Compact movie payload attached to GET /api/guesses. */
+export type GuessMovieSnippet = {
+  id: string;
+  title: string;
+  tmdbID: string | number;
+  poster: string | null;
+  released: string | Date | null;
+  domesticOpening: string | null;
+  internationalOpening: string | null;
+  domesticGross: string | null;
+  internationalGross: string | null;
+  worldwideGross: string | null;
+  rottenTomatoesScore: string | null;
+  runPhase: RunPhase | null;
+  runPhaseAt: string | null;
+  /** Newest domestic weekly period gross in dollars. */
+  latestWeeklyGross?: number | null;
 };
 
 export type SavedMovie = {
@@ -62,6 +88,10 @@ export type Guess = {
   is_viewer?: boolean;
   /** Set on guesses from the movie-guesses endpoint: the viewer follows this guesser. */
   is_friend?: boolean;
+  /** Attached by GET /api/guesses for the Guesses page. */
+  movie?: GuessMovieSnippet | null;
+  /** Aggregate grade + placement vs all guesses on this movie. */
+  standing?: GuessStanding | null;
 };
 
 export type MovieActuals = {
@@ -103,6 +133,16 @@ export type OverallPerformance = {
   overallRank: number;
   totalGuesses: number;
   percentile: number;
+};
+
+/** Attached by GET /api/guesses when the movie has scorable actuals. */
+export type GuessStanding = {
+  overallScore: number;
+  overallRank: number;
+  totalGuesses: number;
+  percentile: number;
+  tier: "nailed" | "close" | "off";
+  scoreMode: "box_office" | "rt";
 };
 
 export type Category = {

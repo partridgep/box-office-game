@@ -247,7 +247,7 @@
   right: 0;
   z-index: 50;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.25rem;
   padding: 0.4rem 0.5rem;
   padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
@@ -289,6 +289,23 @@
   place-items: center;
   width: 1.5rem;
   height: 1.5rem;
+}
+
+.tabBadge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.55rem;
+  min-width: 0.9rem;
+  padding: 0.05rem 0.2rem;
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--color-cinema-950);
+  background: var(--color-theater-gold);
+  border-radius: 999px;
+  pointer-events: none;
 }
 
 .bottomLabel {

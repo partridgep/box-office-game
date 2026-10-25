@@ -5,6 +5,7 @@ import { CinemaLobby } from "./pages/MovieSearch/CinemaLobby/CinemaLobby";
 import Layout from './components/Layout/Layout';
 import FollowInvite from './pages/FollowInvite/FollowInvite';
 import Friends from './pages/Friends/Friends';
+import Guesses from './pages/Guesses/Guesses';
 import AdminHome from './pages/Admin/AdminHome';
 import CategoryList from './pages/Admin/CategoryList';
 import CategoryDetail from './pages/Admin/CategoryDetail';
@@ -17,6 +18,7 @@ export const Routing = () => {
                 <Routes>
                     <Route path="/" element={<CinemaLobby />} />
                     <Route path="/movie/:id" element={<MovieDetails />} />
+                    <Route path="/guesses" element={<Guesses />} />
                     <Route path="/friends" element={<Friends />} />
                     <Route path="/follow/:code" element={<FollowInvite />} />
                     <Route path="/admin" element={<AdminHome />} />

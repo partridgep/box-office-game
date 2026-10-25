@@ -494,7 +494,7 @@ export default function VersusComps({
           <h2 id={headingId} className={SECTION_TITLE}>
             Versus Comps
           </h2>
-          <p className="text-sm text-stone-400 max-w-xl" aria-live="polite">
+          <p className="text-sm text-stone-400 text-left" aria-live="polite">
             {insight}
           </p>
         </div>

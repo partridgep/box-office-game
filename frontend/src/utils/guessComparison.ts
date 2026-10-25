@@ -77,8 +77,7 @@ function ordinal(n: number): string {
 }
 
 export function formatRank(rank: number, total: number): string {
-  if (total === 1) return "Only guess so far";
-  if (rank === total) return `Last of ${total}`;
+  if (total === 1) return "Nobody else has predicted";
   return `${ordinal(rank)} of ${total}`;
 }
 

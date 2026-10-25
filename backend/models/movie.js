@@ -172,6 +172,15 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    /** not_opened | tracking | finished — theatrical run grouping for Guesses. */
+    runPhase: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    runPhaseAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   }, {
     sequelize,
     modelName: 'Movie',

@@ -14,6 +14,7 @@ const {
     getMovieBoxOffice,
     refreshMovieBoxOffice,
     refreshMovieInternationalBoxOffice,
+    getMovieRunPhases,
 } = require('../controllers/movies');
 const {
     postGuess,
@@ -77,6 +78,7 @@ router.get('/movies/:movieId/categories', getMovieCategoryMemberships);
 router.put('/movies/:movieId/categories', putMovieCategoryMemberships);
 router.get('/movies/:movieId/borrowed-categories', getMovieBorrowedCategories);
 router.put('/movies/:movieId/borrowed-categories', putMovieBorrowedCategories);
+router.get('/movies/run-phases', getMovieRunPhases);
 router.get('/movies/:movieId/box-office', getMovieBoxOffice);
 router.post('/movies/:movieId/box-office/refresh', refreshMovieBoxOffice);
 router.post('/movies/:movieId/box-office/international/refresh', refreshMovieInternationalBoxOffice);

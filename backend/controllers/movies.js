@@ -15,6 +15,7 @@ const {
     refreshTerritoryPeriods,
 } = require('../services/internationalBoxOfficeService');
 const { isMovieTracked } = require('../services/historyTrackingPolicy');
+const { getRunPhasesForMovieIds } = require('../services/runPhaseService');
 const { scrapeBoxOffice } = require('../scraper');
 
 const internationalRefreshesInFlight = new Set();
@@ -194,6 +195,34 @@ const refreshMovieInternationalBoxOffice = async (req, res) => {
     }
 };
 
+/**
+ * Batch theatrical run phases for Guesses grouping.
+ * GET /api/movies/run-phases?ids=uuid,uuid
+ */
+const getMovieRunPhases = async (req, res) => {
+    try {
+        const raw = req.query.ids;
+        const ids = Array.isArray(raw)
+            ? raw.flatMap((s) => String(s).split(','))
+            : String(raw || '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+
+        if (ids.length === 0) {
+            return res.status(400).json({ error: 'ids query parameter is required' });
+        }
+        if (ids.length > 200) {
+            return res.status(400).json({ error: 'At most 200 ids per request' });
+        }
+
+        const phases = await getRunPhasesForMovieIds(ids);
+        res.status(200).json({ phases });
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Failed to resolve run phases' });
+    }
+};
+
 module.exports = {
     getMovieSearch,
     getMovieDetails,
@@ -204,5 +233,6 @@ module.exports = {
     updateAllMovies,
     getMovieBoxOffice,
     refreshMovieBoxOffice,
-    refreshMovieInternationalBoxOffice
+    refreshMovieInternationalBoxOffice,
+    getMovieRunPhases,
 };

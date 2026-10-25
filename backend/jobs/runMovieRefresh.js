@@ -10,6 +10,7 @@ const {
   refreshTerritoryPeriods,
 } = require("../services/internationalBoxOfficeService");
 const { getTrackedMovieIds } = require("../services/historyTrackingPolicy");
+const { refreshAllMovieRunPhases } = require("../services/runPhaseService");
 const {
   emptyMovieRefreshSummary,
   pushError,
@@ -165,6 +166,17 @@ async function runMovieRefresh({ trigger = 'unknown' } = {}) {
 
     await refreshInReleaseBoxOffice(summary);
     await refreshTrackedTerritories(trackedIds, summary);
+
+    try {
+      await refreshAllMovieRunPhases();
+      console.log('Theatrical run phases updated.');
+    } catch (err) {
+      pushError(summary, {
+        stage: 'run_phase',
+        message: err.message || String(err),
+      });
+      console.error('Failed to refresh run phases:', err);
+    }
 
     const status = resolveMovieRefreshStatus(summary);
     console.log("Movie refresh completed.", status, summary);

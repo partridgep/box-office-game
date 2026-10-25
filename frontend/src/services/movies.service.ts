@@ -1,4 +1,20 @@
-import { BoxOfficeHistory, InternationalRefreshResult } from '../types';
+import { BoxOfficeHistory, InternationalRefreshResult, RunPhase } from '../types';
+
+export async function getMovieRunPhases(
+  movieIds: string[]
+): Promise<Record<string, RunPhase>> {
+  const unique = [...new Set(movieIds.filter(Boolean))];
+  if (unique.length === 0) return {};
+  const response = await fetch(
+    `/api/movies/run-phases?ids=${encodeURIComponent(unique.join(','))}`
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch run phases');
+  }
+  const data = await response.json();
+  return (data.phases ?? {}) as Record<string, RunPhase>;
+}
 
 export const searchMovies = async (search: string, year?: string | number) => {
   const params = new URLSearchParams({ search });

@@ -1,15 +1,20 @@
 import {
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
   type RefObject,
 } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Clapperboard, Loader2, UserRound, Users } from "lucide-react";
+import { Clapperboard, Loader2, Target, UserRound, Users } from "lucide-react";
 import { useUserStore } from "../../store/useUserStore";
 import { useFriendsStore } from "../../store/useFriendsStore";
+import { useGuessStore } from "../../store/useGuessStore";
+import { useMovieStore } from "../../store/useMovieStore";
+import { joinGuessRows } from "../../pages/Guesses/joinGuessRows";
+import { useGuessUpdatesBadgeCount } from "../../pages/Guesses/useGuessUpdates";
 import RecoverAccount from "../RecoverAccount/RecoverAccount";
 import InviteDialog from "../Friends/InviteDialog";
 import BrandMark from "./BrandMark";
@@ -19,7 +24,7 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-type BottomTab = "upcoming" | "friends" | "you";
+type BottomTab = "upcoming" | "guesses" | "friends" | "you";
 
 const DESKTOP_MQ = "(min-width: 768px)";
 
@@ -69,14 +74,26 @@ export default function Layout({ children }: LayoutProps) {
   const followingCount = useFriendsStore((state) => state.following.length);
   const followingLoaded = useFriendsStore((state) => state.loaded);
   const loadFollowing = useFriendsStore((state) => state.loadFollowing);
+  const guesses = useGuessStore((state) => state.guesses);
+  const movies = useMovieStore((state) => state.movies);
 
   const signedIn = sessionStatus === "ready" && Boolean(user);
   const upcomingActive = isUpcomingPath(location.pathname) && !accountOpen;
+  const guessesActive = location.pathname.startsWith("/guesses");
   const friendsActive = location.pathname.startsWith("/friends");
   const youActive =
     accountOpen ||
     location.pathname.startsWith("/admin") ||
     location.pathname.startsWith("/follow");
+
+  const guessRows = useMemo(
+    () => joinGuessRows(guesses, movies),
+    [guesses, movies]
+  );
+  const guessesBadgeCount = useGuessUpdatesBadgeCount(
+    signedIn ? user?.id : null,
+    guessRows
+  );
 
   useEffect(() => {
     if (sessionStatus === "ready" && user && !followingLoaded) {
@@ -87,7 +104,9 @@ export default function Layout({ children }: LayoutProps) {
   // One bulb flicker on the newly active bottom tab after a route change.
   useEffect(() => {
     let tab: BottomTab = "upcoming";
-    if (location.pathname.startsWith("/friends")) {
+    if (location.pathname.startsWith("/guesses")) {
+      tab = "guesses";
+    } else if (location.pathname.startsWith("/friends")) {
       tab = "friends";
     } else if (
       location.pathname.startsWith("/admin") ||
@@ -135,9 +154,23 @@ export default function Layout({ children }: LayoutProps) {
     navigate("/");
   }
 
+  function goGuesses() {
+    setAccountOpen(false);
+    navigate("/guesses");
+  }
+
   function goFriends() {
     setAccountOpen(false);
     navigate("/friends");
+  }
+
+  function renderGuessesBadge() {
+    if (!signedIn || guessesBadgeCount <= 0) return null;
+    return (
+      <span className="ml-1 tabular-nums text-stone-500">
+        {guessesBadgeCount > 9 ? "9+" : guessesBadgeCount}
+      </span>
+    );
   }
 
   function toggleAccount() {
@@ -224,6 +257,17 @@ export default function Layout({ children }: LayoutProps) {
               aria-current={location.pathname === "/" ? "page" : undefined}
             >
               Upcoming
+            </button>
+            <button
+              type="button"
+              onClick={goGuesses}
+              className={`${styles.navLink} ${
+                guessesActive ? styles.navLinkActive : ""
+              }`}
+              aria-current={guessesActive ? "page" : undefined}
+            >
+              Guesses
+              {renderGuessesBadge()}
             </button>
             <button
               type="button"
@@ -321,6 +365,40 @@ export default function Layout({ children }: LayoutProps) {
               ) : null}
             </span>
             <span className={styles.bottomLabel}>Upcoming</span>
+          </button>
+
+          <button
+            type="button"
+            className={`${styles.bottomItem} ${
+              guessesActive ? styles.bottomItemActive : ""
+            }`}
+            onClick={goGuesses}
+            aria-current={guessesActive ? "page" : undefined}
+          >
+            <span className={styles.bottomIconWrap}>
+              <Target size={20} strokeWidth={1.75} aria-hidden />
+              {guessesActive ? (
+                <span
+                  key={`guesses-${flickerKey}`}
+                  className={`${styles.bulb} ${
+                    flickerTab === "guesses" ? styles.bulbFlicker : ""
+                  }`}
+                  aria-hidden
+                />
+              ) : null}
+              {signedIn && guessesBadgeCount > 0 && !guessesActive ? (
+                <span className={styles.tabBadge} aria-hidden>
+                  {guessesBadgeCount > 9 ? "9+" : guessesBadgeCount}
+                </span>
+              ) : null}
+            </span>
+            <span className={styles.bottomLabel}>Guesses</span>
+            {signedIn && guessesBadgeCount > 0 ? (
+              <span className="sr-only">
+                {guessesBadgeCount} update
+                {guessesBadgeCount === 1 ? "" : "s"}
+              </span>
+            ) : null}
           </button>
 
           <button

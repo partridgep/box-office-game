@@ -1,5 +1,16 @@
 const db = require('../models');
-const { Guess, User, Follow } = db;
+const { Guess, User, Follow, Movie } = db;
+const { Op } = db.Sequelize;
+const {
+  persistRunPhases,
+  batchLatestWeeklyPeriods,
+  movieSnippetForGuess,
+  GUESS_MOVIE_ATTRIBUTES,
+} = require('./runPhaseService');
+const {
+  hasAnyActuals,
+  standingsForUserGuesses,
+} = require('./overallScoreService');
 
 const createGuess = async (req) => {
   try {
@@ -65,9 +76,77 @@ const fetchGuessesForUser = async (user_id) => {
     }
 
     const guesses = await Guess.findAll({ where: { user_id } });
+    const plainGuesses = guesses.map((guess) => guess.get({ plain: true }));
 
-    const plainGuesses = guesses.map(guess => guess.get({ plain: true }));
-    return plainGuesses;
+    const movieIds = [
+      ...new Set(plainGuesses.map((g) => g.movie_id).filter(Boolean)),
+    ];
+    if (movieIds.length === 0) return plainGuesses;
+
+    const movies = await Movie.findAll({
+      where: { id: movieIds },
+      attributes: GUESS_MOVIE_ATTRIBUTES,
+    });
+    const phaseById = await persistRunPhases(movies);
+    const movieById = new Map(
+      movies.map((m) => {
+        const plain = m.get({ plain: true });
+        return [String(plain.id), plain];
+      })
+    );
+
+    // Domestic weekly tips for tracking notes (newest week per movie).
+    const tipsByMovie = await batchLatestWeeklyPeriods(
+      movieIds.map((id) => String(id))
+    );
+
+    // Peer guesses only for movies that already have actuals (for overall ranking).
+    const scoredMovieIds = movieIds.filter((id) => {
+      const movie = movieById.get(String(id));
+      return movie && hasAnyActuals(movie);
+    });
+
+    const peersByMovieId = new Map();
+    if (scoredMovieIds.length > 0) {
+      const peerGuesses = await Guess.findAll({
+        where: { movie_id: { [Op.in]: scoredMovieIds } },
+        attributes: [
+          'id',
+          'movie_id',
+          'domestic_opening',
+          'international_opening',
+          'final_domestic',
+          'final_international',
+          'rotten_tomatoes_score',
+        ],
+      });
+      for (const row of peerGuesses) {
+        const plain = row.get({ plain: true });
+        const key = String(plain.movie_id);
+        const list = peersByMovieId.get(key) || [];
+        list.push(plain);
+        peersByMovieId.set(key, list);
+      }
+    }
+
+    const standingsByGuessId = standingsForUserGuesses(
+      plainGuesses,
+      movieById,
+      peersByMovieId
+    );
+
+    return plainGuesses.map((guess) => {
+      const movieId = String(guess.movie_id);
+      const movie = movieById.get(movieId);
+      const runPhase = phaseById.get(movieId);
+      const standing = standingsByGuessId.get(String(guess.id)) || null;
+      const latestWeekly = (tipsByMovie.get(movieId) || [])[0] || null;
+      return {
+        ...guess,
+        movie: movieSnippetForGuess(movie, runPhase, latestWeekly),
+        standing,
+      };
+    });
 
    } catch (error) {
     throw new Error("Error fetching guesses: " + error.message);
