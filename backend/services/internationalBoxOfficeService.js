@@ -194,8 +194,64 @@ const getInternationalHistory = async (movieId) => {
     };
 };
 
+/**
+ * Latest international week-over-week add (dollars) per movie, from territory
+ * weekend periods rolled into a calendar-week cumulative series.
+ * @returns {Promise<Map<string, number>>}
+ */
+const batchLatestIntlWeeklyAdds = async (movieIds) => {
+    const map = new Map();
+    const uniqueIds = [...new Set((movieIds || []).filter(Boolean).map(String))];
+    if (uniqueIds.length === 0) return map;
+
+    const periods = await MovieBoxOfficePeriod.findAll({
+        where: {
+            movie_id: uniqueIds,
+            period_type: 'weekend',
+            region: { [Op.ne]: 'domestic' },
+        },
+        attributes: ['movie_id', 'region', 'end_date', 'gross_to_date'],
+        order: [['end_date', 'ASC']],
+        raw: true,
+    });
+
+    const byMovie = new Map();
+    for (const row of periods) {
+        const id = String(row.movie_id);
+        const list = byMovie.get(id) || [];
+        list.push({
+            region: row.region,
+            end_date: row.end_date,
+            gross_to_date: row.gross_to_date,
+        });
+        byMovie.set(id, list);
+    }
+
+    for (const [id, moviePeriods] of byMovie) {
+        const weekly = buildInternationalWeekly(moviePeriods);
+        if (weekly.length === 0) continue;
+
+        let add = null;
+        if (weekly.length === 1) {
+            add = weekly[0].grossToDate;
+        } else {
+            const latest = weekly[weekly.length - 1];
+            const prev = weekly[weekly.length - 2];
+            add = latest.grossToDate - prev.grossToDate;
+        }
+
+        if (add != null && Number.isFinite(add) && add > 0) {
+            map.set(id, add);
+        }
+    }
+
+    return map;
+};
+
 module.exports = {
     recordTitleSnapshot,
     refreshTerritoryPeriods,
     getInternationalHistory,
+    batchLatestIntlWeeklyAdds,
+    buildInternationalWeekly,
 };

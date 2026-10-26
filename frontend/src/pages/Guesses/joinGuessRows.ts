@@ -17,6 +17,7 @@ function snippetAsMovie(snippet: GuessMovieSnippet): MovieData {
     runPhase: snippet.runPhase,
     runPhaseAt: snippet.runPhaseAt,
     latestWeeklyGross: snippet.latestWeeklyGross ?? null,
+    latestIntlWeeklyGross: snippet.latestIntlWeeklyGross ?? null,
     // Unused on Guesses rows — satisfy MovieData.
     actors: "",
     awards: null,
@@ -60,6 +61,10 @@ export function joinGuessRows(
         runPhaseAt: guess.movie.runPhaseAt ?? movie.runPhaseAt,
         latestWeeklyGross:
           guess.movie.latestWeeklyGross ?? movie.latestWeeklyGross ?? null,
+        latestIntlWeeklyGross:
+          guess.movie.latestIntlWeeklyGross ??
+          movie.latestIntlWeeklyGross ??
+          null,
       };
     } else if (!movie && guess.movie) {
       movie = snippetAsMovie(guess.movie);

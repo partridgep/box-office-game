@@ -8,6 +8,9 @@ const {
   GUESS_MOVIE_ATTRIBUTES,
 } = require('./runPhaseService');
 const {
+  batchLatestIntlWeeklyAdds,
+} = require('./internationalBoxOfficeService');
+const {
   hasAnyActuals,
   standingsForUserGuesses,
 } = require('./overallScoreService');
@@ -95,10 +98,12 @@ const fetchGuessesForUser = async (user_id) => {
       })
     );
 
-    // Domestic weekly tips for tracking notes (newest week per movie).
-    const tipsByMovie = await batchLatestWeeklyPeriods(
-      movieIds.map((id) => String(id))
-    );
+    const movieIdStrs = movieIds.map((id) => String(id));
+    // Domestic weekly tips + intl weekend adds for tracking notes.
+    const [tipsByMovie, intlAddsByMovie] = await Promise.all([
+      batchLatestWeeklyPeriods(movieIdStrs),
+      batchLatestIntlWeeklyAdds(movieIdStrs),
+    ]);
 
     // Peer guesses only for movies that already have actuals (for overall ranking).
     const scoredMovieIds = movieIds.filter((id) => {
@@ -143,7 +148,10 @@ const fetchGuessesForUser = async (user_id) => {
       const latestWeekly = (tipsByMovie.get(movieId) || [])[0] || null;
       return {
         ...guess,
-        movie: movieSnippetForGuess(movie, runPhase, latestWeekly),
+        movie: movieSnippetForGuess(movie, runPhase, {
+          latestWeeklyTip: latestWeekly,
+          latestIntlWeeklyAdd: intlAddsByMovie.get(movieId) ?? null,
+        }),
         standing,
       };
     });

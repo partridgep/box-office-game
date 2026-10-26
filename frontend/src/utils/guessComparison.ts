@@ -2,6 +2,7 @@ import {
   Guess,
   MovieData,
   GuessComparison,
+  GuessFieldDisplay,
   GuessVsGuess,
   CategoryLeaderboard,
   OverallPerformance,
@@ -92,6 +93,68 @@ function compareNumber(
   const percentError = (Math.abs(delta) / actual) * 100;
 
   return { field, guess, actual, delta, percentError };
+}
+
+function finiteGuess(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  return Number(value);
+}
+
+function displayRow(
+  field: string,
+  guess: number | null,
+  actual: number | null
+): GuessFieldDisplay | null {
+  if (guess == null) return null;
+  if (actual == null) {
+    return { field, guess, actual: null, delta: null, percentError: null };
+  }
+  const delta = guess - actual;
+  return {
+    field,
+    guess,
+    actual,
+    delta,
+    percentError: (Math.abs(delta) / actual) * 100,
+  };
+}
+
+/**
+ * Fields the user called, including rows still waiting on actuals.
+ * Used by Movie Details accuracy cards so guesses stay visible.
+ */
+export function listGuessFieldsForDisplay(
+  guess: Guess,
+  movie: MovieData
+): GuessFieldDisplay[] {
+  const actuals = getMovieActuals(movie);
+  const owDom = millionsToDollars(finiteGuess(guess.domestic_opening));
+  const owIntl = millionsToDollars(finiteGuess(guess.international_opening));
+  const finalDom = millionsToDollars(finiteGuess(guess.final_domestic));
+  const finalIntl = millionsToDollars(finiteGuess(guess.final_international));
+  const rt = finiteGuess(guess.rotten_tomatoes_score);
+
+  return [
+    displayRow("Domestic Opening", owDom, actuals.domesticOpening),
+    displayRow("International Opening", owIntl, actuals.internationalOpening),
+    owDom != null && owIntl != null
+      ? displayRow(
+          "Worldwide Opening",
+          owDom + owIntl,
+          actuals.worldwideOpening
+        )
+      : null,
+    displayRow("Domestic Final", finalDom, actuals.finalDomestic),
+    displayRow("International Final", finalIntl, actuals.finalInternational),
+    finalDom != null && finalIntl != null
+      ? displayRow(
+          "Worldwide Final",
+          finalDom + finalIntl,
+          actuals.worldwideFinal
+        )
+      : null,
+    displayRow("Rotten Tomatoes", rt, actuals.rottenTomatoesScore),
+  ].filter(Boolean) as GuessFieldDisplay[];
 }
 
 export function compareGuessToMovie(
@@ -351,6 +414,11 @@ export function compareUserToAllGuesses(
 const RT_MAX_BONUS = 0.05;
 /** RT guesses this many points off (or more) earn no bonus. */
 const RT_BONUS_CUTOFF = 20;
+/**
+ * Finals enter overallScore after opening weekend (day 7 = start of week 2).
+ * Keep in sync with runPhase.FINALS_SCORE_AFTER_DAYS + backend overallScoreService.
+ */
+const FINALS_SCORE_AFTER_DAYS = 7;
 
 function rtBonus(guessRt: number | null, actualRt: number | null): number {
   if (actualRt == null || guessRt == null) return 0;
@@ -358,26 +426,116 @@ function rtBonus(guessRt: number | null, actualRt: number | null): number {
   return RT_MAX_BONUS * Math.max(0, 1 - pointsOff / RT_BONUS_CUTOFF);
 }
 
+function scoresFinalGross(movie: MovieData, now = Date.now()): boolean {
+  if (!movie.released) return true;
+  const t = new Date(movie.released).getTime();
+  if (Number.isNaN(t)) return true;
+  const days = (now - t) / (1000 * 60 * 60 * 24);
+  return days >= FINALS_SCORE_AFTER_DAYS;
+}
+
+function relativeError(
+  guessDollars: number | null,
+  actualDollars: number | null
+): number | null {
+  if (
+    guessDollars == null ||
+    actualDollars == null ||
+    !Number.isFinite(guessDollars) ||
+    !Number.isFinite(actualDollars) ||
+    actualDollars === 0
+  ) {
+    return null;
+  }
+  return Math.abs(guessDollars - actualDollars) / actualDollars;
+}
+
+export type ScoreLeg = {
+  label: string;
+  /** Fraction (0.15 = 15% off), same unit as overallScore BO errors. */
+  error: number;
+};
+
+type MovieActuals = ReturnType<typeof getMovieActuals>;
+
+/** Prefer worldwide; if one market is still missing, score the market that landed. */
+function openingLeg(
+  guess: Guess,
+  actuals: MovieActuals
+): ScoreLeg | null {
+  if (actuals.worldwideOpening != null) {
+    const error = relativeError(
+      millionsToDollars(
+        Number(guess.domestic_opening) + Number(guess.international_opening)
+      ),
+      actuals.worldwideOpening
+    );
+    return error != null ? { label: "Opening WW", error } : null;
+  }
+  const dom = relativeError(
+    millionsToDollars(guess.domestic_opening),
+    actuals.domesticOpening
+  );
+  if (dom != null) return { label: "Opening Dom", error: dom };
+  const intl = relativeError(
+    millionsToDollars(guess.international_opening),
+    actuals.internationalOpening
+  );
+  return intl != null ? { label: "Opening Intl", error: intl } : null;
+}
+
+function finalLeg(guess: Guess, actuals: MovieActuals): ScoreLeg | null {
+  if (actuals.worldwideFinal != null) {
+    const error = relativeError(
+      millionsToDollars(
+        Number(guess.final_domestic) + Number(guess.final_international)
+      ),
+      actuals.worldwideFinal
+    );
+    return error != null ? { label: "Final WW", error } : null;
+  }
+  const dom = relativeError(
+    millionsToDollars(guess.final_domestic),
+    actuals.finalDomestic
+  );
+  if (dom != null) return { label: "Final Dom", error: dom };
+  const intl = relativeError(
+    millionsToDollars(guess.final_international),
+    actuals.finalInternational
+  );
+  return intl != null ? { label: "Final Intl", error: intl } : null;
+}
+
 /**
- * Lower is better: avg worldwide opening/final % error, minus a small RT bonus.
- * Before BO actuals land, falls back to absolute RT points off.
+ * Box-office legs that currently feed overallScore (opening always when
+ * available; finals only after opening weekend).
+ */
+export function scoredBoxOfficeLegs(
+  guess: Guess,
+  movie: MovieData
+): ScoreLeg[] {
+  const actuals = getMovieActuals(movie);
+  const legs: ScoreLeg[] = [];
+  const opening = openingLeg(guess, actuals);
+  if (opening) legs.push(opening);
+  if (scoresFinalGross(movie)) {
+    const fin = finalLeg(guess, actuals);
+    if (fin) legs.push(fin);
+  }
+  return legs;
+}
+
+/**
+ * Lower is better: avg opening/final % error, minus a small RT bonus.
+ * Prefer WW; fall back to a single market when the other hasn't landed.
+ * Finals are deferred through opening weekend so cumulative "so far" gross
+ * does not tank a correct lifetime call. Before BO actuals land, falls back
+ * to absolute RT points off.
  */
 export function overallScore(guess: Guess, movie: MovieData): number | null {
   const actuals = getMovieActuals(movie);
   const actualRt = actuals.rottenTomatoesScore;
-
-  const boErrors = [
-    actuals.worldwideOpening &&
-      Math.abs(
-        millionsToDollars(guess.domestic_opening + guess.international_opening)! -
-          actuals.worldwideOpening
-      ) / actuals.worldwideOpening,
-    actuals.worldwideFinal &&
-      Math.abs(
-        millionsToDollars(guess.final_domestic + guess.final_international)! -
-          actuals.worldwideFinal
-      ) / actuals.worldwideFinal,
-  ].filter((v): v is number => typeof v === "number");
+  const boErrors = scoredBoxOfficeLegs(guess, movie).map((leg) => leg.error);
 
   if (boErrors.length) {
     const boScore = boErrors.reduce((a, b) => a + b, 0) / boErrors.length;

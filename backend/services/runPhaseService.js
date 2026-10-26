@@ -255,9 +255,12 @@ const GUESS_MOVIE_ATTRIBUTES = [
 /**
  * @param {object|null} movie
  * @param {RunPhase|null|undefined} runPhase
- * @param {{ gross: number|null }|null|undefined} latestWeeklyTip Newest domestic weekly tip
+ * @param {{
+ *   latestWeeklyTip?: { gross: number|null }|null,
+ *   latestIntlWeeklyAdd?: number|null,
+ * }} [tips]
  */
-function movieSnippetForGuess(movie, runPhase, latestWeeklyTip = null) {
+function movieSnippetForGuess(movie, runPhase, tips = {}) {
   if (!movie) return null;
   const plain = movie.get ? movie.get({ plain: true }) : movie;
   const snippet = {};
@@ -268,11 +271,14 @@ function movieSnippetForGuess(movie, runPhase, latestWeeklyTip = null) {
     }
     snippet[key] = plain[key] ?? null;
   }
-  const weekGross = latestWeeklyTip?.gross;
+  const weekGross = tips.latestWeeklyTip?.gross;
   snippet.latestWeeklyGross =
     weekGross != null && Number.isFinite(Number(weekGross))
       ? Number(weekGross)
       : null;
+  const intlAdd = tips.latestIntlWeeklyAdd;
+  snippet.latestIntlWeeklyGross =
+    intlAdd != null && Number.isFinite(Number(intlAdd)) ? Number(intlAdd) : null;
   return snippet;
 }
 

@@ -7,6 +7,26 @@
 
 const RT_MAX_BONUS = 0.05;
 const RT_BONUS_CUTOFF = 20;
+/**
+ * Finals enter overallScore after opening weekend (day 7 = start of week 2).
+ * Keep in sync with frontend runPhase.FINALS_SCORE_AFTER_DAYS / guessComparison.
+ */
+const FINALS_SCORE_AFTER_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function daysSinceRelease(released, now = Date.now()) {
+  if (!released) return null;
+  const t = new Date(released).getTime();
+  if (Number.isNaN(t)) return null;
+  return (now - t) / DAY_MS;
+}
+
+/** Cumulative gross counts as the final leg only after opening weekend. */
+function scoresFinalGross(movie, now = Date.now()) {
+  const days = daysSinceRelease(movie.released, now);
+  if (days == null) return true;
+  return days >= FINALS_SCORE_AFTER_DAYS;
+}
 
 function parseMoney(value) {
   if (value == null || value === '') return null;
@@ -59,29 +79,76 @@ function rtBonus(guessRt, actualRt) {
   return RT_MAX_BONUS * Math.max(0, 1 - pointsOff / RT_BONUS_CUTOFF);
 }
 
+function relativeError(guessDollars, actualDollars) {
+  if (
+    guessDollars == null ||
+    actualDollars == null ||
+    !Number.isFinite(guessDollars) ||
+    !Number.isFinite(actualDollars) ||
+    actualDollars === 0
+  ) {
+    return null;
+  }
+  return Math.abs(guessDollars - actualDollars) / actualDollars;
+}
+
+/**
+ * Prefer worldwide; if one market is still missing, score the market that landed.
+ */
+function openingLegError(guess, actuals) {
+  if (actuals.worldwideOpening != null) {
+    return relativeError(
+      millionsToDollars(
+        Number(guess.domestic_opening) + Number(guess.international_opening)
+      ),
+      actuals.worldwideOpening
+    );
+  }
+  const dom = relativeError(
+    millionsToDollars(Number(guess.domestic_opening)),
+    actuals.domesticOpening
+  );
+  if (dom != null) return dom;
+  return relativeError(
+    millionsToDollars(Number(guess.international_opening)),
+    actuals.internationalOpening
+  );
+}
+
+function finalLegError(guess, actuals) {
+  if (actuals.worldwideFinal != null) {
+    return relativeError(
+      millionsToDollars(
+        Number(guess.final_domestic) + Number(guess.final_international)
+      ),
+      actuals.worldwideFinal
+    );
+  }
+  const dom = relativeError(
+    millionsToDollars(Number(guess.final_domestic)),
+    actuals.finalDomestic
+  );
+  if (dom != null) return dom;
+  return relativeError(
+    millionsToDollars(Number(guess.final_international)),
+    actuals.finalInternational
+  );
+}
+
 /**
  * Lower is better. Returns { score, mode } where mode is 'box_office' | 'rt'.
+ * Finals deferred through opening weekend (cumulative ≠ lifetime yet).
+ * Opening/final legs fall back to a single market when WW isn't complete yet.
  * null when the guess can't be scored yet.
  */
 function overallScoreDetail(guess, movie) {
   const actuals = getMovieActuals(movie);
   const actualRt = actuals.rottenTomatoesScore;
+  const includeFinal = scoresFinalGross(movie);
 
   const boErrors = [
-    actuals.worldwideOpening != null
-      ? Math.abs(
-          millionsToDollars(
-            Number(guess.domestic_opening) + Number(guess.international_opening)
-          ) - actuals.worldwideOpening
-        ) / actuals.worldwideOpening
-      : null,
-    actuals.worldwideFinal != null
-      ? Math.abs(
-          millionsToDollars(
-            Number(guess.final_domestic) + Number(guess.final_international)
-          ) - actuals.worldwideFinal
-        ) / actuals.worldwideFinal
-      : null,
+    openingLegError(guess, actuals),
+    includeFinal ? finalLegError(guess, actuals) : null,
   ].filter((v) => typeof v === 'number' && Number.isFinite(v));
 
   if (boErrors.length) {
@@ -173,6 +240,8 @@ module.exports = {
   parseMoney,
   getMovieActuals,
   hasAnyActuals,
+  scoresFinalGross,
+  FINALS_SCORE_AFTER_DAYS,
   overallScore,
   overallScoreDetail,
   tierFromOverall,

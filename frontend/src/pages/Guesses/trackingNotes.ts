@@ -2,7 +2,12 @@ import type { MovieData, RunPhase } from "../../types";
 import { parseMoney } from "../../utils/guessComparison";
 import { formatDollars } from "../../utils/formatMoney";
 
-export type TrackingNoteKind = "opening" | "weekly" | "rt";
+export type TrackingNoteKind =
+  | "opening"
+  | "opening_intl"
+  | "weekly"
+  | "weekly_intl"
+  | "rt";
 
 export type TrackingNote = {
   kind: TrackingNoteKind;
@@ -13,7 +18,8 @@ export type TrackingNote = {
 const MILESTONE_WINDOW_DAYS = 14;
 const THIS_WEEKEND_DAYS = 3;
 const LAST_WEEKEND_DAYS = 10;
-const MAX_NOTES = 2;
+/** Dom + intl opening, both weeklies, and RT when everything lines up. */
+const MAX_NOTES = 5;
 
 function daysSinceRelease(
   released: Date | string | null | undefined,
@@ -33,10 +39,14 @@ function openingWhenPhrase(days: number): string | null {
   return null;
 }
 
+function positiveGross(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
 /**
- * Tracking-row news blurbs (max 2): timed opening, weekly domestic tip,
- * then a fresh RT beat. Prefer signals that add timeline context over
- * restating metric-card numbers alone.
+ * Tracking-row news blurbs. Early window: domestic + intl openings and RT.
+ * Anytime while tracking: domestic week add and intl weekend add.
  */
 export function buildTrackingNotes(
   movie: MovieData,
@@ -54,35 +64,36 @@ export function buildTrackingNotes(
     if (dom != null) {
       notes.push({
         kind: "opening",
-        text: `Opened ${when} to ${formatDollars(dom)} domestic`,
+        text: `Opened ${when} to ${formatDollars(dom)} domestically`,
       });
-    } else {
-      const intl = parseMoney(movie.internationalOpening);
-      if (intl != null) {
-        notes.push({
-          kind: "opening",
-          text: `Opened ${when} to ${formatDollars(intl)} intl`,
-        });
-      }
+    }
+
+    const intl = parseMoney(movie.internationalOpening);
+    if (intl != null) {
+      notes.push({
+        kind: "opening_intl",
+        text: `Opened ${when} to ${formatDollars(intl)} internationally`,
+      });
     }
   }
 
-  const weekGross = movie.latestWeeklyGross;
-  if (
-    weekGross != null &&
-    Number.isFinite(weekGross) &&
-    weekGross > 0 &&
-    notes.length < MAX_NOTES
-  ) {
+  const weekGross = positiveGross(movie.latestWeeklyGross);
+  if (weekGross != null) {
     notes.push({
       kind: "weekly",
-      text: `Last week added ${formatDollars(weekGross)} domestic`,
+      text: `Last week added ${formatDollars(weekGross)} domestically`,
     });
   }
 
-  // RT only as a fresh early-window beat when we still have a slot —
-  // weekly tip and opening take priority.
-  if (when && notes.length < MAX_NOTES && movie.rottenTomatoesScore) {
+  const intlWeek = positiveGross(movie.latestIntlWeeklyGross);
+  if (intlWeek != null) {
+    notes.push({
+      kind: "weekly_intl",
+      text: `Last weekend added ${formatDollars(intlWeek)} internationally`,
+    });
+  }
+
+  if (when && movie.rottenTomatoesScore) {
     notes.push({
       kind: "rt",
       text: `Critics landed at ${movie.rottenTomatoesScore} on Rotten Tomatoes`,

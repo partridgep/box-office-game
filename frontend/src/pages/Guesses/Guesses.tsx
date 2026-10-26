@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   Clock,
+  Globe,
   Loader2,
   Star,
   X,
@@ -20,6 +21,7 @@ import {
 import {
   resolveRunPhaseLocal,
   RUN_PHASE_SECTION,
+  trackingStatusLabel,
 } from "../../utils/runPhase";
 import { getMovieRunPhases } from "../../services/movies.service";
 import type { Guess, GuessStanding, MovieData, RunPhase } from "../../types";
@@ -31,6 +33,7 @@ import {
   buildTrackingNotes,
   type TrackingNoteKind,
 } from "./trackingNotes";
+import { standingInsightLine } from "./standingInsight";
 
 const sectionHeading =
   "text-xs font-semibold uppercase tracking-[0.2em] text-stone-300 mb-3";
@@ -60,7 +63,9 @@ const PHASE_ICON: Record<RunPhase, LucideIcon> = {
 
 const NOTE_ICON: Record<TrackingNoteKind, LucideIcon> = {
   opening: CalendarDays,
+  opening_intl: Globe,
   weekly: Activity,
+  weekly_intl: Globe,
   rt: Star,
 };
 
@@ -417,7 +422,7 @@ function GuessGroup({
   showStanding: boolean;
 }) {
   if (rows.length === 0) return null;
-  const { heading, status } = RUN_PHASE_SECTION[phase];
+  const { heading } = RUN_PHASE_SECTION[phase];
   const Icon = PHASE_ICON[phase];
 
   return (
@@ -433,7 +438,6 @@ function GuessGroup({
             guess={guess}
             movie={movie}
             phase={phase}
-            status={status}
             standing={showStanding ? guess.standing : null}
             expectStanding={showStanding}
           />
@@ -443,20 +447,42 @@ function GuessGroup({
   );
 }
 
-function StandingSummary({ standing }: { standing: GuessStanding }) {
+function StandingSummary({
+  standing,
+  guess,
+  movie,
+  phase,
+}: {
+  standing: GuessStanding;
+  guess: Guess;
+  movie: MovieData;
+  phase: RunPhase;
+}) {
+  const insight =
+    standing.scoreMode === "box_office"
+      ? standingInsightLine(guess, movie, phase)
+      : null;
+
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 sm:mt-2">
-      <span
-        className={[
-          "inline-flex items-center rounded-sm border px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] sm:px-2.5 sm:text-[0.7rem]",
-          TIER_BADGE[standing.tier],
-        ].join(" ")}
-      >
-        {TIER_LABEL[standing.tier]}
-      </span>
-      <span className="text-sm text-stone-400 sm:text-[0.9375rem]">
-        {formatRank(standing.overallRank, standing.totalGuesses)}
-      </span>
+    <div className="mt-1.5 sm:mt-2">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span
+          className={[
+            "inline-flex items-center rounded-sm border px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] sm:px-2.5 sm:text-[0.7rem]",
+            TIER_BADGE[standing.tier],
+          ].join(" ")}
+        >
+          {TIER_LABEL[standing.tier]}
+        </span>
+        <span className="text-sm text-stone-400 sm:text-[0.9375rem]">
+          {formatRank(standing.overallRank, standing.totalGuesses)}
+        </span>
+      </div>
+      {insight ? (
+        <p className="mt-1.5 text-xs leading-snug text-stone-400 sm:mt-2 sm:text-sm">
+          {insight}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -465,19 +491,24 @@ function GuessRow({
   guess,
   movie,
   phase,
-  status,
   standing,
   expectStanding,
 }: {
   guess: Guess;
   movie: MovieData;
   phase: RunPhase;
-  status: string;
   standing?: GuessStanding | null;
   expectStanding?: boolean;
 }) {
   const posterSrc = movie.poster ? `${POSTER}${movie.poster}` : null;
-  const Icon = PHASE_ICON[phase];
+  const status =
+    phase === "tracking"
+      ? trackingStatusLabel(movie)
+      : RUN_PHASE_SECTION[phase].status;
+  const weekStatusParts =
+    phase === "tracking" && status.startsWith("Week ")
+      ? status.split(" · ")
+      : null;
 
   return (
     <li>
@@ -499,16 +530,29 @@ function GuessRow({
             <span className="text-lg font-semibold leading-snug text-stone-50 transition-colors duration-150 group-hover:text-theater-gold motion-reduce:transition-none sm:text-xl md:text-[1.35rem]">
               {movie.title}
             </span>
-            <span className="inline-flex shrink-0 items-center gap-1.5 pt-1 text-[0.6rem] uppercase tracking-[0.18em] text-stone-400 sm:text-[0.65rem]">
-              <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
-              {status}
-            </span>
+            {weekStatusParts ? (
+              <span className="flex shrink-0 flex-col items-end pt-1 text-right text-[0.65rem] leading-snug text-stone-400 sm:text-xs">
+                <span className="whitespace-nowrap">{weekStatusParts[0]}</span>
+                {weekStatusParts[1] ? (
+                  <span className="whitespace-nowrap">{weekStatusParts[1]}</span>
+                ) : null}
+              </span>
+            ) : (
+              <span className="shrink-0 pt-1 text-[0.6rem] uppercase tracking-[0.18em] text-stone-400 sm:text-[0.65rem]">
+                {status}
+              </span>
+            )}
           </div>
           <p className="mt-0.5 text-xs text-stone-400 sm:text-sm">
             {formatRelease(movie.released)}
           </p>
           {standing ? (
-            <StandingSummary standing={standing} />
+            <StandingSummary
+              standing={standing}
+              guess={guess}
+              movie={movie}
+              phase={phase}
+            />
           ) : expectStanding ? (
             <p className="mt-1.5 text-sm text-stone-400">Awaiting results</p>
           ) : null}

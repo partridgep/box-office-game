@@ -37,6 +37,8 @@ export type MovieData = {
   runPhaseAt?: string | null,
   /** Newest domestic weekly period gross (dollars), from GET /api/guesses. */
   latestWeeklyGross?: number | null,
+  /** Latest international week-over-week add (dollars), from GET /api/guesses. */
+  latestIntlWeeklyGross?: number | null,
 };
 
 /** Compact movie payload attached to GET /api/guesses. */
@@ -56,6 +58,8 @@ export type GuessMovieSnippet = {
   runPhaseAt: string | null;
   /** Newest domestic weekly period gross in dollars. */
   latestWeeklyGross?: number | null;
+  /** Latest international week-over-week add in dollars. */
+  latestIntlWeeklyGross?: number | null;
 };
 
 export type SavedMovie = {
@@ -110,6 +114,15 @@ export type GuessComparison = {
   actual: number;
   delta: number;
   percentError: number;
+};
+
+/** Accuracy-grid row: scored when actual is in, otherwise guess-only / awaiting. */
+export type GuessFieldDisplay = {
+  field: string;
+  guess: number;
+  actual: number | null;
+  delta: number | null;
+  percentError: number | null;
 };
 
 export type GuessVsGuess = {
