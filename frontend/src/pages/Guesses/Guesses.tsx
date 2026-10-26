@@ -4,6 +4,7 @@ import {
   Activity,
   CalendarDays,
   Check,
+  ChevronRight,
   Clock,
   Globe,
   Loader2,
@@ -346,7 +347,7 @@ export default function Guesses() {
   }
 
   return (
-    <div className="mx-auto w-full mt-8 max-w-4xl space-y-10 text-left">
+    <div className="mx-auto w-full mt-2 md:mt-6 max-w-4xl space-y-10 text-left">
       <header>
         <h1 className="font-marquee text-4xl uppercase tracking-wide text-theater-gold sm:text-5xl">
           Your Guesses
@@ -514,6 +515,7 @@ function GuessRow({
     <li>
       <Link
         to={`/movie/${movie.tmdbID}`}
+        aria-label={`Details for ${movie.title}`}
         className="group flex gap-3 px-3 py-5 transition-colors hover:bg-theater-gold/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-theater-gold sm:gap-4 sm:px-5 sm:py-6 md:gap-5 md:px-6 lg:px-7"
       >
         <div className="h-18 w-12 shrink-0 overflow-hidden rounded bg-cinema-900 ring-1 ring-stone-600/40 transition-[box-shadow,ring-color] duration-150 group-hover:ring-theater-gold/50 motion-reduce:transition-none sm:h-24 sm:w-16 md:h-28 md:w-20 md:rounded-md">
@@ -559,6 +561,10 @@ function GuessRow({
           <GuessMetricCards guess={guess} movie={movie} phase={phase} />
           <TrackingNotes movie={movie} phase={phase} />
         </div>
+        <ChevronRight
+          className="h-5 w-5 shrink-0 self-center text-stone-500 transition-[color,transform] duration-150 group-hover:translate-x-0.5 group-hover:text-theater-gold motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+          aria-hidden
+        />
       </Link>
     </li>
   );

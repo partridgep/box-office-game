@@ -18,6 +18,7 @@ interface RTScoreSliderProps {
   disabled?: boolean;
   variant?: "default" | "ticket";
   compMarkers?: CompMarker[];
+  highlightedCompMovieId?: string | null;
   id?: string;
 }
 
@@ -27,6 +28,7 @@ export default function RTScoreSlider({
   disabled = false,
   variant = "default",
   compMarkers = [],
+  highlightedCompMovieId = null,
   id,
 }: RTScoreSliderProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -235,6 +237,7 @@ export default function RTScoreSlider({
           }}
           disabled={disabled}
           variant={variant}
+          highlightedCompMovieId={highlightedCompMovieId}
         />
       </div>
     </div>

@@ -326,14 +326,10 @@ export default function Layout({ children }: LayoutProps) {
       </header>
 
       {restoreAccessOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-cinema-950/80 backdrop-blur-sm p-4">
-          <div className="bg-cinema-900 border border-cinema-800 rounded-3xl p-6 max-w-md w-full shadow-2xl">
-            <RecoverAccount
-              message={sessionMessage}
-              onClose={closeRestoreAccess}
-            />
-          </div>
-        </div>
+        <RecoverAccount
+          message={sessionMessage}
+          onClose={closeRestoreAccess}
+        />
       )}
 
       {inviteOpen && signedIn && (

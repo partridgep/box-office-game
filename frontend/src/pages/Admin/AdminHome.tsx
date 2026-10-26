@@ -160,6 +160,22 @@ function summarizeRun(run: JobRun) {
   return parts.join(" · ");
 }
 
+/** Extract a Box Office Mojo release URL from scraper error text (e.g. rl… / weekly). */
+function bomReleaseLinkFromMessage(message: string): {
+  href: string;
+  label: string;
+} | null {
+  const releaseMatch = message.match(/\b(rl\d+)\b/i);
+  if (!releaseMatch) return null;
+  const releaseId = releaseMatch[1];
+  const periodMatch = message.match(/\b(weekly|weekend)\b/i);
+  const period = (periodMatch?.[1] ?? "weekly").toLowerCase();
+  return {
+    href: `https://www.boxofficemojo.com/release/${releaseId}/${period}/`,
+    label: `BOM ${releaseId}`,
+  };
+}
+
 function GuessesSparkline({
   days,
 }: {
@@ -819,23 +835,40 @@ export default function AdminHome() {
                         <p className="text-xs text-stone-500">No errors logged.</p>
                       ) : (
                         <ul className="space-y-1 max-h-48 overflow-y-auto">
-                          {errors.map((err, index) => (
-                            <li
-                              key={`${run.id}-err-${index}`}
-                              className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 text-xs text-rose-100"
-                            >
-                              <span className="text-rose-300/80">{err.stage}</span>
-                              {err.title ? (
-                                <span className="text-stone-300">
-                                  {" "}
-                                  · {err.title}
+                          {errors.map((err, index) => {
+                            const bomLink = bomReleaseLinkFromMessage(
+                              err.message,
+                            );
+                            return (
+                              <li
+                                key={`${run.id}-err-${index}`}
+                                className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1.5 text-xs text-rose-100"
+                              >
+                                <span className="text-rose-300/80">
+                                  {err.stage}
                                 </span>
-                              ) : null}
-                              <span className="block text-stone-400 mt-0.5">
-                                {err.message}
-                              </span>
-                            </li>
-                          ))}
+                                {err.title ? (
+                                  <span className="text-stone-300">
+                                    {" "}
+                                    · {err.title}
+                                  </span>
+                                ) : null}
+                                <span className="block text-stone-400 mt-0.5">
+                                  {err.message}
+                                </span>
+                                {bomLink ? (
+                                  <a
+                                    href={bomLink.href}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-0.5 inline-block text-cinema-400 hover:text-cinema-300 hover:underline underline-offset-2"
+                                  >
+                                    {bomLink.label}
+                                  </a>
+                                ) : null}
+                              </li>
+                            );
+                          })}
                           {run.summary?.errorsTruncated ? (
                             <li className="text-[11px] text-stone-500">
                               Additional errors were truncated.

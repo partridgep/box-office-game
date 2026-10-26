@@ -17,6 +17,7 @@ interface LifetimeGroupProps {
   finalInternationalFallback?: number;
   finalDomesticMarkers?: CompMarker[];
   finalInternationalMarkers?: CompMarker[];
+  highlightedCompMovieId?: string | null;
 }
 
 export default function LifetimeGroup({
@@ -33,6 +34,7 @@ export default function LifetimeGroup({
   finalInternationalFallback = 600,
   finalDomesticMarkers = [],
   finalInternationalMarkers = [],
+  highlightedCompMovieId = null,
 }: LifetimeGroupProps) {
   const isTicket = variant === "ticket";
 
@@ -78,6 +80,7 @@ export default function LifetimeGroup({
           disabled={disabled}
           variant={variant}
           compMarkers={finalDomesticMarkers}
+          highlightedCompMovieId={highlightedCompMovieId}
         />
 
         <LogMoneySlider
@@ -92,6 +95,7 @@ export default function LifetimeGroup({
           disabled={disabled}
           variant={variant}
           compMarkers={finalInternationalMarkers}
+          highlightedCompMovieId={highlightedCompMovieId}
         />
 
         <div

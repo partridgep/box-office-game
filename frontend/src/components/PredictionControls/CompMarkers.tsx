@@ -16,6 +16,11 @@ export interface CompMarker {
   value: number;
   /** User-prioritized — always labeled, stronger tick, broken out of clusters. */
   starred?: boolean;
+  /**
+   * Ephemeral mark injected while brushing a non-starred comp under star
+   * focus mode — not a persistent slider preference.
+   */
+  transient?: boolean;
 }
 
 type PositionedMarker = CompMarker & { pos: number };
@@ -888,9 +893,28 @@ const MARKERS_ROW_HEIGHT_PX = 24;
 /** Original vertical tick height (Tailwind h-2). */
 const TICK_HEIGHT_PX = 8;
 
+/**
+ * Extra lift above the markers row so brush tips clear the slider
+ * (LogMoneySlider / RT track row is h-5) and leave the tick visible.
+ */
+const BRUSH_TOOLTIP_TRACK_CLEARANCE_PX = 26;
+/** Slide between comps while scrubbing Historical Comps (brush only). */
+const BRUSH_SLIDE_MS = 180;
+/** Soft fade when brush tip copy swaps mid-scrub. */
+const BRUSH_CONTENT_FADE_MS = 90;
+
 /** Gap between tick/arm bottom and acronym (starred get extra air). */
 const LABEL_GAP_PX = 2;
 const STARRED_LABEL_GAP_PX = 6;
+
+type BrushTipTarget = { pos: number; text: string };
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 interface CompMarkersProps {
   markers: CompMarker[];
@@ -901,6 +925,45 @@ interface CompMarkersProps {
   variant?: "default" | "ticket";
   /** When set, ease `left` on scale changes (ms). Matches thumb expand ease. */
   positionTransitionMs?: number;
+  /** CompMovie.id from Historical Comps — emphasize matching ticks (linked brushing). */
+  highlightedCompMovieId?: string | null;
+}
+
+function markerMatchesComp(
+  marker: Pick<CompMarker, "compMovieId">,
+  compMovieId: string | null | undefined,
+): boolean {
+  return Boolean(compMovieId && marker.compMovieId === compMovieId);
+}
+
+/** Resolve the tick under brush for a CompMovie.id (member pos inside clusters). */
+function findBrushTipTarget(
+  items: MarkerLayout[],
+  compMovieId: string,
+  formatValue: (value: number) => string,
+): BrushTipTarget | null {
+  for (const item of items) {
+    const members = item.clusterMembers;
+    const clustered = (members?.length ?? 0) >= COMP_CLUSTER_MIN;
+    if (clustered) {
+      const member = members!.find((m) =>
+        markerMatchesComp(m, compMovieId),
+      );
+      if (!member) continue;
+      const name = member.title ?? member.label;
+      return {
+        pos: member.pos,
+        text: `${name}: ${formatValue(member.value)}`,
+      };
+    }
+    if (!markerMatchesComp(item.marker, compMovieId)) continue;
+    const name = item.marker.title ?? item.marker.label;
+    return {
+      pos: item.marker.pos,
+      text: `${name}: ${formatValue(item.marker.value)}`,
+    };
+  }
+  return null;
 }
 
 export default function CompMarkers({
@@ -911,6 +974,7 @@ export default function CompMarkers({
   disabled = false,
   variant = "default",
   positionTransitionMs = 0,
+  highlightedCompMovieId = null,
 }: CompMarkersProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [tooltipShift, setTooltipShift] = useState(0);
@@ -920,6 +984,18 @@ export default function CompMarkers({
   const containerRef = useRef<HTMLDivElement>(null);
   const openKeyRef = useRef<string | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Shared tip while scrubbing Historical Comps (slides between ticks). */
+  const [brushTarget, setBrushTarget] = useState<BrushTipTarget | null>(null);
+  const [brushDisplayText, setBrushDisplayText] = useState("");
+  const [brushContentOpaque, setBrushContentOpaque] = useState(true);
+  const [brushShift, setBrushShift] = useState(0);
+  const [brushSlideReady, setBrushSlideReady] = useState(false);
+  const brushTipRef = useRef<HTMLSpanElement>(null);
+  const brushContentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const brushTextRef = useRef("");
+  const reduceMotionRef = useRef(false);
   const isTicket = variant === "ticket";
 
   openKeyRef.current = openKey;
@@ -946,18 +1022,26 @@ export default function CompMarkers({
 
   // Skip animating from 0% on first paint.
   useLayoutEffect(() => {
+    reduceMotionRef.current = prefersReducedMotion();
     const id = requestAnimationFrame(() => setTransitionsReady(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
   useLayoutEffect(() => {
-    return () => cancelScheduledClose();
+    return () => {
+      cancelScheduledClose();
+      if (brushContentTimerRef.current != null) {
+        clearTimeout(brushContentTimerRef.current);
+      }
+    };
   }, []);
 
   useLayoutEffect(() => {
-    if (!openKey || !containerRef.current) {
-      setTooltipShift(0);
-      setTooltipReady(false);
+    if (!openKey || !containerRef.current || brushTarget) {
+      if (!openKey) {
+        setTooltipShift(0);
+        setTooltipReady(false);
+      }
       return;
     }
 
@@ -972,7 +1056,7 @@ export default function CompMarkers({
 
     setTooltipShift(measureTooltipShift(tip, containerRef.current));
     setTooltipReady(true);
-  }, [openKey]);
+  }, [openKey, brushTarget]);
 
   /**
    * Top edge of the markers row ≈ bottom of the slider. Overflowing tip/hit
@@ -1003,6 +1087,8 @@ export default function CompMarkers({
     clientY >= hoverGateTop() || isOverOpenTip(clientX, clientY);
 
   const openTooltip = (key: string) => {
+    // Local tick hover only — brush uses the shared sliding tip.
+    if (highlightedCompMovieId) return;
     cancelScheduledClose();
     // Re-entering the same label (or its tip) must not flash opacity-0.
     if (openKeyRef.current === key) return;
@@ -1034,6 +1120,7 @@ export default function CompMarkers({
     clientX: number,
     clientY: number,
   ) => {
+    if (highlightedCompMovieId) return;
     if (!allowsTooltipAt(clientX, clientY)) return;
     openTooltip(key);
   };
@@ -1060,6 +1147,98 @@ export default function CompMarkers({
       window.removeEventListener("pointermove", onPointerMove);
     };
   }, [openKey]);
+
+  // Linked brushing: shared tip above the track (slides between matching ticks).
+  useLayoutEffect(() => {
+    if (!highlightedCompMovieId || markers.length === 0) {
+      setBrushTarget(null);
+      return;
+    }
+
+    // Dismiss any local tip while brushing from the comps list.
+    if (openKeyRef.current) closeTooltip();
+
+    const layoutItems = resolveLabelCollisions(
+      layoutCompMarkers(markers, getPos),
+      trackWidthPx,
+    );
+    const next = findBrushTipTarget(
+      layoutItems,
+      highlightedCompMovieId,
+      formatValue,
+    );
+    setBrushTarget((prev) => {
+      if (
+        prev &&
+        next &&
+        prev.pos === next.pos &&
+        prev.text === next.text
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [
+    highlightedCompMovieId,
+    markers,
+    getPos,
+    trackWidthPx,
+    formatValue,
+  ]);
+
+  // Soft-fade brush tip copy when scrubbing between comps.
+  useLayoutEffect(() => {
+    if (brushContentTimerRef.current != null) {
+      clearTimeout(brushContentTimerRef.current);
+      brushContentTimerRef.current = null;
+    }
+    if (!brushTarget) {
+      brushTextRef.current = "";
+      setBrushDisplayText("");
+      setBrushContentOpaque(true);
+      setBrushSlideReady(false);
+      return;
+    }
+
+    const nextText = brushTarget.text;
+    const prevText = brushTextRef.current;
+    if (!prevText || prevText === nextText || reduceMotionRef.current) {
+      brushTextRef.current = nextText;
+      setBrushDisplayText(nextText);
+      setBrushContentOpaque(true);
+      return;
+    }
+
+    // Keep previous copy while fading out, then swap in the new line.
+    setBrushContentOpaque(false);
+    brushContentTimerRef.current = setTimeout(() => {
+      brushContentTimerRef.current = null;
+      brushTextRef.current = nextText;
+      setBrushDisplayText(nextText);
+      setBrushContentOpaque(true);
+    }, BRUSH_CONTENT_FADE_MS);
+  }, [brushTarget]);
+
+  // Enable left transition after the tip’s first paint (avoid flying from 0%).
+  useLayoutEffect(() => {
+    if (!brushTarget) {
+      setBrushSlideReady(false);
+      return;
+    }
+    if (brushSlideReady || reduceMotionRef.current) return;
+    const id = requestAnimationFrame(() => setBrushSlideReady(true));
+    return () => cancelAnimationFrame(id);
+  }, [brushTarget, brushSlideReady]);
+
+  useLayoutEffect(() => {
+    if (!brushTarget || !brushTipRef.current || !containerRef.current) {
+      setBrushShift(0);
+      return;
+    }
+    setBrushShift(
+      measureTooltipShift(brushTipRef.current, containerRef.current),
+    );
+  }, [brushTarget, brushDisplayText, trackWidthPx, brushContentOpaque]);
 
   if (markers.length === 0) return null;
 
@@ -1093,6 +1272,50 @@ export default function CompMarkers({
       ? `left ${positionTransitionMs}ms cubic-bezier(0.33, 1, 0.68, 1), opacity ${positionTransitionMs}ms ease-out`
       : undefined;
 
+  const brushing = Boolean(highlightedCompMovieId);
+  /** Only brush/dim when this track actually has a matching tick. */
+  const hasMatchOnTrack =
+    brushing &&
+    markers.some((m) => markerMatchesComp(m, highlightedCompMovieId));
+  /**
+   * Transient non-starred preview in a dense map: hide every other tick so the
+   * hover mark doesn’t fight clusters / acronyms.
+   */
+  const soloTransientBrush =
+    hasMatchOnTrack &&
+    densityMode &&
+    markers.some(
+      (m) =>
+        m.transient && markerMatchesComp(m, highlightedCompMovieId),
+    );
+
+  /** Dense + transient brush: only the preview tick (not its cluster). */
+  const displayItems: MarkerLayout[] = soloTransientBrush
+    ? items.flatMap((item) => {
+        const members = item.clusterMembers;
+        const clustered = (members?.length ?? 0) >= COMP_CLUSTER_MIN;
+        if (clustered) {
+          const member = members!.find((m) =>
+            markerMatchesComp(m, highlightedCompMovieId),
+          );
+          if (!member) return [];
+          return [
+            {
+              marker: member,
+              showTick: true,
+              showLabel: true,
+              side: "center" as const,
+              corner: false,
+            },
+          ];
+        }
+        if (!markerMatchesComp(item.marker, highlightedCompMovieId)) {
+          return [];
+        }
+        return [item];
+      })
+    : items;
+
   const tickClass = isTicket
     ? "bg-ticket-ink/40 group-hover:bg-ticket-ink group-focus-within:bg-ticket-ink"
     : "bg-stone-500 group-hover:bg-theater-gold group-focus-within:bg-theater-gold";
@@ -1100,6 +1323,9 @@ export default function CompMarkers({
   const starredTickClass = isTicket
     ? "bg-ticket-ink group-hover:bg-black group-focus-within:bg-black"
     : "bg-theater-gold group-hover:bg-[#f0d080] group-focus-within:bg-[#f0d080]";
+
+  const tickActiveClass = isTicket ? "bg-ticket-ink" : "bg-theater-gold";
+  const starredTickActiveClass = isTicket ? "bg-black" : "bg-[#f0d080]";
 
   const labelClass = isTicket
     ? "text-ticket-ink/50 group-hover:text-ticket-ink group-focus-within:text-ticket-ink"
@@ -1109,6 +1335,11 @@ export default function CompMarkers({
     ? "text-ticket-ink font-semibold group-hover:text-black group-focus-within:text-black"
     : "text-theater-gold font-semibold group-hover:text-[#f0d080] group-focus-within:text-[#f0d080]";
 
+  const labelActiveClass = isTicket ? "text-ticket-ink" : "text-theater-gold";
+  const starredLabelActiveClass = isTicket
+    ? "text-black font-semibold"
+    : "text-[#f0d080] font-semibold";
+
   const tooltipClass = isTicket
     ? "border border-ticket-ink/35 bg-white/50 backdrop-blur-lg font-outfit text-ticket-ink"
     : "border border-cinema-700 bg-cinema-900 text-stone-200";
@@ -1117,15 +1348,20 @@ export default function CompMarkers({
     transform: `translateX(calc(-50% + ${tooltipShift}px))`,
   };
 
+  const brushSlideTransition =
+    brushSlideReady && !reduceMotionRef.current
+      ? `left ${BRUSH_SLIDE_MS}ms cubic-bezier(0.33, 1, 0.68, 1)`
+      : undefined;
+
   return (
     <div
       ref={containerRef}
-      className="relative mt-1"
+      className="relative mt-1 overflow-visible"
       style={{ height: `${rowHeight}px` }}
       onMouseLeave={() => scheduleCloseTooltip()}
       data-density={densityMode ? "ticks" : "labeled"}
     >
-      {items.map((item) => {
+      {displayItems.map((item) => {
         const {
           marker,
           showTick,
@@ -1172,7 +1408,7 @@ export default function CompMarkers({
           : isStarred
             ? `Starred comparison ${singleTooltip}`
             : singleTooltip;
-        const isOpen = openKey === key;
+        const isOpen = openKey === key && !brushTarget;
         const showTooltip = isOpen && tooltipReady;
 
         const hasRange =
@@ -1230,7 +1466,29 @@ export default function CompMarkers({
         const labelTop =
           stackSize > 1 ? baseLabelTop + stackIndex * 12 : baseLabelTop;
         const tipAnchorTop = ticksOnlyChrome ? 0 : labelTop;
-        const markColorClass = isStarred ? starredTickClass : tickClass;
+        const itemMatches = isCluster
+          ? clusterMembers!.some((m) =>
+              markerMatchesComp(m, highlightedCompMovieId),
+            )
+          : markerMatchesComp(marker, highlightedCompMovieId);
+        const forcedHighlight =
+          (hasMatchOnTrack && itemMatches) || soloTransientBrush;
+        const isDimmed =
+          !soloTransientBrush && hasMatchOnTrack && !itemMatches;
+        const markColorClass = forcedHighlight
+          ? isStarred
+            ? starredTickActiveClass
+            : tickActiveClass
+          : isStarred
+            ? starredTickClass
+            : tickClass;
+        const labelColorClass = forcedHighlight
+          ? isStarred
+            ? starredLabelActiveClass
+            : labelActiveClass
+          : isStarred
+            ? starredLabelClass
+            : labelClass;
 
         const onTriggerBlur = (
           e: ReactFocusEvent<HTMLElement>,
@@ -1257,12 +1515,22 @@ export default function CompMarkers({
         return (
           <div
             key={key}
-            className="absolute top-0 w-0 group"
+            className={`absolute top-0 w-0 group transition-opacity ${
+              isDimmed ? "opacity-30" : "opacity-100"
+            }`}
             style={{
               left: `${groupPos}%`,
               height: hitH,
-              transition: positionTransition,
-              zIndex: isOpen ? 40 : isStarred ? 2 : 1,
+              transition: positionTransition
+                ? `${positionTransition}, opacity 120ms ease-out`
+                : "opacity 120ms ease-out",
+              zIndex: isOpen
+                ? 40
+                : forcedHighlight
+                  ? 30
+                  : isStarred
+                    ? 2
+                    : 1,
             }}
             onMouseEnter={(e) =>
               tryOpenFromPointer(key, e.clientX, e.clientY)
@@ -1317,17 +1585,27 @@ export default function CompMarkers({
                     }}
                     aria-hidden
                   />
-                  {clusterMembers!.map((m) => (
-                    <span
-                      key={markerKey(m)}
-                      className={`absolute top-0 z-0 h-2 w-0.5 -translate-x-1/2 transition-colors ${markColorClass}`}
-                      style={{
-                        left:
-                          ((m.pos - groupPos) / 100) * trackWidthPx,
-                      }}
-                      aria-hidden
-                    />
-                  ))}
+                  {clusterMembers!.map((m) => {
+                    const memberHighlight =
+                      hasMatchOnTrack &&
+                      markerMatchesComp(m, highlightedCompMovieId);
+                    const memberColor = memberHighlight
+                      ? m.starred
+                        ? starredTickActiveClass
+                        : tickActiveClass
+                      : markColorClass;
+                    return (
+                      <span
+                        key={markerKey(m)}
+                        className={`absolute top-0 z-0 h-2 w-0.5 -translate-x-1/2 transition-colors ${memberColor}`}
+                        style={{
+                          left:
+                            ((m.pos - groupPos) / 100) * trackWidthPx,
+                        }}
+                        aria-hidden
+                      />
+                    );
+                  })}
                 </>
               ) : (
                 <span
@@ -1358,9 +1636,7 @@ export default function CompMarkers({
               )}
               {showLabel && (
                 <span
-                  className={`absolute z-0 cursor-pointer text-[9px] leading-none transition-[colors,top] ${labelPosClass} ${
-                    isStarred ? starredLabelClass : labelClass
-                  }`}
+                  className={`absolute z-0 cursor-pointer text-[9px] leading-none transition-[colors,top] ${labelPosClass} ${labelColorClass}`}
                   style={{
                     top: `${labelTop}px`,
                     transform: labelTransform,
@@ -1474,6 +1750,45 @@ export default function CompMarkers({
           </div>
         );
       })}
+
+      {brushTarget && brushDisplayText ? (
+        <div
+          className="pointer-events-none absolute top-0 z-30 w-0"
+          style={{
+            left: `${brushTarget.pos}%`,
+            transition: brushSlideTransition,
+          }}
+        >
+          <span
+            ref={brushTipRef}
+            role="tooltip"
+            data-tooltip-id="brush-tip"
+            className={`${tooltipBaseClass} ${tooltipClass} pointer-events-none whitespace-nowrap text-center opacity-100`}
+            style={{
+              marginBottom: BRUSH_TOOLTIP_TRACK_CLEARANCE_PX,
+              transform: `translateX(calc(-50% + ${brushShift}px))`,
+            }}
+          >
+            <span
+              className={
+                reduceMotionRef.current
+                  ? undefined
+                  : "inline-block transition-opacity ease-out"
+              }
+              style={
+                reduceMotionRef.current
+                  ? undefined
+                  : {
+                      opacity: brushContentOpaque ? 1 : 0,
+                      transitionDuration: `${BRUSH_CONTENT_FADE_MS}ms`,
+                    }
+              }
+            >
+              {brushDisplayText}
+            </span>
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

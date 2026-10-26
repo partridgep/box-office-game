@@ -51,6 +51,8 @@ interface LogMoneySliderProps {
   scaleKey?: string;
   disabled?: boolean;
   compMarkers?: CompMarker[];
+  /** CompMovie.id from Historical Comps hover/focus — emphasize matching ticks. */
+  highlightedCompMovieId?: string | null;
   id?: string;
   variant?: "default" | "ticket";
 }
@@ -66,6 +68,7 @@ export default function LogMoneySlider({
   scaleKey,
   disabled = false,
   compMarkers = [],
+  highlightedCompMovieId = null,
   id,
   variant = "default",
 }: LogMoneySliderProps) {
@@ -867,7 +870,8 @@ export default function LogMoneySlider({
                 formatValue={formatMillions}
                 onSelect={(v) => {
                   if (disabled) return;
-                  const next = clampValue(snapToDetent(roundMoney(v)), absoluteMax);
+                  // Comps use display rounding only — don't pull to milestone detents.
+                  const next = clampValue(roundMoney(v), absoluteMax);
                   expandToFit(next);
                   onChange(next);
                   emitCommit(next);
@@ -875,6 +879,7 @@ export default function LogMoneySlider({
                 disabled={disabled}
                 variant={variant}
                 positionTransitionMs={EXPAND_ANIM_MS}
+                highlightedCompMovieId={highlightedCompMovieId}
               />
             </div>
           </div>

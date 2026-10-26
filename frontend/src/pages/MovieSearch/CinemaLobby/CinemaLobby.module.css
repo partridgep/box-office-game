@@ -30,6 +30,8 @@
   min-height: min(85dvh, 40rem);
   scroll-snap-align: start;
   scroll-snap-stop: always;
+  /* Clip scaled+blurred desktop wash so the next slide can't bleed in. */
+  overflow: hidden;
 }
 
 .posterTrack {

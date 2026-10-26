@@ -27,6 +27,8 @@ interface PredictionControlsProps {
   movieId: string;
   availability: ReturnType<typeof getPredictionAvailability>;
   compMarkersByField?: CompMarkersByField;
+  /** CompMovie.id highlighted from Historical Comps (linked brushing). */
+  highlightedCompMovieId?: string | null;
   inviterName?: string;
   /** True while signup confirmation is showing — parent should keep this mounted. */
   onSignupFlowChange?: (active: boolean) => void;
@@ -73,6 +75,7 @@ export default function PredictionControls({
   movieId,
   availability,
   compMarkersByField = emptyMarkers,
+  highlightedCompMovieId = null,
   inviterName,
   onSignupFlowChange,
 }: PredictionControlsProps) {
@@ -258,6 +261,7 @@ export default function PredictionControls({
             scaleKey={movieId}
             disabled={!availability.domesticOpening}
             compMarkers={compMarkersByField.domesticOpening}
+            highlightedCompMovieId={highlightedCompMovieId}
             variant="ticket"
           />
           <LogMoneySlider
@@ -271,6 +275,7 @@ export default function PredictionControls({
             scaleKey={movieId}
             disabled={!availability.internationalOpening}
             compMarkers={compMarkersByField.internationalOpening}
+            highlightedCompMovieId={highlightedCompMovieId}
             variant="ticket"
           />
           <div className="flex items-center justify-between pt-2 border-t border-ticket-ink/30">
@@ -296,6 +301,7 @@ export default function PredictionControls({
         finalInternationalFallback={finalInternationalFallback}
         finalDomesticMarkers={compMarkersByField.finalDomestic}
         finalInternationalMarkers={compMarkersByField.finalInternational}
+        highlightedCompMovieId={highlightedCompMovieId}
       />
 
       <div>
@@ -306,6 +312,7 @@ export default function PredictionControls({
           disabled={!availability.rottenTomatoes}
           variant="ticket"
           compMarkers={compMarkersByField.rottenTomatoesScore}
+          highlightedCompMovieId={highlightedCompMovieId}
         />
       </div>
 

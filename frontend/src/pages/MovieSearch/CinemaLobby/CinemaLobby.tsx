@@ -829,17 +829,12 @@ function FeaturedHero({
                   <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6 lg:flex-row lg:items-center lg:gap-12 xl:gap-16">
                     {movie.poster ? (
                       <div className="hidden w-72 shrink-0 xl:w-86 lg:block">
-                        <div className="relative aspect-2/3 overflow-hidden rounded-lg shadow-2xl ring-1 ring-theater-gold/25">
+                        <div className="aspect-2/3 overflow-hidden rounded-lg shadow-2xl ring-1 ring-theater-gold/25">
                           <img
                             src={`${POSTER_HERO}${movie.poster}`}
                             alt=""
                             className="h-full w-full object-cover"
                             draggable={false}
-                          />
-                          <PredictionBadge
-                            lines={callLines}
-                            compact
-                            className="absolute left-3 top-3 max-w-[calc(100%-1.5rem)]"
                           />
                         </div>
                       </div>

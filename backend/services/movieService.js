@@ -2,6 +2,7 @@ const db = require('../models');
 const { fetchBoxOfficeData } = require('./boxOfficeService');
 const { fetchRottenTomatoesData } = require('./rottenTomatoesService');
 const { generateAcronym } = require('../utils/acronym');
+const { pickProductionStudio } = require('../utils/pickProductionStudio');
 const { Movie } = db;
 
 const formatDollars = (amount) =>
@@ -152,9 +153,7 @@ const getMovieById = async (tmdbID, isBatch) => {
 
     imdbVotes: data.vote_count || null,
 
-    production: data.production_companies
-      ?.map(p => p.name)
-      .join(", ") ?? null,
+    production: pickProductionStudio(data.production_companies),
 
     rottenTomatoesScore: null,
 

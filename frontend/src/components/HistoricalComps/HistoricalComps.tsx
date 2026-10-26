@@ -1,4 +1,5 @@
 import { useAutoAnimate } from "@formkit/auto-animate/react";
+import { useEffect, useRef } from "react";
 import { EyeOff, Star } from "lucide-react";
 import { CompGroup, CompMovie } from "../../types";
 import { formatMillions } from "../../utils/formatMoney";
@@ -33,7 +34,15 @@ interface HistoricalCompsProps {
   subjectMovieId: string;
   /** Under "About this movie": match Prediction Pool / Movie Details title weight */
   subsection?: boolean;
+  /** Linked brushing: hover/focus a row → highlight matching slider ticks. */
+  onHighlightComp?: (compMovieId: string | null) => void;
 }
+
+/**
+ * Grace period when the pointer crosses `space-y-*` gaps between rows so the
+ * brush tip can slide instead of clearing and remounting.
+ */
+const HIGHLIGHT_CLEAR_GRACE_MS = 120;
 
 function compLabel(movie: CompMovie) {
   return movie.acronym?.trim() || generateAcronym(movie.title) || movie.title;
@@ -203,6 +212,7 @@ function CompRow({
   starDisabled,
   onHide,
   onToggleStar,
+  onHighlight,
 }: {
   movie: CompMovie;
   starred: boolean;
@@ -210,6 +220,7 @@ function CompRow({
   starDisabled: boolean;
   onHide: (compMovieId: string) => void;
   onToggleStar: (compMovieId: string) => void;
+  onHighlight?: (compMovieId: string | null) => void;
 }) {
   const metrics = getCompMetrics(movie);
 
@@ -221,13 +232,22 @@ function CompRow({
     { label: "RT", value: formatMetric(metrics.rottenTomatoesScore, "rt") },
   ];
 
+  const clearHighlight = (related: EventTarget | null, current: HTMLElement) => {
+    if (related instanceof Node && current.contains(related)) return;
+    onHighlight?.(null);
+  };
+
   return (
     <div
-      className={`w-full p-3 rounded-lg text-left border ${
+      className={`w-full p-3 rounded-lg text-left border transition-colors ${
         starred
-          ? "bg-theater-gold/10 border-theater-gold/40"
-          : "bg-cinema-900/50 border-cinema-800"
+          ? "bg-theater-gold/10 border-theater-gold/40 hover:border-theater-gold/70 hover:bg-theater-gold/15"
+          : "bg-cinema-900/50 border-cinema-800 hover:border-cinema-600"
       }`}
+      onPointerEnter={() => onHighlight?.(movie.id)}
+      onPointerLeave={(e) => clearHighlight(e.relatedTarget, e.currentTarget)}
+      onFocusCapture={() => onHighlight?.(movie.id)}
+      onBlurCapture={(e) => clearHighlight(e.relatedTarget, e.currentTarget)}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -304,6 +324,7 @@ export default function HistoricalComps({
   groups,
   subjectMovieId,
   subsection = false,
+  onHighlightComp,
 }: HistoricalCompsProps) {
   const [listParent] = useAutoAnimate();
   const user = useUserStore((s) => s.user);
@@ -329,6 +350,38 @@ export default function HistoricalComps({
     filterReleasedGroups(groups).length > 0 || hiddenCount > 0;
   const starredSet = new Set(starredIds);
   const atStarMax = starredIds.length >= STARRED_COMPS_MAX;
+
+  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimerRef.current != null) {
+        clearTimeout(highlightClearTimerRef.current);
+      }
+    };
+  }, []);
+
+  /** Immediate highlight; delayed clear so row gaps don’t kill the brush slide. */
+  const setHighlight = (compMovieId: string | null) => {
+    if (!onHighlightComp) return;
+    if (compMovieId != null) {
+      if (highlightClearTimerRef.current != null) {
+        clearTimeout(highlightClearTimerRef.current);
+        highlightClearTimerRef.current = null;
+      }
+      onHighlightComp(compMovieId);
+      return;
+    }
+    if (highlightClearTimerRef.current != null) {
+      clearTimeout(highlightClearTimerRef.current);
+    }
+    highlightClearTimerRef.current = setTimeout(() => {
+      highlightClearTimerRef.current = null;
+      onHighlightComp(null);
+    }, HIGHLIGHT_CLEAR_GRACE_MS);
+  };
 
   const handleHide = (compMovieId: string) => {
     unstar(userKey, subjectMovieId, compMovieId);
@@ -373,7 +426,7 @@ export default function HistoricalComps({
   };
 
   return (
-    <div>
+    <div onPointerLeave={() => setHighlight(null)}>
       <div className="flex items-center justify-between gap-3 mb-4">
         <h3
           className={
@@ -436,6 +489,7 @@ export default function HistoricalComps({
                         starDisabled={atStarMax && !starred}
                         onHide={handleHide}
                         onToggleStar={handleToggleStar}
+                        onHighlight={setHighlight}
                       />
                     );
                   })}
@@ -453,11 +507,13 @@ export default function HistoricalComps({
  * Build slider markers. Explicitly hidden comps are omitted.
  * When any comps are starred, only starred comps appear on the sliders
  * (non-starred stay visible in the Historical Comps list — not "hidden").
+ * `transientCompId` optionally injects one non-starred comp for linked brushing.
  */
 export function compsToMarkersByField(
   groups: CompGroup[],
   hiddenIds: ReadonlyArray<string> = EMPTY_HIDDEN,
-  starredIds: ReadonlyArray<string> = EMPTY_STARRED
+  starredIds: ReadonlyArray<string> = EMPTY_STARRED,
+  transientCompId: string | null = null,
 ): CompMarkersByField {
   const result: CompMarkersByField = {
     domesticOpening: [],
@@ -476,19 +532,23 @@ export function compsToMarkersByField(
       const id = movie.id;
       if (seen.has(id)) continue;
       // Focus mode: starring filters the slider map without calling hide().
-      if (starred && !starred.has(id)) continue;
+      // Hover preview may temporarily re-include one non-starred id.
+      if (starred && !starred.has(id) && id !== transientCompId) continue;
       seen.add(id);
 
       const metrics = getCompMetrics(movie);
       const label = compLabel(movie);
       const title = movie.title;
       const isStarred = starred?.has(id) ?? false;
+      const isTransient =
+        Boolean(starred) && !isStarred && id === transientCompId;
 
       const base = {
         compMovieId: id,
         label,
         title,
         starred: isStarred,
+        transient: isTransient || undefined,
       };
 
       if (metrics.domesticOpening != null) {

@@ -439,8 +439,7 @@ export default function SocialProof({
 
   const sealedFooter = showSealedFooter ? (
     <p className="mt-3 text-xs text-left text-stone-400">
-      Lock in your prediction to see how the crowd
-      {friendGuesses.length ? " and your friends" : ""} called it.
+      Lock in your prediction to see how others called it.
     </p>
   ) : null;
 

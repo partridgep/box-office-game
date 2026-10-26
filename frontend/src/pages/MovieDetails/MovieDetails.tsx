@@ -80,6 +80,10 @@ export default function MovieDetails() {
   /** Keep PredictionControls mounted through signup confirmation even after the guess locks. */
   const [holdPredictForSignup, setHoldPredictForSignup] = useState(false);
   const [retroactiveMode, setRetroactiveMode] = useState(false);
+  /** Linked brushing: Historical Comps row ↔ matching slider ticks. */
+  const [highlightedCompId, setHighlightedCompId] = useState<string | null>(
+    null,
+  );
 
   const pageMode = usePageMode(movie, loggedGuess, isInDatabase);
 
@@ -124,8 +128,14 @@ export default function MovieDetails() {
   );
 
   const compMarkersByField = useMemo(() => {
-    return compsToMarkersByField(compGroups, hiddenCompIds, starredCompIds);
-  }, [compGroups, hiddenCompIds, starredCompIds]);
+    return compsToMarkersByField(
+      compGroups,
+      hiddenCompIds,
+      starredCompIds,
+      // Star focus mode: preview a non-starred comp’s ticks while brushing.
+      highlightedCompId,
+    );
+  }, [compGroups, hiddenCompIds, starredCompIds, highlightedCompId]);
 
   const inviterName = useMemo(() => {
     if (!inviterGuess) return undefined;
@@ -153,7 +163,7 @@ export default function MovieDetails() {
       })
     : "TBA";
 
-  const titleBlock = (
+  const renderTitleBlock = () => (
     <TicketStub compact className="admit-ticket max-w-md rounded-r">
       <div className="flex items-start gap-3">
         <button
@@ -246,7 +256,7 @@ export default function MovieDetails() {
     </TicketStub>
   );
 
-  const panelContent = (
+  const renderPanelContent = () => (
     <>
       {retroactiveActive && (
         <div className="mb-4 border border-ticket-ink/40 py-2 px-3 text-xs uppercase tracking-wide text-ticket-ink">
@@ -259,6 +269,7 @@ export default function MovieDetails() {
           movieId={movie.id}
           availability={effectiveAvailability}
           compMarkersByField={compMarkersByField}
+          highlightedCompMovieId={highlightedCompId}
           inviterName={inviterName}
           onSignupFlowChange={setHoldPredictForSignup}
         />
@@ -316,7 +327,7 @@ export default function MovieDetails() {
         {/* -mx-4 cancels Layout main px-4 below sm so charts/data can use full width */}
         <div className="relative z-10 pt-5 -mx-4 sm:mx-0">
           <div className="px-4 sm:px-0 mb-6 grid grid-cols-1 lg:grid-cols-[minmax(0,28rem)_1fr] gap-6 items-stretch">
-            {titleBlock}
+            {renderTitleBlock()}
             <OverallPerformance
               movie={movie}
               userGuess={loggedGuess}
@@ -411,56 +422,93 @@ export default function MovieDetails() {
         className="hidden lg:block fixed inset-y-0 left-0 z-0 w-1/2"
       />
 
-      <div className="relative z-10 space-y-6 pt-5">
-        {/* Mobile: title above the fold */}
-        <div className="lg:hidden">{titleBlock}</div>
-
-        {/* Countdown visible first on mobile */}
-        <div className="lg:hidden">
-          <CountdownStrip movie={movie} availability={predictionAvailability} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          {/* Right column first on mobile for controls */}
-          <div className="order-1 lg:order-2 lg:sticky lg:top-24 space-y-4">
-            <div className="hidden lg:block">
-              <CountdownStrip movie={movie} availability={predictionAvailability} />
-            </div>
-            {useTicketShell ? (
-              <TicketStub
-                watermark={movie.rated || "NR"}
-                footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
-                className="rounded-r"
-              >
-                {panelContent}
-              </TicketStub>
-            ) : (
-              <div className="rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
-                {panelContent}
-              </div>
-            )}
+      {/* Mobile: single-column document scroll */}
+      <div className="relative z-10 space-y-6 pt-5 lg:hidden">
+        {renderTitleBlock()}
+        <CountdownStrip movie={movie} availability={predictionAvailability} />
+        {useTicketShell ? (
+          <TicketStub
+            watermark={movie.rated || "NR"}
+            footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
+            className="rounded-r"
+          >
+            {renderPanelContent()}
+          </TicketStub>
+        ) : (
+          <div className="rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
+            {renderPanelContent()}
           </div>
-
-          <div className="order-2 lg:order-1 space-y-6">
-            <div className="hidden lg:block">{titleBlock}</div>
-
-            <MovieContextPanel
-              movie={movie}
-              allMovieGuesses={allMovieGuesses}
-              friendGuesses={friendGuesses}
-              revealGuesses={revealGuesses}
-              compGroups={compGroups}
-            />
-          </div>
-        </div>
-
-        {showingShareDialog && loggedGuess && id && (
-          <ShareLink
-            shareLink={`${window.location.origin}/movie/${id}?fromGuess=${loggedGuess.id}`}
-            onClose={() => setShowingShareDialog(false)}
-          />
         )}
+        <MovieContextPanel
+          movie={movie}
+          allMovieGuesses={allMovieGuesses}
+          friendGuesses={friendGuesses}
+          revealGuesses={revealGuesses}
+          compGroups={compGroups}
+          onHighlightComp={
+            mode === "predict" || holdPredictForSignup
+              ? setHighlightedCompId
+              : undefined
+          }
+        />
       </div>
+
+      {/*
+        Desktop: each viewport half is a full-height scrollport (inset-y-0).
+        pt-19 on content clears the top rail at rest; scrolling goes under the
+        rail with no dead gap between header and content.
+      */}
+      <div
+        role="region"
+        aria-label="Movie context"
+        className="relative z-10 hidden w-1/2 overflow-x-clip overflow-y-auto overscroll-y-contain lg:fixed lg:inset-y-0 lg:left-0 lg:block"
+      >
+        <div className="max-w-full space-y-6 overflow-x-clip px-6 pt-19 pb-6 pr-4">
+          {renderTitleBlock()}
+          <MovieContextPanel
+            movie={movie}
+            allMovieGuesses={allMovieGuesses}
+            friendGuesses={friendGuesses}
+            revealGuesses={revealGuesses}
+            compGroups={compGroups}
+            onHighlightComp={
+              mode === "predict" || holdPredictForSignup
+                ? setHighlightedCompId
+                : undefined
+            }
+          />
+        </div>
+      </div>
+
+      <div
+        role="region"
+        aria-label="Your prediction"
+        className="relative z-10 hidden w-1/2 overflow-x-clip overflow-y-auto overscroll-y-contain lg:fixed lg:inset-y-0 lg:right-0 lg:block"
+      >
+        <div className="max-w-full space-y-4 overflow-x-clip px-6 pt-19 pb-6 pl-4">
+          <CountdownStrip movie={movie} availability={predictionAvailability} />
+          {useTicketShell ? (
+            <TicketStub
+              watermark={movie.rated || "NR"}
+              footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
+              className="max-w-full rounded-r"
+            >
+              {renderPanelContent()}
+            </TicketStub>
+          ) : (
+            <div className="max-w-full rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
+              {renderPanelContent()}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showingShareDialog && loggedGuess && id && (
+        <ShareLink
+          shareLink={`${window.location.origin}/movie/${id}?fromGuess=${loggedGuess.id}`}
+          onClose={() => setShowingShareDialog(false)}
+        />
+      )}
     </>
   );
 }

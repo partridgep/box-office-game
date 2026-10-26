@@ -53,10 +53,25 @@ const refreshBoxOfficePeriods = async (movie) => {
     if (!movie.bomReleaseId) return 0;
 
     let saved = 0;
+    const errors = [];
 
     for (const periodType of PERIOD_TYPES) {
-        const periods = await scrapeReleasePeriods(movie.bomReleaseId, periodType);
-        saved += await savePeriods(movie.id, REGION, periodType, periods);
+        try {
+            const periods = await scrapeReleasePeriods(movie.bomReleaseId, periodType);
+            saved += await savePeriods(movie.id, REGION, periodType, periods);
+        } catch (err) {
+            errors.push(err);
+            console.error(
+                `Failed to scrape ${periodType} for ${movie.title} (${movie.bomReleaseId}):`,
+                err.message || err
+            );
+        }
+    }
+
+    // Only fail the movie when every period type failed; one type succeeding
+    // (e.g. weekend while weekly isn't ready) still counts as a refresh.
+    if (errors.length === PERIOD_TYPES.length) {
+        throw errors[0];
     }
 
     return saved;

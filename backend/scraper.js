@@ -305,8 +305,9 @@ async function scrapeReleasePeriods(releaseId, periodType) {
 
   const $ = await fetchBomPage(`${BOM_ORIGIN}/release/${releaseId}/${periodType}/`);
   const table = $("table.mojo-body-table").first();
-  const rows = table.find("tr");
+  if (!table.length) return [];
 
+  const rows = table.find("tr");
   const columnIndex = {};
   rows.first().find("th").each((i, th) => {
     const title = $(th).find("[title]").first().attr("title");
@@ -315,6 +316,14 @@ async function scrapeReleasePeriods(releaseId, periodType) {
 
   const required = ["Date", titles.gross, "Gross To Date"];
   if (required.some((t) => columnIndex[t] == null)) {
+    // Early in a run BOM may serve an empty table or the daily table on
+    // /weekly/. Treat those as "no periods yet" rather than a hard failure.
+    const bodyRows = rows.slice(1).filter((_, row) => $(row).find("td").length > 0);
+    const notReadyYet =
+      Object.keys(columnIndex).length === 0 ||
+      columnIndex["Daily Gross"] != null ||
+      bodyRows.length === 0;
+    if (notReadyYet) return [];
     throw new Error(`Unexpected BOM ${periodType} table layout for ${releaseId}`);
   }
 
