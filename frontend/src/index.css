@@ -182,7 +182,7 @@
   transition-duration: 1400ms;
 }
 
-/* Click: every bulb flashes white-hot once (a single flash, well under WCAG 2.3.1's limit) and the stub tears off. */
+/* Click: every bulb flashes white-hot once (a single flash, well under WCAG 2.3.1's limit). */
 @keyframes marquee-flash {
   0% {
     filter: none;
@@ -193,26 +193,6 @@
   100% {
     filter: brightness(1.15);
   }
-}
-
-/* Duration must match TEAR_MS in PredictButton. Pivots on the bottom-left so the top peels away first. */
-@keyframes marquee-stub-tear {
-  0% {
-    transform: none;
-  }
-  30% {
-    transform: rotate(2.5deg);
-  }
-  45% {
-    transform: translateX(2px) rotate(1.5deg);
-  }
-  100% {
-    transform: translate(22px, 12px) rotate(4deg);
-  }
-}
-
-.marquee-stub {
-  transform-origin: 0 100%;
 }
 
 [data-pressed] .marquee-chase,
@@ -229,35 +209,88 @@
   animation: marquee-flash 450ms ease-out both;
 }
 
-/* The stub lives outside the button (on the surrounding ticket), so it reacts through the shared scope. */
-.admit-ticket-scope:has([data-pressed]) .marquee-stub {
-  animation: marquee-stub-tear 480ms cubic-bezier(0.3, 0, 0, 1) forwards;
-  box-shadow: 8px 16px 28px rgba(0, 0, 0, 0.55);
+/*
+ * Root View Transition: lobby → movie details only.
+ * Back is instant (no VT) — same as browser back.
+ * data-theater-nav="enter" marks the outbound fade.
+ */
+@keyframes vt-lobby-out {
+  to {
+    opacity: 0;
+    filter: brightness(0.08);
+  }
 }
 
-.admit-ticket-scope:has(.marquee-off) .marquee-stub {
-  filter: saturate(0.4) brightness(0.5);
+@keyframes vt-page-in {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-/* The torn stub flies into the movie page's title ticket. */
-.admit-ticket,
-.admit-ticket-scope:has([data-pressed]) .marquee-stub {
-  view-transition-name: admit-ticket;
+html[data-theater-nav="enter"] ::view-transition-old(root) {
+  animation: vt-lobby-out 300ms ease-in both;
 }
 
-::view-transition-group(admit-ticket) {
-  animation-duration: 600ms;
-  animation-timing-function: cubic-bezier(0.3, 0, 0, 1);
+html[data-theater-nav="enter"] ::view-transition-new(root) {
+  animation: vt-page-in 260ms ease-out both;
 }
 
-::view-transition-old(admit-ticket),
-::view-transition-new(admit-ticket) {
-  height: 100%;
-  object-fit: cover;
+/* Movie-page backdrop: fades in when the bitmap is ready (not part of the route VT). */
+.poster-backdrop-img {
+  opacity: 0;
+  transition: opacity 500ms ease;
 }
 
-::view-transition-old(admit-ticket) {
-  animation-duration: 200ms;
+.poster-backdrop-img[data-loaded] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster-backdrop-img {
+    opacity: 1;
+    transition: none;
+  }
+}
+
+/*
+ * Movie details (desktop two-column shell): panes ease in from their edges once on entry.
+ * Transform-only (no opacity) so the root View Transition snapshot still shows content.
+ * Short travel — theatrical without a full wipe. Right lags slightly.
+ */
+@keyframes movie-pane-in-left {
+  from {
+    transform: translateX(-20px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes movie-pane-in-right {
+  from {
+    transform: translateX(20px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.movie-pane-enter-left {
+  animation: movie-pane-in-left 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.movie-pane-enter-right {
+  animation: movie-pane-in-right 480ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .movie-pane-enter-left,
+  .movie-pane-enter-right {
+    animation: none;
+  }
 }
 
 /*
@@ -521,7 +554,6 @@
 
   .marquee-chase,
   .marquee-power,
-  .marquee-stub,
   .marquee-button svg {
     animation: none !important;
   }

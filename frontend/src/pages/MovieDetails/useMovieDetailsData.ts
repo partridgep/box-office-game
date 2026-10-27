@@ -23,7 +23,14 @@ export function useMovieDetailsData() {
   const setInviterId = useSetInviterId();
   const friendsVersion = useFriendsStore((state) => state.version);
 
-  const [movie, setMovie] = useState<MovieData | SavedMovie | null>(null);
+  // Prefer the lobby store so the poster destination exists on the first paint of a
+  // shared-element View Transition (useEffect would be one frame too late).
+  const storeMovie = id ? movies[id] ?? null : null;
+  const [remoteMovie, setRemoteMovie] = useState<MovieData | SavedMovie | null>(
+    null
+  );
+  const movie = storeMovie ?? remoteMovie;
+
   const [inviterGuess, setInviterGuess] = useState<Guess | undefined>();
   const [allMovieGuesses, setAllMovieGuesses] = useState<Guess[]>([]);
   const [compGroups, setCompGroups] = useState<CompGroup[]>([]);
@@ -45,13 +52,10 @@ export function useMovieDetailsData() {
   );
 
   useEffect(() => {
+    setRemoteMovie(null);
     if (!id || Object.keys(movies).length === 0) return;
-
-    if (movies[id]) {
-      setMovie(movies[id]);
-    } else {
-      fetchMovieDetails();
-    }
+    if (movies[id]) return;
+    fetchMovieDetails();
   }, [id, movies]);
 
   useEffect(() => {
@@ -141,7 +145,7 @@ export function useMovieDetailsData() {
   async function fetchMovieDetails() {
     try {
       const result: MovieData = await getMovieDetails(id!);
-      setMovie(result);
+      setRemoteMovie(result);
     } catch (error) {
       console.error("Error fetching movie details:", error);
     }

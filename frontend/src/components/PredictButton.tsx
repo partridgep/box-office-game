@@ -1,7 +1,8 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { Link, useNavigate, type NavigateFunction } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CAP_HEIGHT, layoutMarquee, type MarqueeBox, type MarqueeLayout } from '../utils/marqueeLetters';
+import { enterTheater, prefersReducedMotion } from '../utils/viewTransitions';
 
 interface PredictBoxOfficeButtonProps {
   /** Where the sign links to; without it the sign renders "powered off" and isn't interactive. */
@@ -64,8 +65,6 @@ function powerOnTiming(layout: MarqueeLayout) {
   );
 }
 
-const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
 type PowerState = 'off' | 'booting' | 'on';
 
 /** Plays the power-on sequence the first time the sign is mostly on screen; skipped for reduced motion. */
@@ -94,41 +93,6 @@ function usePowerOn(element: HTMLElement | null, enabled: boolean): PowerState {
   }, [power]);
 
   return power;
-}
-
-// Click sequence: the sign flashes and the surrounding ticket's stub (`AdmitOneStub`) tears off, then a View
-// Transition flies the stub into the movie page's title ticket. Must match `marquee-stub-tear` in index.css.
-const TEAR_MS = 480;
-// The movie page's title ticket shares this class (and so the view-transition-name).
-const ADMIT_TICKET = 'admit-ticket';
-const TARGET_WAIT_MS = 800;
-
-/** Resolves once a visible element matches, or after the timeout (the transition then just crossfades). */
-function waitForVisible(selector: string, timeoutMs: number) {
-  return new Promise<void>((resolve) => {
-    const start = performance.now();
-    const check = () => {
-      const found = [...document.querySelectorAll(selector)].some((el) => el.getClientRects().length > 0);
-      if (found || performance.now() - start > timeoutMs) resolve();
-      else window.setTimeout(check, 16);
-    };
-    check();
-  });
-}
-
-function enterTheater(to: string, navigate: NavigateFunction) {
-  const go = () => {
-    flushSync(() => navigate(to));
-    window.scrollTo(0, 0);
-  };
-  if (!document.startViewTransition) {
-    go();
-    return;
-  }
-  document.startViewTransition(async () => {
-    go();
-    await waitForVisible(`.${ADMIT_TICKET}`, TARGET_WAIT_MS);
-  });
 }
 
 function MarqueeSign({ layout, idPrefix, className }: { layout: MarqueeLayout; idPrefix: string; className: string }) {
@@ -300,41 +264,25 @@ function MarqueeSign({ layout, idPrefix, className }: { layout: MarqueeLayout; i
   );
 }
 
-/**
- * Ticket stub that tears off when a PredictButton is pressed. Place it inside the same `.admit-ticket-scope`
- * element as the button (the tear is driven by CSS `:has([data-pressed])`).
- */
-export function AdmitOneStub({ className = '' }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={`marquee-stub ticket-stub ticket-stub--compact flex items-center justify-center font-ticketing text-ticket-ink ${className}`}
-    >
-      <span className="[writing-mode:vertical-rl] text-sm sm:text-base uppercase tracking-[0.35em]">Admit one</span>
-    </div>
-  );
-}
-
-export default function PredictBoxOfficeButton({ to, movieTitle }: PredictBoxOfficeButtonProps) {
+export default function PredictBoxOfficeButton({
+  to,
+  movieTitle,
+}: PredictBoxOfficeButtonProps) {
   const id = useId().replace(/:/g, '');
   const [element, setElement] = useState<HTMLElement | null>(null);
   const power = usePowerOn(element, Boolean(to));
   const navigate = useNavigate();
-  // Captured at click time so a carousel change mid-sequence can't redirect the navigation.
-  const [pressedTo, setPressedTo] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!pressedTo) return;
-    const timeout = window.setTimeout(() => enterTheater(pressedTo, navigate), TEAR_MS);
-    return () => window.clearTimeout(timeout);
-  }, [pressedTo, navigate]);
+  const [pressed, setPressed] = useState(false);
 
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     // Let new-tab/window clicks and reduced-motion users through as a plain link.
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (prefersReducedMotion() || !to) return;
     event.preventDefault();
-    if (!pressedTo) setPressedTo(to);
+    if (pressed) return;
+    // Paint the marquee flash into the old snapshot, then crossfade into details.
+    flushSync(() => setPressed(true));
+    enterTheater(to, navigate);
   };
 
   const label = movieTitle ? `Predict box office for ${movieTitle}` : 'Predict box office';
@@ -377,7 +325,7 @@ export default function PredictBoxOfficeButton({ to, movieTitle }: PredictBoxOff
       to={to}
       onClick={handleClick}
       data-power={power}
-      data-pressed={pressedTo ? '' : undefined}
+      data-pressed={pressed || undefined}
       aria-label={label}
       className={`${wrapperClass} transition-transform duration-300 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffb07a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d0203] cursor-pointer`}
     >

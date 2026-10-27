@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { exitTheater } from "../../utils/viewTransitions";
 
 import { useMovieDetailsData } from "./useMovieDetailsData";
 import { usePageMode } from "../../hooks/usePageMode";
@@ -31,6 +32,7 @@ import {
   selectStarredCompIds,
   useStarredCompsStore,
 } from "../../store/useStarredCompsStore";
+const POSTER_BACKDROP = "https://image.tmdb.org/t/p/w1280";
 
 function PosterBackground({
   src,
@@ -39,23 +41,49 @@ function PosterBackground({
 }: {
   src: string;
   className?: string;
-  fade?: "page" | "left";
+  /** "responsive": page fade below lg, left-edge fade at lg+. */
+  fade?: "page" | "left" | "responsive";
 }) {
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setLoaded(false);
+    const el = imgRef.current;
+    if (el?.complete && el.naturalWidth > 0) {
+      setLoaded(true);
+    }
+  }, [src]);
+
+  if (!src) return null;
+
   return (
     <div className={`pointer-events-none ${className ?? ""}`} aria-hidden>
       <img
+        ref={imgRef}
         src={src}
         alt=""
-        className="absolute inset-0 w-full h-full object-cover object-top"
+        decoding="async"
+        className="poster-backdrop-img absolute inset-0 h-full w-full object-cover object-top"
+        data-loaded={loaded ? "" : undefined}
+        onLoad={() => setLoaded(true)}
       />
       {fade === "page" ? (
         <div className="absolute inset-0 bg-linear-to-b from-cinema-950/35 via-cinema-950/65 to-cinema-950/90" />
-      ) : (
+      ) : null}
+      {fade === "left" ? (
         <>
           <div className="absolute inset-0 bg-linear-to-b from-cinema-950/20 via-cinema-950/45 to-cinema-950/80" />
           <div className="absolute inset-0 bg-linear-to-r from-transparent via-transparent to-cinema-950/85" />
         </>
-      )}
+      ) : null}
+      {fade === "responsive" ? (
+        <>
+          <div className="absolute inset-0 bg-linear-to-b from-cinema-950/35 via-cinema-950/65 to-cinema-950/90 lg:hidden" />
+          <div className="absolute inset-0 hidden bg-linear-to-b from-cinema-950/20 via-cinema-950/45 to-cinema-950/80 lg:block" />
+          <div className="absolute inset-0 hidden bg-linear-to-r from-transparent via-transparent to-cinema-950/85 lg:block" />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -143,15 +171,15 @@ export default function MovieDetails() {
     return inviterGuess.guess_user?.name;
   }, [inviterGuess, user]);
 
+  const posterUrl = movie?.poster ? `${POSTER_BACKDROP}${movie.poster}` : "";
+
   if (!movie || !predictionAvailability || !effectiveAvailability) {
     return (
-      <div className="flex justify-center items-center h-[60vh]">
+      <div className="flex h-[60vh] items-center justify-center">
         <Loader2 className="animate-spin text-cinema-400" size={48} />
       </div>
     );
   }
-
-  const posterUrl = `https://image.tmdb.org/t/p/original${movie.poster}`;
   const revealGuesses = Boolean(loggedGuess) || hasAnyActuals(movie);
   const useTicketShell = mode !== "results";
 
@@ -164,11 +192,11 @@ export default function MovieDetails() {
     : "TBA";
 
   const renderTitleBlock = () => (
-    <TicketStub compact className="admit-ticket max-w-md rounded-r">
+    <TicketStub compact className="max-w-md rounded-r">
       <div className="flex items-start gap-3">
         <button
           type="button"
-          onClick={() => navigate("/")}
+          onClick={() => exitTheater(navigate)}
           className="shrink-0 -ml-1 mt-0.5 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
           aria-label="Back to upcoming"
         >
@@ -408,21 +436,13 @@ export default function MovieDetails() {
 
   return (
     <>
-      {/* Mobile: full page poster background */}
       <PosterBackground
         src={posterUrl}
-        fade="page"
-        className="fixed inset-0 z-0 lg:hidden"
+        fade="responsive"
+        className="fixed inset-0 z-0 lg:inset-y-0 lg:left-0 lg:right-auto lg:w-1/2"
       />
 
-      {/* Desktop: entire left half of the viewport */}
-      <PosterBackground
-        src={posterUrl}
-        fade="left"
-        className="hidden lg:block fixed inset-y-0 left-0 z-0 w-1/2"
-      />
-
-      {/* Mobile: single-column document scroll */}
+      {/* Mobile: single-column document scroll — no side-enter (desktop only). */}
       <div className="relative z-10 space-y-6 pt-5 lg:hidden">
         {renderTitleBlock()}
         <CountdownStrip movie={movie} availability={predictionAvailability} />
@@ -457,11 +477,13 @@ export default function MovieDetails() {
         Desktop: each viewport half is a full-height scrollport (inset-y-0).
         pt-19 on content clears the top rail at rest; scrolling goes under the
         rail with no dead gap between header and content.
+        key={id} remounts panes so the edge-enter plays once per movie entry.
       */}
       <div
+        key={`context-${id}`}
         role="region"
         aria-label="Movie context"
-        className="relative z-10 hidden w-1/2 overflow-x-clip overflow-y-auto overscroll-y-contain lg:fixed lg:inset-y-0 lg:left-0 lg:block"
+        className="movie-pane-enter-left relative z-10 hidden w-1/2 overflow-x-clip overflow-y-auto overscroll-y-contain lg:fixed lg:inset-y-0 lg:left-0 lg:block"
       >
         <div className="max-w-full space-y-6 overflow-x-clip px-6 pt-19 pb-6 pr-4">
           {renderTitleBlock()}
@@ -481,9 +503,10 @@ export default function MovieDetails() {
       </div>
 
       <div
+        key={`predict-${id}`}
         role="region"
         aria-label="Your prediction"
-        className="relative z-10 hidden w-1/2 overflow-x-clip overflow-y-auto overscroll-y-contain lg:fixed lg:inset-y-0 lg:right-0 lg:block"
+        className="movie-pane-enter-right relative z-10 hidden w-1/2 overflow-x-clip overflow-y-auto overscroll-y-contain lg:fixed lg:inset-y-0 lg:right-0 lg:block"
       >
         <div className="max-w-full space-y-4 overflow-x-clip px-6 pt-19 pb-6 pl-4">
           <CountdownStrip movie={movie} availability={predictionAvailability} />

@@ -1,21 +1,21 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMovieStore } from "../../../store/useMovieStore";
 import { useGuessStore } from "../../../store/useGuessStore";
-import {
-  getCompGroups,
-  getLobbySections,
-} from "../../../services/categories.service";
-import { LobbyMovie, LobbySection, MovieData } from "../../../types";
+import { useLobbyStore } from "../../../store/useLobbyStore";
+import { getCompGroups } from "../../../services/categories.service";
+import { LobbyMovie, MovieData } from "../../../types";
 import { useFriendActivity } from "../../../components/Friends/useFriendActivity";
 import {
   getPredictionAvailability,
@@ -24,11 +24,22 @@ import {
 import { formatMillions, formatMillionsShort } from "../../../utils/formatMoney";
 import { formatPredictionBadgeLines } from "../../../utils/guessDisplay";
 import { compsToMarkersByField } from "../../../components/HistoricalComps/HistoricalComps";
-import PredictButton, { AdmitOneStub } from "../../../components/PredictButton";
+import PredictButton from "../../../components/PredictButton";
 import LetterboardHeading, {
   backlightDelay,
 } from "../../../components/Letterboard/LetterboardHeading";
 import TicketStub from "../../../components/TicketStub/TicketStub";
+import {
+  clearStoredHeroIndex,
+  enterTheater,
+  isNearLobbyRestore,
+  prefersReducedMotion,
+  readStoredHeroIndex,
+  restoreLobbyPosition,
+  writeStoredHeroIndex,
+  RESTORE_SCROLL_STATE,
+  type TheaterLocationState,
+} from "../../../utils/viewTransitions";
 import { Check, Clock } from "lucide-react";
 import styles from "./CinemaLobby.module.css";
 
@@ -194,10 +205,6 @@ function formatDaysLeft(movie: MovieData): string | null {
   return days === 1 ? "1 day left" : `${days} days left`;
 }
 
-function prefersReducedMotion() {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 function TitleCard({
   movie,
   density = "shelf",
@@ -208,6 +215,7 @@ function TitleCard({
   /** Spotlight/ring come from the shelf magnet instead of local hover. */
   magnetic?: boolean;
 }) {
+  const navigate = useNavigate();
   const guess = useGuessStore((state) =>
     movie.id ? state.guesses[String(movie.id)] : undefined
   );
@@ -235,6 +243,16 @@ function TitleCard({
   const frameClass = magnetic
     ? "relative rounded-md bg-cinema-900 ring-1 ring-cinema-800/80"
     : "relative rounded-md bg-cinema-900 ring-1 ring-cinema-800/80 transition-[box-shadow,ring-color,ring-width] duration-[320ms] ease-in-out group-hover:ring-2 group-hover:ring-theater-gold/40 group-focus-visible:ring-2 group-focus-visible:ring-theater-gold/40";
+
+  const onPosterNavigate = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    if (prefersReducedMotion() || !to) return;
+    event.preventDefault();
+    clearStoredHeroIndex();
+    enterTheater(to, navigate);
+  };
 
   const body = (
     <>
@@ -300,7 +318,13 @@ function TitleCard({
   }
 
   return (
-    <Link to={to} className={className} aria-label={ariaBits.join(". ")}>
+    <Link
+      to={to}
+      className={className}
+      aria-label={ariaBits.join(". ")}
+      data-lobby-movie={movie.tmdbID ? String(movie.tmdbID) : undefined}
+      onClick={onPosterNavigate}
+    >
       {body}
     </Link>
   );
@@ -658,9 +682,18 @@ function FeaturedHero({
 }) {
   const guesses = useGuessStore((state) => state.guesses);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
-  const [autoplayPaused, setAutoplayPaused] = useState(false);
-  const userPausedRef = useRef(false);
+  const restoredHeroRef = useRef(false);
+  const initialHeroIndexRef = useRef<number | null>(null);
+  if (initialHeroIndexRef.current === null) {
+    const saved = readStoredHeroIndex();
+    initialHeroIndexRef.current =
+      saved != null && saved > 0 ? saved : 0;
+  }
+  const [index, setIndex] = useState(initialHeroIndexRef.current);
+  const [autoplayPaused, setAutoplayPaused] = useState(
+    initialHeroIndexRef.current > 0
+  );
+  const userPausedRef = useRef(initialHeroIndexRef.current > 0);
   const programmaticScrollRef = useRef(false);
   const clearProgrammaticTimerRef = useRef(0);
 
@@ -674,23 +707,53 @@ function FeaturedHero({
     if (!scroller || movies.length === 0) return;
     const clamped = ((next % movies.length) + movies.length) % movies.length;
     const width = scroller.clientWidth;
+    // CSS `scroll-behavior: smooth` makes scrollTo({ behavior: "auto" })
+    // animate — assign scrollLeft (or behavior:"instant") for a true jump.
+    const instant = behavior === "auto";
 
     programmaticScrollRef.current = true;
     window.clearTimeout(clearProgrammaticTimerRef.current);
     const release = () => {
       programmaticScrollRef.current = false;
     };
-    const onScrollEnd = () => {
-      release();
-      scroller.removeEventListener("scrollend", onScrollEnd);
-    };
-    scroller.addEventListener("scrollend", onScrollEnd);
-    // Fallback when scrollend isn't fired (reduced-motion / older engines).
-    clearProgrammaticTimerRef.current = window.setTimeout(release, behavior === "auto" ? 50 : 850);
-
-    scroller.scrollTo({ left: clamped * width, behavior });
+    if (instant) {
+      // CSS smooth + scroll-snap-stop:always would animate through each slide.
+      scroller.style.scrollBehavior = "auto";
+      scroller.style.scrollSnapType = "none";
+      scroller.scrollLeft = clamped * width;
+      void scroller.offsetWidth;
+      scroller.style.scrollBehavior = "";
+      scroller.style.scrollSnapType = "";
+      clearProgrammaticTimerRef.current = window.setTimeout(release, 0);
+    } else {
+      const onScrollEnd = () => {
+        release();
+        scroller.removeEventListener("scrollend", onScrollEnd);
+      };
+      scroller.addEventListener("scrollend", onScrollEnd);
+      // Fallback when scrollend isn't fired (reduced-motion / older engines).
+      clearProgrammaticTimerRef.current = window.setTimeout(release, 850);
+      scroller.scrollTo({ left: clamped * width, behavior: "smooth" });
+    }
     setIndex(clamped);
   }, [movies.length]);
+
+  // Reopen the slide that was active when leaving for details.
+  useLayoutEffect(() => {
+    if (restoredHeroRef.current || movies.length === 0) return;
+    restoredHeroRef.current = true;
+    const saved = readStoredHeroIndex();
+    if (saved == null || saved <= 0 || saved >= movies.length) {
+      if (index >= movies.length) setIndex(0);
+      return;
+    }
+    pauseAutoplay();
+    goTo(saved, "auto");
+  }, [movies.length, goTo, pauseAutoplay, index]);
+
+  useEffect(() => {
+    writeStoredHeroIndex(index);
+  }, [index]);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -760,10 +823,7 @@ function FeaturedHero({
       aria-label="Featured upcoming movies"
       onKeyDown={onKeyDown}
     >
-      {/* Stub sits outside the scroller so it stays pinned while slides swipe. */}
-      <div className="admit-ticket-scope relative">
-        <AdmitOneStub className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 rounded-none sm:w-12" />
-
+      <div className="relative">
         <div
           ref={scrollerRef}
           className={styles.heroScroller}
@@ -790,6 +850,7 @@ function FeaturedHero({
                 aria-roledescription="slide"
                 aria-label={`${slideIndex + 1} of ${movies.length}`}
                 aria-hidden={!isActive}
+                data-lobby-movie={movie.tmdbID ? String(movie.tmdbID) : undefined}
                 ref={(node) => {
                   if (!node) return;
                   if (isActive) node.removeAttribute("inert");
@@ -825,7 +886,7 @@ function FeaturedHero({
                   <div className="absolute inset-0 bg-linear-to-r from-cinema-950/80 via-cinema-950/40 to-cinema-950/70" />
                 </div>
 
-                <div className="relative z-5 flex h-full min-h-[inherit] flex-col justify-end px-5 pb-20 pr-14 pt-16 sm:px-8 sm:pr-20 sm:pb-20 lg:justify-center lg:px-12 lg:py-8 lg:pr-24">
+                <div className="relative z-5 flex h-full min-h-[inherit] flex-col justify-end px-5 pb-20 pt-16 sm:px-8 sm:pb-20 lg:justify-center lg:px-12 lg:py-8">
                   <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6 lg:flex-row lg:items-center lg:gap-12 xl:gap-16">
                     {movie.poster ? (
                       <div className="hidden w-72 shrink-0 xl:w-86 lg:block">
@@ -939,9 +1000,15 @@ function FeaturedHero({
 }
 
 export function CinemaLobby() {
+  const location = useLocation();
   const { movies } = useMovieStore();
   const guesses = useGuessStore((state) => state.guesses);
-  const [lobbySections, setLobbySections] = useState<LobbySection[]>([]);
+  const lobbySections = useLobbyStore((s) => s.sections);
+  const sectionsLoaded = useLobbyStore((s) => s.loaded);
+  const ensureSections = useLobbyStore((s) => s.ensureSections);
+
+  const theaterState = location.state as TheaterLocationState | null;
+  const restoreScrollY = theaterState?.[RESTORE_SCROLL_STATE];
 
   const movieList = useMemo(() => {
     const rawList = Array.isArray(movies) ? movies : Object.values(movies);
@@ -1011,16 +1078,8 @@ export function CinemaLobby() {
   >({});
 
   useEffect(() => {
-    async function loadLobby() {
-      try {
-        const sections = await getLobbySections();
-        setLobbySections(sections);
-      } catch (error) {
-        console.error("Error fetching lobby sections:", error);
-      }
-    }
-    loadLobby();
-  }, []);
+    void ensureSections();
+  }, [ensureSections]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1054,6 +1113,14 @@ export function CinemaLobby() {
       cancelled = true;
     };
   }, [featuredIdsKey]);
+
+  // One-shot exact scroll restore before paint. Section cache keeps height stable.
+  useLayoutEffect(() => {
+    if (typeof restoreScrollY !== "number" || restoreScrollY < 0) return;
+    if (!sectionsLoaded && restoreScrollY > 0) return;
+    if (isNearLobbyRestore(restoreScrollY)) return;
+    restoreLobbyPosition(restoreScrollY);
+  }, [restoreScrollY, sectionsLoaded, openSectionMovies.length, movieList.length]);
 
   const hasAnyGuess = Object.keys(guesses).length > 0;
 

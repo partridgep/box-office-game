@@ -18,6 +18,7 @@ import { useGuessUpdatesBadgeCount } from "../../pages/Guesses/useGuessUpdates";
 import RecoverAccount from "../RecoverAccount/RecoverAccount";
 import InviteDialog from "../Friends/InviteDialog";
 import BrandMark from "./BrandMark";
+import { exitTheater } from "../../utils/viewTransitions";
 import styles from "./Layout.module.css";
 
 interface LayoutProps {
@@ -30,6 +31,10 @@ const DESKTOP_MQ = "(min-width: 768px)";
 
 function isUpcomingPath(pathname: string) {
   return pathname === "/" || pathname.startsWith("/movie");
+}
+
+function isMovieDetailsPath(pathname: string) {
+  return pathname.startsWith("/movie/");
 }
 
 function useIsDesktop() {
@@ -151,6 +156,10 @@ export default function Layout({ children }: LayoutProps) {
 
   function goUpcoming() {
     setAccountOpen(false);
+    if (isMovieDetailsPath(location.pathname)) {
+      exitTheater(navigate);
+      return;
+    }
     navigate("/");
   }
 
