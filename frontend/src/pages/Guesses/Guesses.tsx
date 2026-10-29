@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -9,7 +9,6 @@ import {
   Globe,
   Loader2,
   Star,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import { useGuessStore } from "../../store/useGuessStore";
@@ -26,18 +25,13 @@ import {
 } from "../../utils/runPhase";
 import { getMovieRunPhases } from "../../services/movies.service";
 import type { Guess, GuessStanding, MovieData, RunPhase } from "../../types";
-import type { GuessMovieRow } from "./guessUpdates";
-import { joinGuessRows } from "./joinGuessRows";
-import { useGuessUpdates } from "./useGuessUpdates";
+import { joinGuessRows, type GuessMovieRow } from "./joinGuessRows";
 import { GuessMetricCards } from "./GuessMetricCards";
 import {
   buildTrackingNotes,
   type TrackingNoteKind,
 } from "./trackingNotes";
 import { standingInsightLine } from "./standingInsight";
-
-const sectionHeading =
-  "text-xs font-semibold uppercase tracking-[0.2em] text-stone-300 mb-3";
 
 const listShell =
   "divide-y divide-theater-gold/30 rounded-xl border border-theater-gold/35 bg-cinema-900";
@@ -249,19 +243,6 @@ export default function Guesses() {
     };
   }, [signedIn, rows, applyRunPhases]);
 
-  const { events, dismissEvent, markVisibleSeen } = useGuessUpdates(
-    user?.id,
-    rows
-  );
-
-  const markVisibleSeenRef = useRef(markVisibleSeen);
-  markVisibleSeenRef.current = markVisibleSeen;
-  useEffect(() => {
-    return () => {
-      markVisibleSeenRef.current();
-    };
-  }, []);
-
   const notOpened = useMemo(
     () =>
       rows
@@ -354,40 +335,6 @@ export default function Guesses() {
         </h1>
         <Scoreboard blocks={summaryBlocks} />
       </header>
-
-      {events.length > 0 ? (
-        <section aria-labelledby="guesses-updates">
-          <h2 id="guesses-updates" className={sectionHeading}>
-            Updates
-          </h2>
-          <ul className={listShell}>
-            {events.map((event) => (
-              <li key={event.id} className="flex items-stretch gap-1">
-                <Link
-                  to={`/movie/${event.tmdbID}`}
-                  onClick={() => dismissEvent(event)}
-                  className="min-w-0 flex-1 px-4 py-3 text-sm transition-colors hover:bg-stone-100/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-theater-gold"
-                >
-                  <span className="font-medium text-stone-100">
-                    {event.movieTitle}
-                  </span>
-                  <span className="mt-0.5 block text-stone-400">
-                    {event.summary}
-                  </span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => dismissEvent(event)}
-                  aria-label={`Dismiss update for ${event.movieTitle}`}
-                  className="shrink-0 self-center rounded-md px-3 py-3 text-stone-400 hover:text-stone-200 focus-visible:outline-2 focus-visible:outline-theater-gold"
-                >
-                  <X size={16} aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       <section aria-label="Guess list">
         {rows.length === 0 ? (

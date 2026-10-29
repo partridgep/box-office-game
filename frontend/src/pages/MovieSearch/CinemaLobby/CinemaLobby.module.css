@@ -6,6 +6,10 @@
   margin-right: calc(50% - 50vw);
 }
 
+.heroStage {
+  position: relative;
+}
+
 .heroScroller {
   display: flex;
   overflow-x: auto;
@@ -32,6 +36,259 @@
   scroll-snap-stop: always;
   /* Clip scaled+blurred desktop wash so the next slide can't bleed in. */
   overflow: hidden;
+}
+
+/*
+ * Shared layout chrome for slide body + fixed CTA dock.
+ * One Predict marquee lives in the dock; slides only reserve its lane.
+ */
+.heroSlideInner {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  height: 100%;
+  min-height: inherit;
+  flex-direction: column;
+  justify-content: flex-end;
+  /* Tight bottom pad so title/meta/CTA sit on the end above the dots. */
+  padding: 4rem 1.25rem 2.75rem;
+}
+
+.heroFrame {
+  margin-inline: auto;
+  display: flex;
+  width: 100%;
+  max-width: 80rem;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.heroPoster {
+  display: none;
+  width: 18rem;
+  flex-shrink: 0;
+}
+
+/*
+ * Mobile: full-stage overlay so dots stay bottom-centered.
+ * Desktop: becomes the poster-width column with dots under the one-sheet.
+ */
+.heroPosterCol {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0.75rem;
+  pointer-events: none;
+}
+
+.heroPosterSpacer {
+  display: none;
+  pointer-events: none;
+}
+
+.heroCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1.25rem;
+  text-align: left;
+}
+
+/* Mobile: no empty badge reserve — pack meta against the CTA. */
+.badgeSlot {
+  margin-top: 0.75rem;
+}
+
+/* Keeps the CTA band at a stable y across slides (badge/title length vary above). */
+.heroCtaSlot {
+  width: 100%;
+  max-width: 28rem;
+  /* Stacked marquee + panel chrome on small screens. */
+  min-height: 9rem;
+  flex-shrink: 0;
+}
+
+.heroCtaDock {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 4rem 1.25rem 2.75rem;
+  pointer-events: none;
+}
+
+.heroCtaDock .heroCtaSlot {
+  pointer-events: auto;
+}
+
+.heroDots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  pointer-events: auto;
+}
+
+@media (min-width: 640px) {
+  .heroSlideInner,
+  .heroCtaDock {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+
+  .heroFrame {
+    gap: 1.5rem;
+  }
+
+  .heroCopy {
+    gap: 1.75rem;
+  }
+
+  .heroCtaSlot {
+    /* Single-line marquee (`h-12`) + panel padding/border. */
+    max-width: 32rem;
+    min-height: 5.25rem;
+  }
+
+  .heroPosterCol {
+    padding-bottom: 1rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .heroCtaSlot {
+    max-width: 42rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Extra room under the poster for dots (poster + gap + dots). */
+  .heroSlide {
+    min-height: 34rem;
+  }
+
+  .heroSlideInner,
+  .heroCtaDock {
+    justify-content: center;
+    padding: 2rem 3rem 2.5rem;
+  }
+
+  .heroFrame {
+    flex-direction: row;
+    align-items: center;
+    gap: 3rem;
+  }
+
+  .heroPoster {
+    display: block;
+  }
+
+  .heroPosterCol {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: 18rem;
+    flex-shrink: 0;
+    display: block;
+    padding-bottom: 0;
+  }
+
+  .heroPosterSpacer {
+    display: block;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+  }
+
+  /* Hang under the one-sheet without growing the frame (keeps CTA aligned to slides). */
+  .heroDots {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 0.75rem;
+  }
+
+  .heroCopy {
+    flex: 1;
+    gap: 2.5rem;
+    /*
+     * Poster-tall column; CTA lane is pinned near the foot (with a little
+     * lift) so the marquee never jumps when title/badge height changes.
+     */
+    height: 27rem;
+    min-height: 27rem;
+    max-height: 27rem;
+    justify-content: flex-end;
+    padding-bottom: 1.25rem;
+    box-sizing: border-box;
+  }
+
+  .heroMeta {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  .heroMetaSpacer {
+    flex: 1 1 auto;
+    min-height: 0;
+    pointer-events: none;
+  }
+
+  /* Desktop: reserve badge height so badge/no-badge slides share one CTA y. */
+  .badgeSlot {
+    min-height: 4.75rem;
+  }
+
+  .heroCtaSlot {
+    max-width: 42rem;
+    margin-top: 0.25rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .heroSlide {
+    min-height: 38rem;
+  }
+
+  .heroFrame {
+    gap: 4rem;
+  }
+
+  .heroPoster,
+  .heroPosterCol {
+    width: 21.5rem;
+  }
+
+  .heroCopy {
+    height: 32.25rem;
+    min-height: 32.25rem;
+    max-height: 32.25rem;
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* lg+ Predict parallax host — transform painted from the scroll handler. */
+.signParallaxHost {
+  width: 100%;
+  will-change: transform;
+}
+
+@media (max-width: 1023px) {
+  .signParallaxHost {
+    will-change: auto;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 .posterTrack {
@@ -125,17 +382,6 @@
 @media (min-width: 1024px) {
   .shelfItem {
     width: 10rem;
-  }
-
-  /* Desktop: height tracks the inset poster (~20rem × 3/2) plus vertical padding. */
-  .heroSlide {
-    min-height: 32rem;
-  }
-}
-
-@media (min-width: 1280px) {
-  .heroSlide {
-    min-height: 36rem;
   }
 }
 

@@ -14,8 +14,7 @@ export type TrackingNote = {
   text: string;
 };
 
-/** Show opening/RT notes only while the release still feels “new.” */
-const MILESTONE_WINDOW_DAYS = 14;
+/** Opening + RT notes only for this/last weekend; then weeklies take over. */
 const THIS_WEEKEND_DAYS = 3;
 const LAST_WEEKEND_DAYS = 10;
 /** Dom + intl opening, both weeklies, and RT when everything lines up. */
@@ -35,7 +34,6 @@ function openingWhenPhrase(days: number): string | null {
   if (days < 0) return null;
   if (days <= THIS_WEEKEND_DAYS) return "this weekend";
   if (days <= LAST_WEEKEND_DAYS) return "last weekend";
-  if (days < MILESTONE_WINDOW_DAYS) return "a couple weeks ago";
   return null;
 }
 
@@ -45,8 +43,8 @@ function positiveGross(value: number | null | undefined): number | null {
 }
 
 /**
- * Tracking-row news blurbs. Early window: domestic + intl openings and RT.
- * Anytime while tracking: domestic week add and intl weekend add.
+ * Tracking-row news blurbs. This/last weekend: openings + RT.
+ * After that: weekly adds only (no restating the open).
  */
 export function buildTrackingNotes(
   movie: MovieData,
@@ -75,22 +73,22 @@ export function buildTrackingNotes(
         text: `Opened ${when} to ${formatDollars(intl)} internationally`,
       });
     }
-  }
+  } else {
+    const weekGross = positiveGross(movie.latestWeeklyGross);
+    if (weekGross != null) {
+      notes.push({
+        kind: "weekly",
+        text: `Last week added ${formatDollars(weekGross)} domestically`,
+      });
+    }
 
-  const weekGross = positiveGross(movie.latestWeeklyGross);
-  if (weekGross != null) {
-    notes.push({
-      kind: "weekly",
-      text: `Last week added ${formatDollars(weekGross)} domestically`,
-    });
-  }
-
-  const intlWeek = positiveGross(movie.latestIntlWeeklyGross);
-  if (intlWeek != null) {
-    notes.push({
-      kind: "weekly_intl",
-      text: `Last weekend added ${formatDollars(intlWeek)} internationally`,
-    });
+    const intlWeek = positiveGross(movie.latestIntlWeeklyGross);
+    if (intlWeek != null) {
+      notes.push({
+        kind: "weekly_intl",
+        text: `Last weekend added ${formatDollars(intlWeek)} internationally`,
+      });
+    }
   }
 
   if (when && movie.rottenTomatoesScore) {

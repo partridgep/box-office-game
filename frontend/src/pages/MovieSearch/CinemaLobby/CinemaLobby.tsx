@@ -15,7 +15,7 @@ import { useMovieStore } from "../../../store/useMovieStore";
 import { useGuessStore } from "../../../store/useGuessStore";
 import { useLobbyStore } from "../../../store/useLobbyStore";
 import { getCompGroups } from "../../../services/categories.service";
-import { LobbyMovie, MovieData } from "../../../types";
+import { Guess, LobbyMovie, MovieData } from "../../../types";
 import { useFriendActivity } from "../../../components/Friends/useFriendActivity";
 import {
   getPredictionAvailability,
@@ -32,6 +32,7 @@ import TicketStub from "../../../components/TicketStub/TicketStub";
 import {
   clearStoredHeroIndex,
   enterTheater,
+  isDocumentReload,
   isNearLobbyRestore,
   prefersReducedMotion,
   readStoredHeroIndex,
@@ -44,6 +45,8 @@ import { Check, Clock } from "lucide-react";
 import styles from "./CinemaLobby.module.css";
 
 const HERO_AUTOPLAY_MS = 6000;
+/** Desktop-only Predict sign parallax (Tailwind `lg`). */
+const HERO_PARALLAX_MQ = "(min-width: 1024px)";
 const POSTER_SHELF = "https://image.tmdb.org/t/p/w342";
 const POSTER_HERO = "https://image.tmdb.org/t/p/w1280";
 const POSTER_WASH = "https://image.tmdb.org/t/p/w185";
@@ -158,6 +161,65 @@ function formatCallDeadline(movie: MovieData) {
     day: "numeric",
   });
   return `Call domestic opening before ${when}`;
+}
+
+/** Title + deadline + comps + prediction badge — shared by slides and the fixed CTA dock. */
+function HeroSlideMeta({
+  movie,
+  compRange,
+  guess,
+  titleId,
+}: {
+  movie: MovieData;
+  compRange: CompOpeningRange | null | undefined;
+  guess: Guess | undefined;
+  titleId?: string;
+}) {
+  const callLines = formatPredictionBadgeLines(guess);
+  const callDeadline = formatCallDeadline(movie);
+  const rangeLabel = compRange != null ? formatCompRange(compRange) : null;
+
+  return (
+    <div className={styles.heroMeta}>
+      <div className="max-w-3xl rounded-lg bg-linear-to-r from-cinema-950/45 via-cinema-950/35 to-transparent px-3 py-3 sm:px-4 sm:py-3.5 lg:from-cinema-950/60 lg:via-cinema-950/35">
+        <div className="space-y-2">
+          <h2
+            className="font-marquee text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl lg:text-6xl xl:text-7xl"
+            id={titleId}
+          >
+            {movie.title}
+          </h2>
+          <p className="text-sm text-stone-200 sm:text-base">
+            {formatOpens(movie.released)}
+          </p>
+          {callDeadline ? (
+            <p className="flex max-w-xl items-center gap-2 text-sm leading-snug text-stone-200 sm:text-base">
+              <Clock
+                size={14}
+                className="shrink-0 text-stone-300"
+                aria-hidden="true"
+              />
+              <span>{callDeadline}</span>
+            </p>
+          ) : null}
+          {rangeLabel ? (
+            <p className="text-sm leading-snug text-stone-200 sm:text-base">
+              Comps suggest{" "}
+              <span className="font-semibold text-theater-gold">
+                {rangeLabel}
+              </span>
+            </p>
+          ) : null}
+          <div className={styles.badgeSlot}>
+            <PredictionBadge
+              lines={callLines}
+              className="lg:backdrop-blur-none"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const CLOSING_SOON_MS = 7 * 24 * 60 * 60 * 1000;
@@ -693,9 +755,26 @@ function FeaturedHero({
   const [autoplayPaused, setAutoplayPaused] = useState(
     initialHeroIndexRef.current > 0
   );
+  const parallaxHostRef = useRef<HTMLDivElement>(null);
+  const parallaxEnabledRef = useRef(false);
   const userPausedRef = useRef(initialHeroIndexRef.current > 0);
   const programmaticScrollRef = useRef(false);
   const clearProgrammaticTimerRef = useRef(0);
+
+  const paintParallax = useCallback((nudge: number, sliding: boolean) => {
+    const host = parallaxHostRef.current;
+    if (!host) return;
+    if (!parallaxEnabledRef.current || prefersReducedMotion()) {
+      host.style.transform = "";
+      host.style.transition = "";
+      return;
+    }
+    // Sin × inverse-speed; slow drags ~16px peak, flicks ~8px.
+    host.style.transform = `translateX(${nudge * 16}px)`;
+    host.style.transition = sliding
+      ? "none"
+      : "transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+  }, []);
 
   const pauseAutoplay = useCallback(() => {
     userPausedRef.current = true;
@@ -724,6 +803,7 @@ function FeaturedHero({
       void scroller.offsetWidth;
       scroller.style.scrollBehavior = "";
       scroller.style.scrollSnapType = "";
+      paintParallax(0, false);
       clearProgrammaticTimerRef.current = window.setTimeout(release, 0);
     } else {
       const onScrollEnd = () => {
@@ -736,7 +816,7 @@ function FeaturedHero({
       scroller.scrollTo({ left: clamped * width, behavior: "smooth" });
     }
     setIndex(clamped);
-  }, [movies.length]);
+  }, [movies.length, paintParallax]);
 
   // Reopen the slide that was active when leaving for details.
   useLayoutEffect(() => {
@@ -755,11 +835,68 @@ function FeaturedHero({
     writeStoredHeroIndex(index);
   }, [index]);
 
+  const indexRef = useRef(index);
+  indexRef.current = index;
+
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
+    const mq =
+      typeof window !== "undefined" ? window.matchMedia(HERO_PARALLAX_MQ) : null;
+    const syncParallaxMq = () => {
+      parallaxEnabledRef.current = Boolean(mq?.matches);
+      if (!parallaxEnabledRef.current) paintParallax(0, false);
+    };
+    syncParallaxMq();
+    mq?.addEventListener("change", syncParallaxMq);
+
     let frame = 0;
+    // Parallax tethers to the slide we left — never Math.round mid-gesture (that flips at 0.5).
+    let parallaxFrom: number | null = null;
+    let lastProgress = scroller.scrollLeft / (scroller.clientWidth || 1);
+    let lastTime = performance.now();
+    // Smoothed 0.5…1 multiplier: slow drags → full peak, flicks → half.
+    let speedScale = 1;
+    const SPEED_REF = 1.15;
+
+    const updateParallax = () => {
+      if (!parallaxEnabledRef.current || prefersReducedMotion()) {
+        paintParallax(0, false);
+        parallaxFrom = null;
+        speedScale = 1;
+        return;
+      }
+      const width = scroller.clientWidth || 1;
+      const progress = scroller.scrollLeft / width;
+      const now = performance.now();
+      const dt = Math.max(now - lastTime, 1) / 1000;
+      const velocity = Math.abs(progress - lastProgress) / dt;
+      lastProgress = progress;
+      lastTime = now;
+
+      const nearest = Math.round(progress);
+      const settled = Math.abs(progress - nearest) < 0.02;
+      const sliding = !settled;
+
+      let nudge = 0;
+      if (sliding) {
+        if (parallaxFrom == null) {
+          parallaxFrom = indexRef.current;
+        }
+        const speedT = Math.min(1, velocity / SPEED_REF);
+        const rawScale = 1 - 0.5 * speedT; // slow → 1 (~28px), flick → 0.5 (~14px)
+        speedScale += (rawScale - speedScale) * 0.4;
+        const t = Math.max(-1, Math.min(1, progress - parallaxFrom));
+        nudge = -Math.sin(Math.PI * t) * speedScale;
+      } else {
+        parallaxFrom = null;
+        speedScale = 1;
+      }
+
+      paintParallax(nudge, sliding);
+    };
+
     const onScroll = () => {
       if (!programmaticScrollRef.current) {
         pauseAutoplay();
@@ -769,19 +906,28 @@ function FeaturedHero({
         const width = scroller.clientWidth || 1;
         const next = Math.round(scroller.scrollLeft / width);
         setIndex((prev) => (next === prev ? prev : next));
+        updateParallax();
       });
     };
 
+    const onScrollEnd = () => {
+      paintParallax(0, false);
+      parallaxFrom = null;
+      speedScale = 1;
+      lastProgress = scroller.scrollLeft / (scroller.clientWidth || 1);
+      lastTime = performance.now();
+    };
+
     scroller.addEventListener("scroll", onScroll, { passive: true });
+    scroller.addEventListener("scrollend", onScrollEnd);
     return () => {
       cancelAnimationFrame(frame);
       window.clearTimeout(clearProgrammaticTimerRef.current);
+      mq?.removeEventListener("change", syncParallaxMq);
       scroller.removeEventListener("scroll", onScroll);
+      scroller.removeEventListener("scrollend", onScrollEnd);
     };
-  }, [pauseAutoplay]);
-
-  const indexRef = useRef(index);
-  indexRef.current = index;
+  }, [pauseAutoplay, paintParallax]);
 
   useEffect(() => {
     if (movies.length <= 1 || autoplayPaused) return;
@@ -823,7 +969,7 @@ function FeaturedHero({
       aria-label="Featured upcoming movies"
       onKeyDown={onKeyDown}
     >
-      <div className="relative">
+      <div className={styles.heroStage}>
         <div
           ref={scrollerRef}
           className={styles.heroScroller}
@@ -837,12 +983,8 @@ function FeaturedHero({
         >
           {movies.map((movie, slideIndex) => {
             const guess = movie.id ? guesses[String(movie.id)] : undefined;
-            const callLines = formatPredictionBadgeLines(guess);
             const isActive = slideIndex === index;
-            const callDeadline = formatCallDeadline(movie);
             const compRange = movie.id ? compRanges[movie.id] : null;
-            const rangeLabel =
-              compRange != null ? formatCompRange(compRange) : null;
             return (
               <article
                 key={movieKey(movie)}
@@ -886,10 +1028,10 @@ function FeaturedHero({
                   <div className="absolute inset-0 bg-linear-to-r from-cinema-950/80 via-cinema-950/40 to-cinema-950/70" />
                 </div>
 
-                <div className="relative z-5 flex h-full min-h-[inherit] flex-col justify-end px-5 pb-20 pt-16 sm:px-8 sm:pb-20 lg:justify-center lg:px-12 lg:py-8">
-                  <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 sm:gap-6 lg:flex-row lg:items-center lg:gap-12 xl:gap-16">
+                <div className={styles.heroSlideInner}>
+                  <div className={styles.heroFrame}>
                     {movie.poster ? (
-                      <div className="hidden w-72 shrink-0 xl:w-86 lg:block">
+                      <div className={styles.heroPoster}>
                         <div className="aspect-2/3 overflow-hidden rounded-lg shadow-2xl ring-1 ring-theater-gold/25">
                           <img
                             src={`${POSTER_HERO}${movie.poster}`}
@@ -899,51 +1041,19 @@ function FeaturedHero({
                           />
                         </div>
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className={styles.heroPosterSpacer} aria-hidden="true" />
+                    )}
 
-                    <div className="flex min-w-0 flex-1 flex-col gap-6 text-left sm:gap-7 lg:gap-10">
-                      <div className="max-w-3xl rounded-lg bg-linear-to-r from-cinema-950/45 via-cinema-950/35 to-transparent px-3 py-3 sm:px-4 sm:py-3.5 lg:from-cinema-950/60 lg:via-cinema-950/35">
-                        <div className="space-y-2">
-                          <h2
-                            className="font-marquee text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl lg:text-6xl xl:text-7xl"
-                            id={isActive ? "lobby-hero-title" : undefined}
-                          >
-                            {movie.title}
-                          </h2>
-                          <p className="text-sm text-stone-200 sm:text-base">
-                            {formatOpens(movie.released)}
-                          </p>
-                          {callDeadline ? (
-                            <p className="flex max-w-xl items-center gap-2 text-sm leading-snug text-stone-200 sm:text-base">
-                              <Clock
-                                size={14}
-                                className="shrink-0 text-stone-300"
-                                aria-hidden="true"
-                              />
-                              <span>{callDeadline}</span>
-                            </p>
-                          ) : null}
-                          {rangeLabel ? (
-                            <p className="text-sm leading-snug text-stone-200 sm:text-base">
-                              Comps suggest{" "}
-                              <span className="font-semibold text-theater-gold">
-                                {rangeLabel}
-                              </span>
-                            </p>
-                          ) : null}
-                          <PredictionBadge
-                            lines={callLines}
-                            className="mt-3 lg:backdrop-blur-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="w-full max-w-md sm:max-w-lg md:max-w-2xl lg:mt-1 lg:max-w-2xl">
-                        <PredictButton
-                          to={movie.tmdbID ? `/movie/${movie.tmdbID}` : undefined}
-                          movieTitle={movie.title}
-                        />
-                      </div>
+                    <div className={styles.heroCopy}>
+                      <HeroSlideMeta
+                        movie={movie}
+                        compRange={compRange}
+                        guess={guess}
+                        titleId={isActive ? "lobby-hero-title" : undefined}
+                      />
+                      {/* Real marquee lives in the fixed dock; this only reserves its lane. */}
+                      <div className={styles.heroCtaSlot} aria-hidden="true" />
                     </div>
                   </div>
                 </div>
@@ -951,29 +1061,48 @@ function FeaturedHero({
             );
           })}
         </div>
-      </div>
 
-      {movies.length > 1 && (
-        <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 sm:bottom-4">
-          {movies.map((movie, idx) => (
-            <button
-              key={movieKey(movie)}
-              type="button"
-              onClick={() => {
-                pauseAutoplay();
-                goTo(idx);
-              }}
-              aria-label={`Show ${movie.title}`}
-              aria-current={idx === index ? "true" : undefined}
-              className={`h-2.5 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold ${
-                idx === index
-                  ? "w-7 bg-theater-gold"
-                  : "w-2.5 bg-stone-500/70 hover:bg-stone-300"
-              }`}
-            />
-          ))}
+        <div className={styles.heroCtaDock}>
+          <div className={styles.heroFrame}>
+            <div className={styles.heroPosterCol}>
+              <div className={styles.heroPosterSpacer} aria-hidden="true" />
+              {movies.length > 1 && (
+                <div className={styles.heroDots}>
+                  {movies.map((movie, idx) => (
+                    <button
+                      key={movieKey(movie)}
+                      type="button"
+                      onClick={() => {
+                        pauseAutoplay();
+                        goTo(idx);
+                      }}
+                      aria-label={`Show ${movie.title}`}
+                      aria-current={idx === index ? "true" : undefined}
+                      className={`h-2.5 rounded-full transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold ${
+                        idx === index
+                          ? "w-7 bg-theater-gold"
+                          : "w-2.5 bg-stone-500/70 hover:bg-stone-300"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className={styles.heroCopy}>
+              {/* Flex grow so the marquee stays pinned to the copy foot on every slide. */}
+              <div className={styles.heroMetaSpacer} aria-hidden="true" />
+              <div className={styles.heroCtaSlot}>
+                <div ref={parallaxHostRef} className={styles.signParallaxHost}>
+                  <PredictButton
+                    to={active?.tmdbID ? `/movie/${active.tmdbID}` : undefined}
+                    movieTitle={active?.title}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
 
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {active
@@ -1115,7 +1244,9 @@ export function CinemaLobby() {
   }, [featuredIdsKey]);
 
   // One-shot exact scroll restore before paint. Section cache keeps height stable.
+  // Skip on full reload — refresh should land at top, not mid-lobby.
   useLayoutEffect(() => {
+    if (isDocumentReload()) return;
     if (typeof restoreScrollY !== "number" || restoreScrollY < 0) return;
     if (!sectionsLoaded && restoreScrollY > 0) return;
     if (isNearLobbyRestore(restoreScrollY)) return;

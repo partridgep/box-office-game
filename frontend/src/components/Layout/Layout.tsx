@@ -1,7 +1,7 @@
 import {
   useEffect,
   useId,
-  useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -11,14 +11,14 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Clapperboard, Loader2, Target, UserRound, Users } from "lucide-react";
 import { useUserStore } from "../../store/useUserStore";
 import { useFriendsStore } from "../../store/useFriendsStore";
-import { useGuessStore } from "../../store/useGuessStore";
-import { useMovieStore } from "../../store/useMovieStore";
-import { joinGuessRows } from "../../pages/Guesses/joinGuessRows";
-import { useGuessUpdatesBadgeCount } from "../../pages/Guesses/useGuessUpdates";
 import RecoverAccount from "../RecoverAccount/RecoverAccount";
 import InviteDialog from "../Friends/InviteDialog";
 import BrandMark from "./BrandMark";
-import { exitTheater } from "../../utils/viewTransitions";
+import {
+  isDocumentReload,
+  RESTORE_SCROLL_STATE,
+  type TheaterLocationState,
+} from "../../utils/viewTransitions";
 import styles from "./Layout.module.css";
 
 interface LayoutProps {
@@ -31,10 +31,6 @@ const DESKTOP_MQ = "(min-width: 768px)";
 
 function isUpcomingPath(pathname: string) {
   return pathname === "/" || pathname.startsWith("/movie");
-}
-
-function isMovieDetailsPath(pathname: string) {
-  return pathname.startsWith("/movie/");
 }
 
 function useIsDesktop() {
@@ -79,8 +75,6 @@ export default function Layout({ children }: LayoutProps) {
   const followingCount = useFriendsStore((state) => state.following.length);
   const followingLoaded = useFriendsStore((state) => state.loaded);
   const loadFollowing = useFriendsStore((state) => state.loadFollowing);
-  const guesses = useGuessStore((state) => state.guesses);
-  const movies = useMovieStore((state) => state.movies);
 
   const signedIn = sessionStatus === "ready" && Boolean(user);
   const upcomingActive = isUpcomingPath(location.pathname) && !accountOpen;
@@ -91,20 +85,23 @@ export default function Layout({ children }: LayoutProps) {
     location.pathname.startsWith("/admin") ||
     location.pathname.startsWith("/follow");
 
-  const guessRows = useMemo(
-    () => joinGuessRows(guesses, movies),
-    [guesses, movies]
-  );
-  const guessesBadgeCount = useGuessUpdatesBadgeCount(
-    signedIn ? user?.id : null,
-    guessRows
-  );
-
   useEffect(() => {
     if (sessionStatus === "ready" && user && !followingLoaded) {
       loadFollowing().catch(() => {});
     }
   }, [sessionStatus, user, followingLoaded, loadFollowing]);
+
+  // RR7 BrowserRouter commits location updates inside startTransition, so
+  // scroll-after-navigate in the click handler hits the old page. Scroll here
+  // after the new route commits, before paint. Skip lobby restore from
+  // exitTheater (CinemaLobby owns that) — except on full reload, always top.
+  useLayoutEffect(() => {
+    if (!isDocumentReload()) {
+      const state = location.state as TheaterLocationState | null;
+      if (typeof state?.[RESTORE_SCROLL_STATE] === "number") return;
+    }
+    window.scrollTo(0, 0);
+  }, [location.pathname, location.state]);
 
   // One bulb flicker on the newly active bottom tab after a route change.
   useEffect(() => {
@@ -154,32 +151,29 @@ export default function Layout({ children }: LayoutProps) {
     };
   }, [accountOpen]);
 
-  function goUpcoming() {
-    setAccountOpen(false);
-    if (isMovieDetailsPath(location.pathname)) {
-      exitTheater(navigate);
+  function navigateToTop(to: string) {
+    if (location.pathname === to) {
+      window.scrollTo(0, 0);
       return;
     }
-    navigate("/");
+    // No restore state — useLayoutEffect scrolls after the route commits.
+    navigate(to);
+  }
+
+  function goUpcoming() {
+    setAccountOpen(false);
+    // Skip exitTheater restore — nav means top of Upcoming.
+    navigateToTop("/");
   }
 
   function goGuesses() {
     setAccountOpen(false);
-    navigate("/guesses");
+    navigateToTop("/guesses");
   }
 
   function goFriends() {
     setAccountOpen(false);
-    navigate("/friends");
-  }
-
-  function renderGuessesBadge() {
-    if (!signedIn || guessesBadgeCount <= 0) return null;
-    return (
-      <span className="ml-1 tabular-nums text-stone-500">
-        {guessesBadgeCount > 9 ? "9+" : guessesBadgeCount}
-      </span>
-    );
+    navigateToTop("/friends");
   }
 
   function toggleAccount() {
@@ -222,7 +216,11 @@ export default function Layout({ children }: LayoutProps) {
         <Link
           role="menuitem"
           to="/admin"
-          onClick={() => setAccountOpen(false)}
+          onClick={(event) => {
+            event.preventDefault();
+            setAccountOpen(false);
+            navigateToTop("/admin");
+          }}
         >
           Admin
         </Link>
@@ -276,7 +274,6 @@ export default function Layout({ children }: LayoutProps) {
               aria-current={guessesActive ? "page" : undefined}
             >
               Guesses
-              {renderGuessesBadge()}
             </button>
             <button
               type="button"
@@ -391,19 +388,8 @@ export default function Layout({ children }: LayoutProps) {
                   aria-hidden
                 />
               ) : null}
-              {signedIn && guessesBadgeCount > 0 && !guessesActive ? (
-                <span className={styles.tabBadge} aria-hidden>
-                  {guessesBadgeCount > 9 ? "9+" : guessesBadgeCount}
-                </span>
-              ) : null}
             </span>
             <span className={styles.bottomLabel}>Guesses</span>
-            {signedIn && guessesBadgeCount > 0 ? (
-              <span className="sr-only">
-                {guessesBadgeCount} update
-                {guessesBadgeCount === 1 ? "" : "s"}
-              </span>
-            ) : null}
           </button>
 
           <button

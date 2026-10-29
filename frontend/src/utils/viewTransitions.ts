@@ -27,6 +27,43 @@ export function disableBrowserScrollRestoration() {
   }
 }
 
+/** True on a full document reload (not an SPA soft nav). */
+export function isDocumentReload() {
+  const nav = performance.getEntriesByType(
+    "navigation"
+  )[0] as PerformanceNavigationTiming | undefined;
+  return nav?.type === "reload";
+}
+
+/**
+ * Full document boot only (call from main). Drops stale lobby restore keys from
+ * history.state (they survive refresh) and forces top — including late browser
+ * restore after content height grows.
+ */
+export function resetScrollOnDocumentLoad() {
+  const state = history.state;
+  if (state && typeof state === "object") {
+    const record = state as Record<string, unknown>;
+    if (
+      RESTORE_SCROLL_STATE in record ||
+      RESTORE_MOVIE_STATE in record
+    ) {
+      const next = { ...record };
+      delete next[RESTORE_SCROLL_STATE];
+      delete next[RESTORE_MOVIE_STATE];
+      history.replaceState(
+        Object.keys(next).length > 0 ? next : null,
+        ""
+      );
+    }
+  }
+
+  const toTop = () => window.scrollTo(0, 0);
+  toTop();
+  window.addEventListener("load", toTop, { once: true });
+  window.addEventListener("pageshow", toTop);
+}
+
 /** `null` = nothing stored; `0` = hero / top of lobby. */
 export function readStoredScroll(): number | null {
   try {

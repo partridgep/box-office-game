@@ -1,5 +1,9 @@
 import type { Guess, GuessMovieSnippet, MovieData } from "../../types";
-import type { GuessMovieRow } from "./guessUpdates";
+
+export type GuessMovieRow = {
+  guess: Guess;
+  movie: MovieData;
+};
 
 function snippetAsMovie(snippet: GuessMovieSnippet): MovieData {
   return {
