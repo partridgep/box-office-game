@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock,
   Globe,
-  Loader2,
   Star,
   type LucideIcon,
 } from "lucide-react";
@@ -210,15 +209,78 @@ function phaseOf(movie: MovieData): RunPhase {
   return resolveRunPhaseLocal(movie);
 }
 
+const skelBone =
+  "rounded-sm bg-cinema-800/85 motion-safe:animate-pulse";
+
+function GuessesSkeleton() {
+  return (
+    <div
+      className="mx-auto mt-2 w-full max-w-4xl space-y-10 text-left md:mt-6"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <header>
+        <h1 className="font-marquee text-4xl uppercase tracking-wide text-theater-gold sm:text-5xl">
+          Your Guesses
+        </h1>
+        <p className="sr-only">Loading your guesses</p>
+        <div
+          className="mt-6 border-t border-theater-gold/20 pt-6 sm:mt-8 sm:pt-8"
+          aria-hidden="true"
+        >
+          <div className={`h-3 w-36 ${skelBone}`} />
+          <div className="mt-3.5 flex flex-wrap items-end gap-x-8 gap-y-3 sm:gap-x-10">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="min-w-18">
+                <div className={`h-10 w-12 sm:h-12 sm:w-14 ${skelBone}`} />
+                <div className={`mt-2 h-3 w-16 ${skelBone}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <section aria-label="Guess list" aria-hidden="true">
+        <div className={`mb-2 h-3 w-40 ${skelBone}`} />
+        <ul className={listShell}>
+          {Array.from({ length: 4 }, (_, i) => (
+            <li
+              key={i}
+              className="flex gap-3 px-3 py-5 sm:gap-4 sm:px-5 sm:py-6 md:gap-5 md:px-6 lg:px-7"
+            >
+              <div
+                className={`h-18 w-12 shrink-0 rounded bg-cinema-800/85 ring-1 ring-stone-600/40 motion-safe:animate-pulse sm:h-24 sm:w-16 md:h-28 md:w-20 md:rounded-md`}
+              />
+              <div className="min-w-0 flex-1 space-y-2.5 pt-0.5">
+                <div className={`h-5 w-[min(100%,16rem)] sm:h-6 sm:w-64 ${skelBone}`} />
+                <div className={`h-3.5 w-28 sm:w-36 ${skelBone}`} />
+                <div className={`h-3 w-44 max-w-full sm:w-56 ${skelBone}`} />
+                <div className="flex gap-2 pt-1">
+                  <div className={`h-8 w-20 rounded-md ${skelBone}`} />
+                  <div className={`h-8 w-20 rounded-md ${skelBone}`} />
+                  <div className={`hidden h-8 w-20 rounded-md sm:block ${skelBone}`} />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 export default function Guesses() {
   const user = useUserStore((s) => s.user);
   const sessionStatus = useUserStore((s) => s.sessionStatus);
   const openRestoreAccess = useUserStore((s) => s.openRestoreAccess);
   const guesses = useGuessStore((s) => s.guesses);
+  const guessesLoaded = useGuessStore((s) => s.loaded);
   const movies = useMovieStore((s) => s.movies);
   const applyRunPhases = useMovieStore((s) => s.applyRunPhases);
 
   const signedIn = sessionStatus === "ready" && Boolean(user);
+  const guessesPending =
+    sessionStatus === "booting" || (signedIn && !guessesLoaded);
 
   const rows = useMemo(
     () => joinGuessRows(guesses, movies),
@@ -298,13 +360,8 @@ export default function Guesses() {
     return blocks;
   }, [tracking, finished, trackingAccuracy, finishedAccuracy]);
 
-  if (sessionStatus === "booting") {
-    return (
-      <div className="flex items-center justify-center gap-2 py-24 text-stone-400">
-        <Loader2 size={18} className="animate-spin" aria-hidden />
-        Reconnecting…
-      </div>
-    );
+  if (guessesPending) {
+    return <GuessesSkeleton />;
   }
 
   if (!signedIn) {

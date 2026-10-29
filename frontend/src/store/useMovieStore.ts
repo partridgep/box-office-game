@@ -3,6 +3,8 @@ import { Guess, MovieData, RunPhase } from '../types';
 
 interface MovieStore {
   movies: Record<string, MovieData>;
+  /** True after at least one successful or failed catalog fetch (including empty). */
+  loaded: boolean;
   setMovies: (movies: MovieData[]) => void;
   addMovie: (movie: MovieData) => void;
   removeMovie: (id: string) => void;
@@ -13,13 +15,14 @@ interface MovieStore {
 
 export const useMovieStore = create<MovieStore>((set) => ({
   movies: {},
+  loaded: false,
 
   setMovies: (movies) => {
     const movieObject = movies.reduce<Record<string, MovieData>>((acc, movie) => {
       acc[movie.tmdbID] = movie;
       return acc;
     }, {});
-    set({ movies: movieObject })
+    set({ movies: movieObject, loaded: true })
   },
 
   addMovie: (movie) =>

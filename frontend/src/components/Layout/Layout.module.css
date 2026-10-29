@@ -222,7 +222,8 @@
   width: 100%;
   max-width: 96rem;
   margin-inline: auto;
-  padding: 4.25rem 1rem 5.75rem;
+  /* Match .topRail min-height so heroes can sit flush under the rail. */
+  padding: 3.75rem 1rem 5.75rem;
 }
 
 @media (min-width: 640px) {
@@ -233,7 +234,7 @@
 
 @media (min-width: 768px) {
   .main {
-    padding-top: 4.75rem;
+    padding-top: 4.25rem;
     padding-bottom: 2rem;
   }
 }

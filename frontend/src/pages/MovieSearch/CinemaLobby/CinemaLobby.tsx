@@ -14,6 +14,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMovieStore } from "../../../store/useMovieStore";
 import { useGuessStore } from "../../../store/useGuessStore";
 import { useLobbyStore } from "../../../store/useLobbyStore";
+import { useUserStore } from "../../../store/useUserStore";
 import { getCompGroups } from "../../../services/categories.service";
 import { Guess, LobbyMovie, MovieData } from "../../../types";
 import { useFriendActivity } from "../../../components/Friends/useFriendActivity";
@@ -693,6 +694,72 @@ function HowItWorksBeat() {
   );
 }
 
+function LobbySkeleton() {
+  const bone = styles.skelShimmer;
+
+  return (
+    <div className="text-stone-100" aria-busy="true" aria-live="polite">
+      <h1 className="sr-only">Upcoming</h1>
+      <p className="sr-only">Loading titles open for prediction</p>
+
+      <section className={styles.heroBleed} aria-hidden="true">
+        <div className={styles.heroStage}>
+          <div className={styles.heroSlide}>
+            <div className="absolute inset-0 bg-cinema-950" />
+            <div className="absolute inset-0 bg-linear-to-t from-cinema-950 via-cinema-950/50 to-cinema-950/20" />
+            <div className={styles.heroSlideInner}>
+              <div className={styles.heroFrame}>
+                <div className={styles.heroPoster}>
+                  <div
+                    className={`aspect-2/3 overflow-hidden rounded-lg ring-1 ring-cinema-800/80 ${bone}`}
+                  />
+                </div>
+                <div className={styles.heroCopy}>
+                  <div className={styles.heroMeta}>
+                    <div className="max-w-3xl rounded-lg bg-linear-to-r from-cinema-950/45 via-cinema-950/35 to-transparent px-3 py-3 sm:px-4 sm:py-3.5 lg:from-cinema-950/60 lg:via-cinema-950/35">
+                      <div className="space-y-2">
+                        <div
+                          className={`h-10 w-[min(100%,28rem)] rounded-sm sm:h-12 lg:h-16 xl:h-20 xl:w-[min(100%,36rem)] ${bone}`}
+                        />
+                        <div className={`h-4 w-28 rounded-sm sm:w-32 ${bone}`} />
+                        <div className={`h-4 w-56 max-w-full rounded-sm sm:w-72 ${bone}`} />
+                        <div className={`h-4 w-44 rounded-sm sm:w-52 ${bone}`} />
+                        <div className={styles.badgeSlot}>
+                          <div className={`h-10 w-36 rounded-md sm:h-11 sm:w-40 ${bone}`} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={styles.heroCtaSlot}>
+                    <div className={`h-12 w-full max-w-xs rounded-sm sm:max-w-sm ${bone}`} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto mt-10 w-full max-w-7xl space-y-12 px-0 sm:mt-12 sm:space-y-14" aria-hidden="true">
+        {[0, 1].map((shelf) => (
+          <section key={shelf} className="space-y-4">
+            <div className={`h-7 w-48 rounded-sm sm:h-8 sm:w-56 ${bone}`} />
+            <div className="flex gap-3 overflow-hidden pb-1">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="w-30 shrink-0 sm:w-36">
+                  <div className={`aspect-2/3 rounded-md ring-1 ring-cinema-800/80 ${bone}`} />
+                  <div className={`mt-2 h-3 w-[80%] rounded-sm ${bone}`} />
+                  <div className={`mt-1.5 h-2.5 w-1/2 rounded-sm ${bone}`} />
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FriendActivityStrip({ movies }: { movies: MovieData[] }) {
   const { items } = useFriendActivity(movies, { limit: 3, movieScan: 8 });
 
@@ -1131,10 +1198,18 @@ function FeaturedHero({
 export function CinemaLobby() {
   const location = useLocation();
   const { movies } = useMovieStore();
+  const moviesLoaded = useMovieStore((s) => s.loaded);
   const guesses = useGuessStore((state) => state.guesses);
+  const guessesLoaded = useGuessStore((s) => s.loaded);
+  const sessionStatus = useUserStore((s) => s.sessionStatus);
   const lobbySections = useLobbyStore((s) => s.sections);
   const sectionsLoaded = useLobbyStore((s) => s.loaded);
   const ensureSections = useLobbyStore((s) => s.ensureSections);
+
+  const guessesReady =
+    sessionStatus === "anonymous" ||
+    (sessionStatus === "ready" && guessesLoaded);
+  const lobbyReady = moviesLoaded && sessionStatus !== "booting" && guessesReady;
 
   const theaterState = location.state as TheaterLocationState | null;
   const restoreScrollY = theaterState?.[RESTORE_SCROLL_STATE];
@@ -1254,6 +1329,10 @@ export function CinemaLobby() {
   }, [restoreScrollY, sectionsLoaded, openSectionMovies.length, movieList.length]);
 
   const hasAnyGuess = Object.keys(guesses).length > 0;
+
+  if (!lobbyReady) {
+    return <LobbySkeleton />;
+  }
 
   return (
     <div className="text-stone-100">

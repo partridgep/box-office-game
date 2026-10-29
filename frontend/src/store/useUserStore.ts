@@ -8,6 +8,7 @@ import {
   ensureFreshToken,
 } from "../services/authSession";
 import { useFriendsStore } from "./useFriendsStore";
+import { useGuessStore } from "./useGuessStore";
 
 export const SESSION_EXPIRED_MESSAGE =
   "Session expired — enter your access key.";
@@ -63,6 +64,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     localStorage.removeItem("access_key");
     localStorage.removeItem("jwt");
     useFriendsStore.getState().reset();
+    useGuessStore.getState().reset();
     set({
       user: null,
       sessionStatus: "anonymous",
@@ -76,6 +78,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     localStorage.removeItem("access_key");
     localStorage.removeItem("jwt");
     useFriendsStore.getState().reset();
+    useGuessStore.getState().reset();
     set({
       user: null,
       sessionStatus: "anonymous",

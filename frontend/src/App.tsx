@@ -9,7 +9,7 @@ import { useGuessStore } from './store/useGuessStore';
 
 function App() {
 
-  const { movies, setMovies } = useMovieStore();
+  const setMovies = useMovieStore((state) => state.setMovies);
 
   const user = useUserStore((state) => state.user);
   const loadUser = useUserStore((state) => state.loadUser);
@@ -21,6 +21,15 @@ function App() {
 
   // load movies on initial mount
   useEffect(() => {
+    const state = useMovieStore.getState();
+    if (state.loaded) return;
+
+    // HMR / remount with warm store — mark loaded without refetching.
+    if (Object.keys(state.movies).length > 0) {
+      setMovies(Object.values(state.movies));
+      return;
+    }
+
     const fetchSavedMovies = async () => {
         try {
             const savedResults = await getSavedMovies();
@@ -28,11 +37,13 @@ function App() {
             setMovies(savedResults);
         } catch (error) {
             console.error('Error fetching saved movies:', error);
+            // Mark loaded so lobby can show empty instead of spinning forever.
+            setMovies([]);
         }
     };
 
-    if (Object.keys(movies).length === 0) fetchSavedMovies();
-  }, []); // run once
+    void fetchSavedMovies();
+  }, [setMovies]); // run once (setMovies is stable)
 
 
   // automatically loads user from localStorage + decrypts access key
@@ -52,9 +63,12 @@ function App() {
         if (response.status === 200) {
           setGuesses(response.data);
           applyRunPhasesFromGuesses(response.data);
+        } else {
+          setGuesses([]);
         }
       } catch (err) {
         console.error("Error loading guesses:", err);
+        setGuesses([]);
       }
     };
 
