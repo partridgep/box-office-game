@@ -211,14 +211,20 @@ function HeroSlideMeta({
               </span>
             </p>
           ) : null}
-          <div className={styles.badgeSlot}>
-            <PredictionBadge
-              lines={callLines}
-              className="lg:backdrop-blur-none"
-            />
-          </div>
+          {callLines.length > 0 ? (
+            <div className={styles.badgeSlot}>
+              <PredictionBadge
+                lines={callLines}
+                className="lg:backdrop-blur-none"
+              />
+            </div>
+          ) : null}
         </div>
       </div>
+      {/* Same footprint as the badge, outside the scrim — gap only when no prediction. */}
+      {callLines.length === 0 ? (
+        <div className={styles.badgeReserve} aria-hidden="true" />
+      ) : null}
     </div>
   );
 }

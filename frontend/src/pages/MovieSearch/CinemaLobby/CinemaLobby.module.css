@@ -98,9 +98,13 @@
   text-align: left;
 }
 
-/* Mobile: no empty badge reserve — pack meta against the CTA. */
 .badgeSlot {
   margin-top: 0.75rem;
+}
+
+/* Desktop-only: same footprint as an empty badge, outside the scrim. */
+.badgeReserve {
+  display: none;
 }
 
 /* Keeps the CTA band at a stable y across slides (badge/title length vary above). */
@@ -229,10 +233,13 @@
     box-sizing: border-box;
   }
 
+  /*
+   * Pack meta to the CTA. Scrim hugs copy; when there's no badge, `.badgeReserve`
+   * holds the old slot height as transparent gap (not empty scrim).
+   */
   .heroMeta {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -244,8 +251,10 @@
     pointer-events: none;
   }
 
-  /* Desktop: reserve badge height so badge/no-badge slides share one CTA y. */
-  .badgeSlot {
+  .badgeReserve {
+    display: block;
+    flex-shrink: 0;
+    margin-top: 0.75rem;
     min-height: 4.75rem;
   }
 

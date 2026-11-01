@@ -157,14 +157,14 @@ export default function InviteDialog({ onClose }: { onClose: () => void }) {
           </h3>
           <div className="ticket-stub rounded-r px-5 py-4 text-ticket-ink">
             <div className="flex items-center justify-between gap-3">
-              <p className="font-marquee text-4xl uppercase tracking-[0.15em] leading-none">
+              <p className="min-w-0 flex-1 break-all font-marquee text-4xl uppercase tracking-[0.15em] leading-none">
                 <span className="sr-only">Your friend code: </span>
                 {user.short_id}
               </p>
               <button
                 type="button"
                 onClick={() => handleCopy(user.short_id, "code", "Friend code")}
-                className="inline-flex items-center gap-1.5 rounded-md border border-ticket-ink/40 px-3 py-1.5 text-sm font-medium hover:bg-ticket-ink/10 focus-visible:outline-2 focus-visible:outline-ticket-ink"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-ticket-ink/40 px-3 py-1.5 text-sm font-medium hover:bg-ticket-ink/10 focus-visible:outline-2 focus-visible:outline-ticket-ink"
               >
                 {copied === "code" ? (
                   <Check size={16} aria-hidden />
