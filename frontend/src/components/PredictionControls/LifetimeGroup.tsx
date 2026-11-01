@@ -1,4 +1,4 @@
-import LogMoneySlider from "./LogMoneySlider";
+import LogMoneySlider, { type PlaceFieldRegistry } from "./LogMoneySlider";
 import type { CompMarker } from "./CompMarkers";
 import { formatMillions } from "../../utils/formatMoney";
 import { ABSOLUTE_MAX_DOMESTIC_LIFETIME, ABSOLUTE_MAX_INTERNATIONAL_LIFETIME } from "../../utils/logScale";
@@ -18,6 +18,8 @@ interface LifetimeGroupProps {
   finalDomesticMarkers?: CompMarker[];
   finalInternationalMarkers?: CompMarker[];
   highlightedCompMovieId?: string | null;
+  onDismissCompHighlight?: () => void;
+  placeRegistry?: PlaceFieldRegistry;
 }
 
 export default function LifetimeGroup({
@@ -35,6 +37,8 @@ export default function LifetimeGroup({
   finalDomesticMarkers = [],
   finalInternationalMarkers = [],
   highlightedCompMovieId = null,
+  onDismissCompHighlight,
+  placeRegistry,
 }: LifetimeGroupProps) {
   const isTicket = variant === "ticket";
 
@@ -68,35 +72,45 @@ export default function LifetimeGroup({
       </p>
 
       <div className="space-y-5">
-        <LogMoneySlider
-          id="final_domestic"
-          label="Final Domestic"
-          value={finalDomestic}
-          onChange={onFinalDomesticChange}
-          absoluteMin={domesticMin}
-          fallbackMax={finalDomesticFallback}
-          absoluteMax={ABSOLUTE_MAX_DOMESTIC_LIFETIME}
-          scaleKey={scaleKey}
-          disabled={disabled}
-          variant={variant}
-          compMarkers={finalDomesticMarkers}
-          highlightedCompMovieId={highlightedCompMovieId}
-        />
+        <div data-predict-field="finalDomestic">
+          <LogMoneySlider
+            id="final_domestic"
+            label="Final Domestic"
+            value={finalDomestic}
+            onChange={onFinalDomesticChange}
+            absoluteMin={domesticMin}
+            fallbackMax={finalDomesticFallback}
+            absoluteMax={ABSOLUTE_MAX_DOMESTIC_LIFETIME}
+            scaleKey={scaleKey}
+            disabled={disabled}
+            variant={variant}
+            compMarkers={finalDomesticMarkers}
+            highlightedCompMovieId={highlightedCompMovieId}
+            onDismissCompHighlight={onDismissCompHighlight}
+            placeField="finalDomestic"
+            placeRegistry={placeRegistry}
+          />
+        </div>
 
-        <LogMoneySlider
-          id="final_international"
-          label="Final International"
-          value={finalInternational}
-          onChange={onFinalInternationalChange}
-          absoluteMin={internationalMin}
-          fallbackMax={finalInternationalFallback}
-          absoluteMax={ABSOLUTE_MAX_INTERNATIONAL_LIFETIME}
-          scaleKey={scaleKey}
-          disabled={disabled}
-          variant={variant}
-          compMarkers={finalInternationalMarkers}
-          highlightedCompMovieId={highlightedCompMovieId}
-        />
+        <div data-predict-field="finalInternational">
+          <LogMoneySlider
+            id="final_international"
+            label="Final International"
+            value={finalInternational}
+            onChange={onFinalInternationalChange}
+            absoluteMin={internationalMin}
+            fallbackMax={finalInternationalFallback}
+            absoluteMax={ABSOLUTE_MAX_INTERNATIONAL_LIFETIME}
+            scaleKey={scaleKey}
+            disabled={disabled}
+            variant={variant}
+            compMarkers={finalInternationalMarkers}
+            highlightedCompMovieId={highlightedCompMovieId}
+            onDismissCompHighlight={onDismissCompHighlight}
+            placeField="finalInternational"
+            placeRegistry={placeRegistry}
+          />
+        </div>
 
         <div
           className={`flex items-center justify-between pt-2 border-t ${

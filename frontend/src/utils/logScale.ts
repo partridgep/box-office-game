@@ -25,6 +25,8 @@ export const OVERSHOOT_MAX_DELTA = 4;
 export const OVERSHOOT_HOLD_MS = 420;
 /** How long the thumb eases left after a max expand. */
 export const EXPAND_ANIM_MS = 380;
+/** Ease thumb + value when placing a comp metric onto a slider. */
+export const PLACE_ANIM_MS = 240;
 /** How long the thumb eases back toward the right edge while still held. */
 export const EXPAND_RETURN_MS = 280;
 /** How long the thumb eases into normal slider control after leaving the edge. */

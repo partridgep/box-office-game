@@ -19,6 +19,11 @@ interface SocialProofProps {
   bare?: boolean;
   /** Under "About this movie": h3 + shared subsection title weight */
   subsection?: boolean;
+  /**
+   * Compact mid-stack strip for mobile predict: who else has played,
+   * without the full pool table or large heading.
+   */
+  compact?: boolean;
 }
 
 /** Fewer than this many other guesses and the median would just expose individual strangers' picks. */
@@ -121,6 +126,7 @@ export default function SocialProof({
   revealGuesses,
   bare,
   subsection = false,
+  compact = false,
 }: SocialProofProps) {
   const count = allMovieGuesses.length;
   const viewerGuess = allMovieGuesses.find((g) => g.is_viewer);
@@ -196,6 +202,40 @@ export default function SocialProof({
             ? ` · ${friendGuesses.length} from friend${friendGuesses.length === 1 ? "" : "s"}`
             : ""
         }`;
+
+  if (compact) {
+    return (
+      <div className="rounded-xl border border-theater-gold/20 bg-cinema-900/55 px-3 py-2.5 backdrop-blur-md">
+        <p
+          className={`text-sm text-left ${
+            count === 0 ? "text-stone-400" : "font-medium text-stone-200"
+          }`}
+        >
+          {summary}
+        </p>
+        {friendGuesses.length > 0 ? (
+          <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-400">
+            {friendGuesses.map((g) => {
+              const name = g.guess_user?.name?.trim() || "Friend";
+              return (
+                <li key={g.id} className="inline-flex items-center gap-1">
+                  <Lock size={11} aria-hidden className="shrink-0 opacity-80" />
+                  <span className="truncate max-w-36 text-stone-300">
+                    {name}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        {count > 0 && !revealGuesses ? (
+          <p className="mt-1.5 text-[11px] text-left text-stone-500">
+            Numbers stay sealed until you lock in.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
   const showTable = revealGuesses
     ? Boolean(crowdBo || crowdRt != null || friendGuesses.length || viewerGuess)

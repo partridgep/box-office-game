@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type MutableRefObject } from "react";
 import { useUserStore } from "../../store/useUserStore";
 import { useGuessStore } from "../../store/useGuessStore";
 import { useInviteStore } from "../../store/useInviteStore";
@@ -14,12 +14,14 @@ import {
   ABSOLUTE_MAX_DOMESTIC_LIFETIME,
   ABSOLUTE_MAX_INTERNATIONAL_LIFETIME,
 } from "../../utils/logScale";
-import LogMoneySlider from "./LogMoneySlider";
+import LogMoneySlider, { type PlaceFieldRegistry } from "./LogMoneySlider";
 import RTScoreSlider from "./RTScoreSlider";
 import LifetimeGroup from "./LifetimeGroup";
 import { formatMillions } from "../../utils/formatMoney";
 import {
   CompMarkersByField,
+  type CompMetricField,
+  type PlaceCompMetric,
 } from "../HistoricalComps/HistoricalComps";
 import type { Guess } from "../../types";
 
@@ -29,9 +31,17 @@ interface PredictionControlsProps {
   compMarkersByField?: CompMarkersByField;
   /** CompMovie.id highlighted from Historical Comps (linked brushing). */
   highlightedCompMovieId?: string | null;
+  /** Clear pinned comps highlight (e.g. tick tap while brushing). */
+  onDismissCompHighlight?: () => void;
   inviterName?: string;
   /** True while signup confirmation is showing — parent should keep this mounted. */
   onSignupFlowChange?: (active: boolean) => void;
+  /**
+   * Parent assigns this ref; we fill it with a place handler so the mobile
+   * comps sheet can set one slider at a time without lifting all guess state.
+   * Only one mounted instance should receive this (mobile) — desktop also mounts.
+   */
+  placeCompMetricRef?: MutableRefObject<PlaceCompMetric | null>;
 }
 
 const emptyMarkers: CompMarkersByField = {
@@ -76,8 +86,10 @@ export default function PredictionControls({
   availability,
   compMarkersByField = emptyMarkers,
   highlightedCompMovieId = null,
+  onDismissCompHighlight,
   inviterName,
   onSignupFlowChange,
+  placeCompMetricRef,
 }: PredictionControlsProps) {
   const user = useUserStore((state) => state.user);
   const addGuess = useGuessStore((state) => state.addGuess);
@@ -111,6 +123,7 @@ export default function PredictionControls({
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const placeRegistry: PlaceFieldRegistry = useRef({});
 
   // Reset / hydrate from placed guess when the movie changes.
   const [loadedMovieId, setLoadedMovieId] = useState(movieId);
@@ -139,6 +152,33 @@ export default function PredictionControls({
     }
     triggerMutualFollow();
   }, [user, inviterId, clearInvite]);
+
+  // Mobile comps sheet: place one metric onto the matching slider (animated).
+  useEffect(() => {
+    if (!placeCompMetricRef) return;
+
+    const fieldOpen = (field: CompMetricField) =>
+      field === "rottenTomatoesScore"
+        ? availability.rottenTomatoes
+        : field === "domesticOpening"
+          ? availability.domesticOpening
+          : field === "internationalOpening"
+            ? availability.internationalOpening
+            : field === "finalDomestic"
+              ? availability.finalDomestic
+              : availability.finalInternational;
+
+    const place: PlaceCompMetric = (field, raw) => {
+      if (!Number.isFinite(raw) || !fieldOpen(field)) return;
+      placeRegistry.current[field]?.(raw);
+      navigator.vibrate?.(10);
+    };
+
+    placeCompMetricRef.current = place;
+    return () => {
+      placeCompMetricRef.current = null;
+    };
+  }, [placeCompMetricRef, availability, placeRegistry]);
 
   const worldwideOpening =
     domesticOpening != null && internationalOpening != null
@@ -237,7 +277,11 @@ export default function PredictionControls({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 text-ticket-ink">
+    <form
+      data-predict-controls
+      onSubmit={handleSubmit}
+      className="space-y-6 text-ticket-ink"
+    >
       {inviterName && (
         <div className="border-y border-ticket-ink/30 py-2 text-sm font-medium uppercase tracking-wide">
           {inviterName} wants you to predict how well this movie will do!
@@ -250,34 +294,44 @@ export default function PredictionControls({
           Required before the box office deadline.
         </p>
         <div className="space-y-5">
-          <LogMoneySlider
-            id="domestic_opening"
-            label="Domestic Opening"
-            value={domesticOpening}
-            onChange={setDomesticOpening}
-            onCommit={setCommittedDomesticOpening}
-            fallbackMax={DOMESTIC_OPENING_FALLBACK}
-            absoluteMax={ABSOLUTE_MAX_DOMESTIC_OPENING}
-            scaleKey={movieId}
-            disabled={!availability.domesticOpening}
-            compMarkers={compMarkersByField.domesticOpening}
-            highlightedCompMovieId={highlightedCompMovieId}
-            variant="ticket"
-          />
-          <LogMoneySlider
-            id="international_opening"
-            label="International Opening"
-            value={internationalOpening}
-            onChange={setInternationalOpening}
-            onCommit={setCommittedInternationalOpening}
-            fallbackMax={INTERNATIONAL_OPENING_FALLBACK}
-            absoluteMax={ABSOLUTE_MAX_INTERNATIONAL_OPENING}
-            scaleKey={movieId}
-            disabled={!availability.internationalOpening}
-            compMarkers={compMarkersByField.internationalOpening}
-            highlightedCompMovieId={highlightedCompMovieId}
-            variant="ticket"
-          />
+          <div data-predict-field="domesticOpening">
+            <LogMoneySlider
+              id="domestic_opening"
+              label="Domestic Opening"
+              value={domesticOpening}
+              onChange={setDomesticOpening}
+              onCommit={setCommittedDomesticOpening}
+              fallbackMax={DOMESTIC_OPENING_FALLBACK}
+              absoluteMax={ABSOLUTE_MAX_DOMESTIC_OPENING}
+              scaleKey={movieId}
+              disabled={!availability.domesticOpening}
+              compMarkers={compMarkersByField.domesticOpening}
+              highlightedCompMovieId={highlightedCompMovieId}
+              onDismissCompHighlight={onDismissCompHighlight}
+              variant="ticket"
+              placeField="domesticOpening"
+              placeRegistry={placeRegistry}
+            />
+          </div>
+          <div data-predict-field="internationalOpening">
+            <LogMoneySlider
+              id="international_opening"
+              label="International Opening"
+              value={internationalOpening}
+              onChange={setInternationalOpening}
+              onCommit={setCommittedInternationalOpening}
+              fallbackMax={INTERNATIONAL_OPENING_FALLBACK}
+              absoluteMax={ABSOLUTE_MAX_INTERNATIONAL_OPENING}
+              scaleKey={movieId}
+              disabled={!availability.internationalOpening}
+              compMarkers={compMarkersByField.internationalOpening}
+              highlightedCompMovieId={highlightedCompMovieId}
+              onDismissCompHighlight={onDismissCompHighlight}
+              variant="ticket"
+              placeField="internationalOpening"
+              placeRegistry={placeRegistry}
+            />
+          </div>
           <div className="flex items-center justify-between pt-2 border-t border-ticket-ink/30">
             <span className="text-sm uppercase tracking-wide text-ticket-ink/70">Worldwide Opening</span>
             <span className="text-base font-bold tabular-nums">
@@ -302,17 +356,23 @@ export default function PredictionControls({
         finalDomesticMarkers={compMarkersByField.finalDomestic}
         finalInternationalMarkers={compMarkersByField.finalInternational}
         highlightedCompMovieId={highlightedCompMovieId}
+        onDismissCompHighlight={onDismissCompHighlight}
+        placeRegistry={placeRegistry}
       />
 
-      <div>
+      <div data-predict-field="rottenTomatoesScore">
         <h2 className="text-2xl font-bold uppercase tracking-wide mb-4">Critical Reception</h2>
         <RTScoreSlider
+          id="rotten_tomatoes"
           value={rtScore}
           onChange={setRtScore}
           disabled={!availability.rottenTomatoes}
           variant="ticket"
           compMarkers={compMarkersByField.rottenTomatoesScore}
           highlightedCompMovieId={highlightedCompMovieId}
+          onDismissCompHighlight={onDismissCompHighlight}
+          placeField="rottenTomatoesScore"
+          placeRegistry={placeRegistry}
         />
       </div>
 

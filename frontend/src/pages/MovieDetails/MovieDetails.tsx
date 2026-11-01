@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { exitTheater } from "../../utils/viewTransitions";
@@ -6,7 +13,11 @@ import { exitTheater } from "../../utils/viewTransitions";
 import { useMovieDetailsData } from "./useMovieDetailsData";
 import { usePageMode } from "../../hooks/usePageMode";
 import MovieContextPanel from "../../components/MovieContextPanel/MovieContextPanel";
-import { compsToMarkersByField } from "../../components/HistoricalComps/HistoricalComps";
+import {
+  compsToMarkersByField,
+  type CompMetricField,
+  type PlaceCompMetric,
+} from "../../components/HistoricalComps/HistoricalComps";
 import PredictionControls from "../../components/PredictionControls/PredictionControls";
 import LockedPredictionSummary from "../../components/LockedPredictionSummary/LockedPredictionSummary";
 import {
@@ -20,6 +31,10 @@ import SocialProof from "../../components/SocialProof/SocialProof";
 import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
 import TicketStub from "../../components/TicketStub/TicketStub";
+import PredictContextSheet, {
+  PREDICT_SHEET_PEEK_HEIGHT,
+  type SheetHeightChange,
+} from "../../components/PredictContextSheet/PredictContextSheet";
 import { hasAnyActuals } from "../../utils/guessComparison";
 import {
   EMPTY_HIDDEN,
@@ -112,6 +127,154 @@ export default function MovieDetails() {
   const [highlightedCompId, setHighlightedCompId] = useState<string | null>(
     null,
   );
+  /** Mobile sheet height → page bottom pad so Lock / RT stay scrollable. */
+  const [sheetPadPx, setSheetPadPx] = useState(PREDICT_SHEET_PEEK_HEIGHT);
+  const [sheetPadImmediate, setSheetPadImmediate] = useState(true);
+  /** PredictionControls fills this so the comps sheet can place one metric. */
+  const placeCompMetricRef = useRef<PlaceCompMetric | null>(null);
+
+  const onSheetHeightChange = useCallback<SheetHeightChange>((heightPx, opts) => {
+    setSheetPadImmediate(opts.immediate);
+    setSheetPadPx(heightPx);
+  }, []);
+
+  /**
+   * Visible band above the comps sheet. Prefer the live sheet top so occlusion
+   * matches what’s on screen (pad math can lag peek→half).
+   */
+  const predictVisibleBand = useCallback(() => {
+    const topRail = document.querySelector("[data-top-rail]");
+    const bottomNav = document.querySelector("[data-bottom-nav]");
+    const top =
+      (topRail instanceof HTMLElement
+        ? topRail.getBoundingClientRect().bottom
+        : 60) + 8;
+    const navH =
+      bottomNav instanceof HTMLElement
+        ? bottomNav.getBoundingClientRect().height
+        : 72;
+    const sheet = document.querySelector("[data-predict-sheet]");
+    const sheetTop =
+      sheet instanceof HTMLElement
+        ? sheet.getBoundingClientRect().top
+        : window.innerHeight - navH - sheetPadPx;
+    const bottom = Math.min(sheetTop, window.innerHeight - navH) - 8;
+    return { top, bottom };
+  }, [sheetPadPx]);
+
+  const smoothScrollBy = useCallback((delta: number): Promise<void> => {
+    if (Math.abs(delta) < 1) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener("scrollend", finish);
+        window.clearTimeout(fallback);
+        // One frame after scroll so layout/paint catch up before the thumb eases.
+        requestAnimationFrame(() => resolve());
+      };
+      window.addEventListener("scrollend", finish, { once: true });
+      // Safari / older engines may lack scrollend.
+      const fallback = window.setTimeout(finish, 450);
+      window.scrollBy({ top: delta, behavior: "smooth" });
+    });
+  }, []);
+
+  const scrollPredictFieldIntoView = useCallback(
+    (field: CompMetricField): Promise<void> => {
+      const root = document.querySelector("[data-predict-mobile]");
+      const el = root?.querySelector(`[data-predict-field="${field}"]`);
+      if (!(el instanceof HTMLElement)) return Promise.resolve();
+
+      const { top, bottom: visibleBottom } = predictVisibleBand();
+      const rect = el.getBoundingClientRect();
+
+      let delta = 0;
+      if (rect.top < top) {
+        delta = rect.top - top;
+      } else if (rect.bottom > visibleBottom) {
+        delta = rect.bottom - visibleBottom;
+      }
+
+      return smoothScrollBy(delta);
+    },
+    [predictVisibleBand, smoothScrollBy],
+  );
+
+  /**
+   * Pinning can leave slider tracks under the sheet. Check real field boxes
+   * against the sheet’s top edge — not the tall form wrapper.
+   */
+  const scrollPredictionsIntoViewIfNeeded = useCallback(() => {
+    const root = document.querySelector("[data-predict-mobile]");
+    if (!root) return;
+
+    const fields = root.querySelectorAll<HTMLElement>("[data-predict-field]");
+    if (fields.length === 0) return;
+
+    const { top, bottom: visibleBottom } = predictVisibleBand();
+    const bandH = visibleBottom - top;
+    if (bandH < 40) return;
+
+    // Ticks sit mid/lower in each field — need a solid slice above the sheet.
+    const MIN_FIELD_VISIBLE = Math.min(120, bandH * 0.55);
+    let bestOverlap = 0;
+    for (const field of fields) {
+      const rect = field.getBoundingClientRect();
+      const overlap =
+        Math.min(rect.bottom, visibleBottom) - Math.max(rect.top, top);
+      if (overlap > bestOverlap) bestOverlap = overlap;
+    }
+    if (bestOverlap >= MIN_FIELD_VISIBLE) return;
+
+    void smoothScrollBy(fields[0].getBoundingClientRect().top - top);
+  }, [predictVisibleBand, smoothScrollBy]);
+
+  const onPlaceCompMetric = useCallback<PlaceCompMetric>((field, value) => {
+    void (async () => {
+      await scrollPredictFieldIntoView(field);
+      placeCompMetricRef.current?.(field, value);
+    })();
+  }, [scrollPredictFieldIntoView]);
+
+  const onHighlightComp = useCallback((compMovieId: string | null) => {
+    setHighlightedCompId(compMovieId);
+  }, []);
+
+  const clearCompHighlight = useCallback(() => {
+    setHighlightedCompId(null);
+  }, []);
+
+  // After pin (+ peek→half), measure live sheet top and scroll sliders if covered.
+  useLayoutEffect(() => {
+    if (!highlightedCompId) return;
+    scrollPredictionsIntoViewIfNeeded();
+  }, [highlightedCompId, scrollPredictionsIntoViewIfNeeded]);
+
+  // Tap outside the pinned comps row clears the brush (ticks no longer place values).
+  useEffect(() => {
+    if (!highlightedCompId) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(`[data-pinned-comp="${CSS.escape(highlightedCompId)}"]`)) {
+        return;
+      }
+      // Another comps row will set the pin itself — don't clear first (avoids swap flicker).
+      if (target.closest("[data-comp-row]")) return;
+      // Keep sheet chrome (handle / tabs) from dismissing mid-gesture.
+      if (target.closest("[data-sheet-chrome]")) return;
+      // Tapping the pinned comp’s own slider tick places the value — don’t unpin.
+      if (target.closest("[data-highlighted-comp-tick]")) return;
+      setHighlightedCompId(null);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [highlightedCompId]);
 
   const pageMode = usePageMode(movie, loggedGuess, isInDatabase);
 
@@ -284,7 +447,7 @@ export default function MovieDetails() {
     </TicketStub>
   );
 
-  const renderPanelContent = () => (
+  const renderPanelContent = (opts?: { enablePlaceFromComps?: boolean }) => (
     <>
       {retroactiveActive && (
         <div className="mb-4 border border-ticket-ink/40 py-2 px-3 text-xs uppercase tracking-wide text-ticket-ink">
@@ -298,8 +461,12 @@ export default function MovieDetails() {
           availability={effectiveAvailability}
           compMarkersByField={compMarkersByField}
           highlightedCompMovieId={highlightedCompId}
+          onDismissCompHighlight={clearCompHighlight}
           inviterName={inviterName}
           onSignupFlowChange={setHoldPredictForSignup}
+          placeCompMetricRef={
+            opts?.enablePlaceFromComps ? placeCompMetricRef : undefined
+          }
         />
       )}
 
@@ -434,6 +601,9 @@ export default function MovieDetails() {
     );
   }
 
+  const mobilePredict =
+    mode === "predict" || holdPredictForSignup;
+
   return (
     <>
       <PosterBackground
@@ -443,35 +613,72 @@ export default function MovieDetails() {
       />
 
       {/* Mobile: single-column document scroll — no side-enter (desktop only). */}
-      <div className="relative z-10 space-y-6 pt-5 lg:hidden">
+      <div
+        data-predict-mobile
+        className="relative z-10 space-y-6 pt-5 lg:hidden"
+        style={
+          mobilePredict
+            ? {
+                paddingBottom: sheetPadPx,
+                transition: sheetPadImmediate
+                  ? "none"
+                  : "padding-bottom 280ms var(--ease-snappy)",
+              }
+            : undefined
+        }
+      >
         {renderTitleBlock()}
         <CountdownStrip movie={movie} availability={predictionAvailability} />
+        {mobilePredict ? (
+          <SocialProof
+            movie={movie}
+            allMovieGuesses={allMovieGuesses}
+            friendGuesses={friendGuesses}
+            revealGuesses={revealGuesses}
+            compact
+          />
+        ) : null}
         {useTicketShell ? (
           <TicketStub
             watermark={movie.rated || "NR"}
             footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
             className="rounded-r"
           >
-            {renderPanelContent()}
+            {renderPanelContent({ enablePlaceFromComps: true })}
           </TicketStub>
         ) : (
           <div className="rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
-            {renderPanelContent()}
+            {renderPanelContent({ enablePlaceFromComps: true })}
           </div>
         )}
-        <MovieContextPanel
-          movie={movie}
-          allMovieGuesses={allMovieGuesses}
-          friendGuesses={friendGuesses}
-          revealGuesses={revealGuesses}
-          compGroups={compGroups}
-          onHighlightComp={
-            mode === "predict" || holdPredictForSignup
-              ? setHighlightedCompId
-              : undefined
-          }
-        />
+        {!mobilePredict ? (
+          <MovieContextPanel
+            movie={movie}
+            allMovieGuesses={allMovieGuesses}
+            friendGuesses={friendGuesses}
+            revealGuesses={revealGuesses}
+            compGroups={compGroups}
+          />
+        ) : null}
       </div>
+
+      {mobilePredict && movie.id && effectiveAvailability ? (
+        <PredictContextSheet
+          movie={movie}
+          compGroups={compGroups}
+          highlightedCompId={highlightedCompId}
+          onHighlightComp={onHighlightComp}
+          onHeightChange={onSheetHeightChange}
+          onPlaceCompMetric={onPlaceCompMetric}
+          metricAvailability={{
+            domesticOpening: effectiveAvailability.domesticOpening,
+            internationalOpening: effectiveAvailability.internationalOpening,
+            finalDomestic: effectiveAvailability.finalDomestic,
+            finalInternational: effectiveAvailability.finalInternational,
+            rottenTomatoesScore: effectiveAvailability.rottenTomatoes,
+          }}
+        />
+      ) : null}
 
       {/*
         Desktop: each viewport half is a full-height scrollport (inset-y-0).

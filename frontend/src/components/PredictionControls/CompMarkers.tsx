@@ -927,6 +927,11 @@ interface CompMarkersProps {
   positionTransitionMs?: number;
   /** CompMovie.id from Historical Comps — emphasize matching ticks (linked brushing). */
   highlightedCompMovieId?: string | null;
+  /**
+   * While a comps row is pinned, tick taps clear the pin instead of setting
+   * the slider (chips on the row are the place affordance).
+   */
+  onDismissHighlight?: () => void;
 }
 
 function markerMatchesComp(
@@ -975,6 +980,7 @@ export default function CompMarkers({
   variant = "default",
   positionTransitionMs = 0,
   highlightedCompMovieId = null,
+  onDismissHighlight,
 }: CompMarkersProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [tooltipShift, setTooltipShift] = useState(0);
@@ -1511,6 +1517,13 @@ export default function CompMarkers({
         const hitH = ticksOnlyChrome
           ? 14
           : Math.max(24, labelTop + 12);
+        /** Bigger hit while this tick is the pinned brush target (esp. touch). */
+        const highlightHitH = Math.max(hitH, 44);
+        const matchedMember = isCluster
+          ? clusterMembers!.find((m) =>
+              markerMatchesComp(m, highlightedCompMovieId),
+            )
+          : null;
 
         return (
           <div
@@ -1520,7 +1533,7 @@ export default function CompMarkers({
             }`}
             style={{
               left: `${groupPos}%`,
-              height: hitH,
+              height: forcedHighlight ? highlightHitH : hitH,
               transition: positionTransition
                 ? `${positionTransition}, opacity 120ms ease-out`
                 : "opacity 120ms ease-out",
@@ -1542,8 +1555,26 @@ export default function CompMarkers({
             <button
               type="button"
               disabled={disabled}
+              data-highlighted-comp-tick={
+                forcedHighlight ? highlightedCompMovieId ?? "" : undefined
+              }
               onClick={(e) => {
                 if (!allowsTooltipAt(e.clientX, e.clientY)) return;
+                if (highlightedCompMovieId) {
+                  // Pinned tick → place that value; other ticks → clear pin.
+                  if (forcedHighlight) {
+                    if (matchedMember) {
+                      onSelect(matchedMember.value);
+                    } else if (!isCluster) {
+                      onSelect(marker.value);
+                    } else {
+                      openTooltip(key);
+                    }
+                    return;
+                  }
+                  onDismissHighlight?.();
+                  return;
+                }
                 if (isCluster) {
                   openTooltip(key);
                   return;
@@ -1559,10 +1590,18 @@ export default function CompMarkers({
               }
               className={
                 ticksOnlyChrome
-                  ? "absolute -left-2.5 top-0 z-0 h-3.5 w-5"
-                  : "absolute top-0 left-0 z-0 w-0"
+                  ? forcedHighlight
+                    ? "absolute -left-5 top-0 z-0 h-11 w-10 [@media(pointer:coarse)]:-left-6 [@media(pointer:coarse)]:h-12 [@media(pointer:coarse)]:w-12"
+                    : "absolute -left-2.5 top-0 z-0 h-3.5 w-5"
+                  : forcedHighlight
+                    ? "absolute -left-5 top-0 z-0 w-10 [@media(pointer:coarse)]:-left-6 [@media(pointer:coarse)]:w-12"
+                    : "absolute top-0 left-0 z-0 w-0"
               }
-              style={ticksOnlyChrome ? undefined : { height: hitH }}
+              style={
+                ticksOnlyChrome
+                  ? undefined
+                  : { height: forcedHighlight ? highlightHitH : hitH }
+              }
               aria-label={clusterAria}
               aria-expanded={isCluster ? isOpen : undefined}
               aria-haspopup={isCluster ? "listbox" : undefined}
@@ -1709,9 +1748,23 @@ export default function CompMarkers({
                                 : "hover:bg-cinema-800 focus-visible:ring-theater-gold/50"
                             }`}
                             onClick={() => {
+                              if (highlightedCompMovieId) {
+                                if (markerMatchesComp(m, highlightedCompMovieId)) {
+                                  onSelect(m.value);
+                                } else {
+                                  onDismissHighlight?.();
+                                }
+                                closeTooltip(key);
+                                return;
+                              }
                               onSelect(m.value);
                               closeTooltip(key);
                             }}
+                            data-highlighted-comp-tick={
+                              markerMatchesComp(m, highlightedCompMovieId)
+                                ? highlightedCompMovieId ?? ""
+                                : undefined
+                            }
                             onFocus={() => openTooltip(key)}
                             onBlur={(e) =>
                               onTriggerBlur(

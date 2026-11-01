@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { Lock } from "lucide-react";
 import {
@@ -19,6 +26,7 @@ import {
   EXPAND_ANIM_MS,
   EXPAND_RETURN_MS,
   EXPAND_HANDOFF_MS,
+  PLACE_ANIM_MS,
   growMaxForOvershoot,
 } from "../../utils/logScale";
 import {
@@ -26,9 +34,15 @@ import {
   formatMillionsShort,
   parseMoneyToMillions,
 } from "../../utils/formatMoney";
+import { prefersReducedMotion } from "../../utils/viewTransitions";
 import CompMarkers, { type CompMarker } from "./CompMarkers";
+import type { CompMetricField } from "../HistoricalComps/HistoricalComps";
 
 export type { CompMarker };
+
+export type PlaceFieldRegistry = MutableRefObject<
+  Partial<Record<CompMetricField, (value: number) => void>>
+>;
 
 /** A first jump wider than this (≈ thumb width) means the track was clicked. */
 const TRACK_CLICK_MIN_PX = 12;
@@ -53,8 +67,13 @@ interface LogMoneySliderProps {
   compMarkers?: CompMarker[];
   /** CompMovie.id from Historical Comps hover/focus — emphasize matching ticks. */
   highlightedCompMovieId?: string | null;
+  /** Clear pinned comps highlight (tick tap while brushing). */
+  onDismissCompHighlight?: () => void;
   id?: string;
   variant?: "default" | "ticket";
+  /** Register an animated place handler for mobile comps → this slider. */
+  placeField?: CompMetricField;
+  placeRegistry?: PlaceFieldRegistry;
 }
 
 export default function LogMoneySlider({
@@ -69,8 +88,11 @@ export default function LogMoneySlider({
   disabled = false,
   compMarkers = [],
   highlightedCompMovieId = null,
+  onDismissCompHighlight,
   id,
   variant = "default",
+  placeField,
+  placeRegistry,
 }: LogMoneySliderProps) {
   /** Visual / track scale always starts at 0 so comps below the floor stay visible. */
   const scaleMin = 0;
@@ -501,6 +523,51 @@ export default function LogMoneySlider({
     return nextMax;
   };
 
+  /** Place a comps metric: ease thumb + input from current value → target. */
+  const animatePlaceRef = useRef<(raw: number) => void>(() => {});
+  animatePlaceRef.current = (raw: number) => {
+    if (disabled) return;
+    const next = roundMoney(
+      Math.max(floorRef.current, Math.min(raw, absoluteMax)),
+    );
+    const nextMax = fitMaxForValue(next, maxRef.current, absoluteMax);
+    if (nextMax > maxRef.current) {
+      userExpandedRef.current = true;
+      maxRef.current = nextMax;
+      setMax(nextMax);
+    }
+
+    const from = valueRef.current ?? floorRef.current;
+    cancelExpandAnim();
+
+    if (prefersReducedMotion() || Math.abs(next - from) < 0.05) {
+      onChangeRef.current(next);
+      emitCommit(next);
+      return;
+    }
+
+    expandLockRef.current = true;
+    expandVisualRef.current = from;
+    setExpandVisual(from);
+    runVisualPhase(from, next, PLACE_ANIM_MS, true, () => {
+      onChangeRef.current(next);
+      emitCommit(next);
+      expandAnimRef.current = null;
+      expandLockRef.current = false;
+      expandVisualRef.current = null;
+      setExpandVisual(null);
+    });
+  };
+
+  useEffect(() => {
+    if (!placeField || !placeRegistry) return;
+    const registry = placeRegistry.current;
+    registry[placeField] = (v) => animatePlaceRef.current(v);
+    return () => {
+      delete registry[placeField];
+    };
+  }, [placeField, placeRegistry]);
+
   /** Pixel distance on the track covered by a $M delta at the current scale. */
   const valueDeltaToPx = (delta: number) => {
     const root = rootRef.current;
@@ -880,6 +947,7 @@ export default function LogMoneySlider({
                 variant={variant}
                 positionTransitionMs={EXPAND_ANIM_MS}
                 highlightedCompMovieId={highlightedCompMovieId}
+                onDismissHighlight={onDismissCompHighlight}
               />
             </div>
           </div>

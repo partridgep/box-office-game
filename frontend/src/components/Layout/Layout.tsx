@@ -242,7 +242,7 @@ export default function Layout({ children }: LayoutProps) {
     <div
       className={`min-h-screen overflow-x-hidden overscroll-x-none bg-cinema-950 text-stone-100 flex flex-col selection:bg-cinema-500 selection:text-white ${styles.layout}`}
     >
-      <header className={styles.topRail}>
+      <header className={styles.topRail} data-top-rail>
         <button
           type="button"
           className={styles.brandButton}
@@ -345,7 +345,11 @@ export default function Layout({ children }: LayoutProps) {
       <main className={styles.main}>{children}</main>
 
       {!isDesktop ? (
-        <nav className={styles.bottomBar} aria-label="Primary">
+        <nav
+          className={styles.bottomBar}
+          aria-label="Primary"
+          data-bottom-nav
+        >
           <button
             type="button"
             className={`${styles.bottomItem} ${

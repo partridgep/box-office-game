@@ -28,6 +28,14 @@ export type CompMarkersByField = {
   rottenTomatoesScore: CompMarker[];
 };
 
+/** Prediction fields that can be set from a pinned comp metric on mobile. */
+export type CompMetricField = keyof CompMarkersByField;
+
+export type PlaceCompMetric = (field: CompMetricField, value: number) => void;
+
+/** Which fields are still open for prediction (closed → metric not placeable). */
+export type CompMetricAvailability = Partial<Record<CompMetricField, boolean>>;
+
 interface HistoricalCompsProps {
   groups: CompGroup[];
   /** Subject movie these comps belong to — hide/star prefs are scoped to this id. */
@@ -36,7 +44,58 @@ interface HistoricalCompsProps {
   subsection?: boolean;
   /** Linked brushing: hover/focus a row → highlight matching slider ticks. */
   onHighlightComp?: (compMovieId: string | null) => void;
+  /**
+   * "hover": desktop brush (enter/leave).
+   * "pin": tap to sticky-highlight for mobile sheet dual-view.
+   */
+  highlightMode?: "hover" | "pin";
+  /** Controlled pin when highlightMode is "pin". */
+  pinnedCompId?: string | null;
+  /** Hide the section heading (sheet tab already labels Comps). */
+  hideHeading?: boolean;
+  /** Place one metric onto the matching prediction slider (pinned rows). */
+  onPlaceCompMetric?: PlaceCompMetric;
+  /** Closed fields stay non-interactive even when pinned. */
+  metricAvailability?: CompMetricAvailability;
 }
+
+const METRIC_CELLS: Array<{
+  field: CompMetricField;
+  label: string;
+  kind: "money" | "rt";
+  ariaName: string;
+}> = [
+  {
+    field: "domesticOpening",
+    label: "Dom Open",
+    kind: "money",
+    ariaName: "domestic opening",
+  },
+  {
+    field: "internationalOpening",
+    label: "Int Open",
+    kind: "money",
+    ariaName: "international opening",
+  },
+  {
+    field: "finalDomestic",
+    label: "Dom Final",
+    kind: "money",
+    ariaName: "final domestic",
+  },
+  {
+    field: "finalInternational",
+    label: "Int Final",
+    kind: "money",
+    ariaName: "final international",
+  },
+  {
+    field: "rottenTomatoesScore",
+    label: "RT",
+    kind: "rt",
+    ariaName: "Rotten Tomatoes score",
+  },
+];
 
 /**
  * Grace period when the pointer crosses `space-y-*` gaps between rows so the
@@ -210,112 +269,262 @@ function CompRow({
   movie,
   starred,
   starDisabled,
+  pinned,
+  highlightMode,
   onHide,
   onToggleStar,
   onHighlight,
+  onTogglePin,
+  onPlaceCompMetric,
+  metricAvailability,
 }: {
   movie: CompMovie;
   starred: boolean;
   /** True when at max stars and this row isn’t already starred. */
   starDisabled: boolean;
+  pinned: boolean;
+  highlightMode: "hover" | "pin";
   onHide: (compMovieId: string) => void;
   onToggleStar: (compMovieId: string) => void;
   onHighlight?: (compMovieId: string | null) => void;
+  onTogglePin?: (compMovieId: string) => void;
+  onPlaceCompMetric?: PlaceCompMetric;
+  metricAvailability?: CompMetricAvailability;
 }) {
   const metrics = getCompMetrics(movie);
-
-  const cells: Array<{ label: string; value: string }> = [
-    { label: "Dom Open", value: formatMetric(metrics.domesticOpening, "money") },
-    { label: "Int Open", value: formatMetric(metrics.internationalOpening, "money") },
-    { label: "Dom Final", value: formatMetric(metrics.finalDomestic, "money") },
-    { label: "Int Final", value: formatMetric(metrics.finalInternational, "money") },
-    { label: "RT", value: formatMetric(metrics.rottenTomatoesScore, "rt") },
-  ];
+  const pinMode = highlightMode === "pin";
+  const canPlace = Boolean(pinned && onPlaceCompMetric);
 
   const clearHighlight = (related: EventTarget | null, current: HTMLElement) => {
+    if (pinMode) return;
     if (related instanceof Node && current.contains(related)) return;
     onHighlight?.(null);
   };
 
+  const pinChromeTransition =
+    "transition-[background-color,border-color,padding] duration-[120ms] ease-out";
+
+  // Star owns gold chrome. Pin is a cool left rail (+ cool border when not starred).
+  const shellClass = starred
+    ? "bg-theater-gold/10 border-theater-gold/40 hover:border-theater-gold/70 hover:bg-theater-gold/15"
+    : pinned
+      ? "bg-stone-100/5 border-stone-500/45"
+      : "bg-cinema-900/50 border-cinema-800 hover:border-cinema-600";
+
+  const pinRail = (
+    <span
+      className={`pointer-events-none absolute top-2 bottom-2 left-0 w-0.5 rounded-full bg-stone-100 transition-opacity duration-[120ms] ease-out ${
+        pinned ? "opacity-100" : "opacity-0"
+      }`}
+      aria-hidden
+    />
+  );
+
+  const titleBlock = (
+    <div className="min-w-0 text-left">
+      <p className="text-sm font-medium text-stone-200 text-left">
+        {movie.title}
+        {movie.year ? (
+          <span className="text-stone-500 font-normal"> ({movie.year})</span>
+        ) : null}
+      </p>
+      {movie.reason && (
+        <p className="text-xs text-stone-500 mt-0.5 text-left">{movie.reason}</p>
+      )}
+    </div>
+  );
+
+  const hasPlaceableMetric =
+    canPlace &&
+    METRIC_CELLS.some((cell) => {
+      const raw = metrics[cell.field];
+      const fieldOpen = metricAvailability?.[cell.field] !== false;
+      return raw != null && Number.isFinite(raw) && fieldOpen;
+    });
+
+  /** Same box geometry pinned/unpinned — only border/fill change when placeable. */
+  const metricCellLayout =
+    "min-w-0 rounded-md px-1 py-1 text-left border transition-[background-color,border-color,transform] duration-[120ms] ease-out";
+
+  const metricsGrid = (
+    <div className="mt-3">
+      <div className="grid grid-cols-5 gap-1.5">
+        {METRIC_CELLS.map((cell) => {
+          const raw = metrics[cell.field];
+          const display = formatMetric(raw, cell.kind);
+          const fieldOpen = metricAvailability?.[cell.field] !== false;
+          const placeable =
+            canPlace && raw != null && Number.isFinite(raw) && fieldOpen;
+
+          const label = (
+            <p className="text-[9px] uppercase tracking-wide text-stone-400 truncate">
+              {cell.label}
+            </p>
+          );
+          const value = (
+            <p className="mt-0.5 text-xs font-semibold text-theater-gold tabular-nums truncate">
+              {display}
+            </p>
+          );
+
+          // Keep a <button> in pin mode so chrome can transition without remounting.
+          if (pinMode && onPlaceCompMetric) {
+            return (
+              <button
+                key={cell.field}
+                type="button"
+                disabled={!placeable}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!placeable) return;
+                  onPlaceCompMetric(cell.field, raw!);
+                }}
+                aria-label={
+                  placeable
+                    ? `Set ${cell.ariaName} guess to ${display}`
+                    : undefined
+                }
+                className={`${metricCellLayout} ${
+                  placeable
+                    ? "border-stone-500/40 bg-cinema-800/80 hover:border-stone-400/55 hover:bg-cinema-800 active:scale-[0.97] active:bg-stone-100/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/70"
+                    : "border-transparent bg-transparent pointer-events-none"
+                }`}
+              >
+                {label}
+                {value}
+              </button>
+            );
+          }
+
+          return (
+            <div
+              key={cell.field}
+              className={`${metricCellLayout} border-transparent bg-transparent`}
+            >
+              {label}
+              {value}
+            </div>
+          );
+        })}
+      </div>
+      <div
+        className={`grid transition-[grid-template-rows,opacity,margin] duration-[120ms] ease-out ${
+          hasPlaceableMetric
+            ? "mt-2 grid-rows-[1fr] opacity-100"
+            : "mt-0 grid-rows-[0fr] opacity-0"
+        }`}
+        aria-hidden={!hasPlaceableMetric}
+      >
+        <div className="overflow-hidden min-h-0">
+          <p className="text-[11px] text-stone-400 text-left leading-snug">
+            Tap a number to set as guess
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const actionButtons = (
+    <div className="relative z-10 flex shrink-0 items-center gap-0.5">
+      <button
+        type="button"
+        onClick={() => onToggleStar(movie.id)}
+        disabled={starDisabled}
+        aria-pressed={starred}
+        aria-label={
+          starred
+            ? `Unstar ${movie.title} as a priority comparison`
+            : starDisabled
+              ? `Star limit reached (${STARRED_COMPS_MAX}). Unstar another first.`
+              : `Star ${movie.title} as a priority comparison`
+        }
+        title={
+          starDisabled
+            ? `Up to ${STARRED_COMPS_MAX} starred comps`
+            : starred
+              ? "Un-star this comp"
+              : "Star this comp"
+        }
+        className={`rounded-md p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theater-gold/60 disabled:opacity-40 disabled:cursor-not-allowed ${
+          starred
+            ? "text-theater-gold hover:text-theater-gold/80 hover:bg-theater-gold/10"
+            : "text-stone-500 hover:text-theater-gold hover:bg-cinema-800/80"
+        }`}
+      >
+        <Star
+          size={14}
+          aria-hidden
+          className={starred ? "fill-theater-gold" : undefined}
+        />
+      </button>
+      <button
+        type="button"
+        onClick={() => onHide(movie.id)}
+        className="rounded-md p-1.5 text-stone-500 hover:text-stone-200 hover:bg-cinema-800/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theater-gold/60"
+        aria-label={`Hide ${movie.title} as a comparison`}
+      >
+        <EyeOff size={14} aria-hidden />
+      </button>
+    </div>
+  );
+
+  if (pinMode) {
+    // Same padding/metrics placement pinned or not. Unpinned: invisible overlay
+    // pins the whole card. Pinned: title clears pin; metric chips place values.
+    return (
+      <div
+        data-comp-row
+        data-pinned-comp={pinned ? movie.id : undefined}
+        className={`relative w-full rounded-lg border p-3 ${pinChromeTransition} ${
+          pinned ? "pl-3.5" : "pl-3"
+        } ${shellClass}`}
+      >
+        {pinRail}
+        {!pinned ? (
+          <button
+            type="button"
+            onClick={() => onTogglePin?.(movie.id)}
+            aria-pressed={false}
+            aria-label={`Highlight ${movie.title} on prediction sliders`}
+            className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-stone-200/70"
+          />
+        ) : null}
+        <div className={`relative ${pinned ? "" : "pointer-events-none"}`}>
+          {pinned ? (
+            <button
+              type="button"
+              onClick={() => onTogglePin?.(movie.id)}
+              aria-pressed
+              aria-label={`Clear highlight for ${movie.title} on prediction sliders`}
+              className="w-full pr-16 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-200/70"
+            >
+              {titleBlock}
+            </button>
+          ) : (
+            <div className="pr-16 text-left">{titleBlock}</div>
+          )}
+          <div className={pinned ? "relative z-10" : undefined}>
+            {metricsGrid}
+          </div>
+        </div>
+        <div className="absolute top-2 right-2 z-20">{actionButtons}</div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`w-full p-3 rounded-lg text-left border transition-colors ${
-        starred
-          ? "bg-theater-gold/10 border-theater-gold/40 hover:border-theater-gold/70 hover:bg-theater-gold/15"
-          : "bg-cinema-900/50 border-cinema-800 hover:border-cinema-600"
-      }`}
+      className={`relative w-full p-3 rounded-lg text-left border transition-colors ${shellClass}`}
       onPointerEnter={() => onHighlight?.(movie.id)}
       onPointerLeave={(e) => clearHighlight(e.relatedTarget, e.currentTarget)}
       onFocusCapture={() => onHighlight?.(movie.id)}
       onBlurCapture={(e) => clearHighlight(e.relatedTarget, e.currentTarget)}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-stone-200">
-            {movie.title}
-            {movie.year ? (
-              <span className="text-stone-500 font-normal"> ({movie.year})</span>
-            ) : null}
-          </p>
-          {movie.reason && (
-            <p className="text-xs text-stone-500 mt-0.5">{movie.reason}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button
-            type="button"
-            onClick={() => onToggleStar(movie.id)}
-            disabled={starDisabled}
-            aria-pressed={starred}
-            aria-label={
-              starred
-                ? `Unstar ${movie.title} as a priority comparison`
-                : starDisabled
-                  ? `Star limit reached (${STARRED_COMPS_MAX}). Unstar another first.`
-                  : `Star ${movie.title} as a priority comparison`
-            }
-            title={
-              starDisabled
-                ? `Up to ${STARRED_COMPS_MAX} starred comps`
-                : starred
-                  ? "Un-star this comp"
-                  : "Star this comp"
-            }
-            className={`rounded-md p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theater-gold/60 disabled:opacity-40 disabled:cursor-not-allowed ${
-              starred
-                ? "text-theater-gold hover:text-theater-gold/80 hover:bg-theater-gold/10"
-                : "text-stone-500 hover:text-theater-gold hover:bg-cinema-800/80"
-            }`}
-          >
-            <Star
-              size={14}
-              aria-hidden
-              className={starred ? "fill-theater-gold" : undefined}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={() => onHide(movie.id)}
-            className="rounded-md p-1.5 text-stone-500 hover:text-stone-200 hover:bg-cinema-800/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theater-gold/60"
-            aria-label={`Hide ${movie.title} as a comparison`}
-          >
-            <EyeOff size={14} aria-hidden />
-          </button>
-        </div>
+        <div className="min-w-0">{titleBlock}</div>
+        {actionButtons}
       </div>
-
-      <div className="mt-3 grid grid-cols-5 gap-1.5">
-        {cells.map((cell) => (
-          <div key={cell.label} className="min-w-0">
-            <p className="text-[9px] uppercase tracking-wide text-stone-500 truncate">
-              {cell.label}
-            </p>
-            <p className="text-xs font-semibold text-theater-gold/85 tabular-nums truncate">
-              {cell.value}
-            </p>
-          </div>
-        ))}
-      </div>
+      {metricsGrid}
     </div>
   );
 }
@@ -325,6 +534,11 @@ export default function HistoricalComps({
   subjectMovieId,
   subsection = false,
   onHighlightComp,
+  highlightMode = "hover",
+  pinnedCompId = null,
+  hideHeading = false,
+  onPlaceCompMetric,
+  metricAvailability,
 }: HistoricalCompsProps) {
   const [listParent] = useAutoAnimate();
   const user = useUserStore((s) => s.user);
@@ -350,6 +564,7 @@ export default function HistoricalComps({
     filterReleasedGroups(groups).length > 0 || hiddenCount > 0;
   const starredSet = new Set(starredIds);
   const atStarMax = starredIds.length >= STARRED_COMPS_MAX;
+  const pinMode = highlightMode === "pin";
 
   const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -365,7 +580,7 @@ export default function HistoricalComps({
 
   /** Immediate highlight; delayed clear so row gaps don’t kill the brush slide. */
   const setHighlight = (compMovieId: string | null) => {
-    if (!onHighlightComp) return;
+    if (!onHighlightComp || pinMode) return;
     if (compMovieId != null) {
       if (highlightClearTimerRef.current != null) {
         clearTimeout(highlightClearTimerRef.current);
@@ -381,6 +596,11 @@ export default function HistoricalComps({
       highlightClearTimerRef.current = null;
       onHighlightComp(null);
     }, HIGHLIGHT_CLEAR_GRACE_MS);
+  };
+
+  const togglePin = (compMovieId: string) => {
+    if (!onHighlightComp) return;
+    onHighlightComp(pinnedCompId === compMovieId ? null : compMovieId);
   };
 
   const handleHide = (compMovieId: string) => {
@@ -426,27 +646,37 @@ export default function HistoricalComps({
   };
 
   return (
-    <div onPointerLeave={() => setHighlight(null)}>
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h3
-          className={
-            subsection
-              ? "text-lg font-semibold text-stone-100 uppercase tracking-wider"
-              : "text-sm font-semibold text-stone-200 uppercase tracking-wider"
-          }
+    <div onPointerLeave={pinMode ? undefined : () => setHighlight(null)}>
+      {(!hideHeading || hiddenCount > 0) && (
+        <div
+          className={`flex items-center gap-3 mb-4 ${
+            hideHeading ? "justify-end" : "justify-between"
+          }`}
         >
-          Historical Comps
-        </h3>
-        {hiddenCount > 0 && (
-          <button
-            type="button"
-            onClick={handleShowHidden}
-            className="shrink-0 text-xs font-medium text-theater-gold/90 hover:text-theater-gold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theater-gold/60 rounded"
-          >
-            Show {hiddenCount} hidden
-          </button>
-        )}
-      </div>
+          {!hideHeading ? (
+            <h3
+              className={
+                subsection
+                  ? "text-lg font-semibold text-stone-100 uppercase tracking-wider"
+                  : "text-sm font-semibold text-stone-200 uppercase tracking-wider"
+              }
+            >
+              Historical Comps
+            </h3>
+          ) : (
+            <span className="sr-only">Historical comps</span>
+          )}
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={handleShowHidden}
+              className="shrink-0 text-xs font-medium text-theater-gold/90 hover:text-theater-gold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theater-gold/60 rounded"
+            >
+              Show {hiddenCount} hidden
+            </button>
+          )}
+        </div>
+      )}
 
       {!hadReleasedComps ? (
         <p className="text-sm text-stone-500">
@@ -487,9 +717,14 @@ export default function HistoricalComps({
                         movie={movie}
                         starred={starred}
                         starDisabled={atStarMax && !starred}
+                        pinned={pinnedCompId === movie.id}
+                        highlightMode={highlightMode}
                         onHide={handleHide}
                         onToggleStar={handleToggleStar}
                         onHighlight={setHighlight}
+                        onTogglePin={togglePin}
+                        onPlaceCompMetric={onPlaceCompMetric}
+                        metricAvailability={metricAvailability}
                       />
                     );
                   })}

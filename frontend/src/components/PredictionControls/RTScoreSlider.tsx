@@ -1,8 +1,12 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { Lock } from "lucide-react";
 import CompMarkers, { type CompMarker } from "./CompMarkers";
 import { FreshTomatoIcon, RottenSplatIcon } from "./RtScoreIcons";
+import { PLACE_ANIM_MS } from "../../utils/logScale";
+import { prefersReducedMotion } from "../../utils/viewTransitions";
+import type { CompMetricField } from "../HistoricalComps/HistoricalComps";
+import type { PlaceFieldRegistry } from "./LogMoneySlider";
 
 const MIN = 0;
 const MAX = 100;
@@ -19,7 +23,10 @@ interface RTScoreSliderProps {
   variant?: "default" | "ticket";
   compMarkers?: CompMarker[];
   highlightedCompMovieId?: string | null;
+  onDismissCompHighlight?: () => void;
   id?: string;
+  placeField?: CompMetricField;
+  placeRegistry?: PlaceFieldRegistry;
 }
 
 export default function RTScoreSlider({
@@ -29,20 +36,40 @@ export default function RTScoreSlider({
   variant = "default",
   compMarkers = [],
   highlightedCompMovieId = null,
+  onDismissCompHighlight,
   id,
+  placeField,
+  placeRegistry,
 }: RTScoreSliderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [inputText, setInputText] = useState("");
   const [inputWidth, setInputWidth] = useState<number | undefined>();
+  /** Drives thumb + input while easing a comps place. */
+  const [placeVisual, setPlaceVisual] = useState<number | null>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const displayValue = value ?? MIN;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const placeAnimRef = useRef<number | null>(null);
+  const displayValue = Math.round(placeVisual ?? value ?? MIN);
   const isTicket = variant === "ticket";
   const category =
-    value == null ? null : value >= FRESH_THRESHOLD ? "fresh" : "rotten";
+    placeVisual != null || value != null
+      ? displayValue >= FRESH_THRESHOLD
+        ? "fresh"
+        : "rotten"
+      : null;
   const thumbIsFresh = displayValue >= FRESH_THRESHOLD;
 
-  const numberStr = inputText || (value != null ? String(value) : "");
+  const numberStr =
+    inputText ||
+    (placeVisual != null
+      ? String(Math.round(placeVisual))
+      : value != null
+        ? String(value)
+        : "");
   // Reserve 3-digit width so 9 → 10 → 100 doesn't shift Fresh/Rotten.
   const sizerStr =
     (numberStr || String(MIN)).length >= 3 ? numberStr || String(MIN) : "100";
@@ -60,6 +87,59 @@ export default function RTScoreSlider({
     observer.observe(el);
     return () => observer.disconnect();
   }, [sizerStr]);
+
+  useEffect(() => {
+    return () => {
+      if (placeAnimRef.current != null) {
+        cancelAnimationFrame(placeAnimRef.current);
+      }
+    };
+  }, []);
+
+  const animatePlaceRef = useRef<(raw: number) => void>(() => {});
+  animatePlaceRef.current = (raw: number) => {
+    if (disabled) return;
+    const next = Math.round(Math.max(MIN, Math.min(MAX, raw)));
+    const from = valueRef.current ?? MIN;
+
+    if (placeAnimRef.current != null) {
+      cancelAnimationFrame(placeAnimRef.current);
+      placeAnimRef.current = null;
+    }
+
+    if (prefersReducedMotion() || Math.abs(next - from) < 0.5) {
+      setPlaceVisual(null);
+      onChangeRef.current(next);
+      return;
+    }
+
+    const t0 = performance.now();
+    setPlaceVisual(from);
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / PLACE_ANIM_MS);
+      const eased = 1 - (1 - t) ** 2;
+      const v = from + (next - from) * eased;
+      setPlaceVisual(v);
+      onChangeRef.current(Math.round(v));
+      if (t < 1) {
+        placeAnimRef.current = requestAnimationFrame(tick);
+      } else {
+        placeAnimRef.current = null;
+        setPlaceVisual(null);
+        onChangeRef.current(next);
+      }
+    };
+    placeAnimRef.current = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => {
+    if (!placeField || !placeRegistry) return;
+    const registry = placeRegistry.current;
+    registry[placeField] = (v) => animatePlaceRef.current(v);
+    return () => {
+      delete registry[placeField];
+    };
+  }, [placeField, placeRegistry]);
 
   const applyManualValue = (parsed: number) => {
     const next = Math.round(Math.max(MIN, Math.min(MAX, parsed)));
@@ -196,7 +276,10 @@ export default function RTScoreSlider({
         <Slider.Root
           className="relative flex items-center select-none touch-none w-full h-5"
           value={[displayValue]}
-          onValueChange={([v]) => onChange(v)}
+          onValueChange={([v]) => {
+            if (placeVisual != null) return;
+            onChange(v);
+          }}
           onValueCommit={() => {
             setIsDragging(false);
             navigator.vibrate?.(5);
@@ -205,7 +288,7 @@ export default function RTScoreSlider({
           min={MIN}
           max={MAX}
           step={1}
-          disabled={disabled}
+          disabled={disabled || placeVisual != null}
           aria-valuetext={ariaValueText}
         >
           <Slider.Track
@@ -238,6 +321,7 @@ export default function RTScoreSlider({
           disabled={disabled}
           variant={variant}
           highlightedCompMovieId={highlightedCompMovieId}
+          onDismissHighlight={onDismissCompHighlight}
         />
       </div>
     </div>
