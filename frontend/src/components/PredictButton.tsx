@@ -1,7 +1,13 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
-import { CAP_HEIGHT, layoutMarquee, type MarqueeBox, type MarqueeLayout } from '../utils/marqueeLetters';
+import { isWebKitEngine } from '../utils/engine';
+import {
+  CAP_HEIGHT,
+  layoutMarquee,
+  type MarqueeBox,
+  type MarqueeLayout,
+} from '../utils/marqueeLetters';
 import { enterTheater, prefersReducedMotion } from '../utils/viewTransitions';
 
 interface PredictBoxOfficeButtonProps {
@@ -19,10 +25,21 @@ const BULB_RADIUS = 4.3;
 // Must match the two-phase chase keyframes in index.css.
 const CHASE_STEPS = 2;
 
-// 15.4 is the widest spacing that still puts five bulbs (four gaps) on a full-height stem.
-const LAYOUT_OPTIONS = { strokeWidth: STROKE, letterGap: 10, wordGap: 30, bulbSpacing: 15.4, lineGap: 16 };
-const SINGLE_LINE = layoutMarquee(['PREDICT BOX OFFICE'], LAYOUT_OPTIONS);
-const STACKED = layoutMarquee(['PREDICT', 'BOX OFFICE'], LAYOUT_OPTIONS);
+// WebKit shaves SVG letter clipPaths — use flush X/R tips, no clips. Blink/Gecko get clipped long extends.
+const USE_LETTER_CLIPS = !isWebKitEngine();
+const LAYOUT_BASE = {
+  strokeWidth: STROKE,
+  letterGap: 10,
+  wordGap: 30,
+  // 15.4 is the widest spacing that still puts five bulbs (four gaps) on a full-height stem.
+  bulbSpacing: 15.4,
+  lineGap: 16,
+  // Matches OUTLINE: extends C's outline path past butt ends so the rim wraps the flat mouth.
+  openEndOutlineExtend: OUTLINE,
+  diagonalTips: USE_LETTER_CLIPS ? ('clipped' as const) : ('flush' as const),
+};
+const SINGLE_LINE = layoutMarquee(['PREDICT BOX OFFICE'], LAYOUT_BASE);
+const STACKED = layoutMarquee(['PREDICT', 'BOX OFFICE'], LAYOUT_BASE);
 
 const grow = (box: MarqueeBox, by: number) => ({
   x: box.x - by,
@@ -115,6 +132,7 @@ function MarqueeSign({ layout, idPrefix, className }: { layout: MarqueeLayout; i
   return (
     <svg
       aria-hidden="true"
+      overflow="visible"
       className={`relative overflow-visible ${className}`}
       viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
       xmlns="http://www.w3.org/2000/svg"
@@ -146,16 +164,17 @@ function MarqueeSign({ layout, idPrefix, className }: { layout: MarqueeLayout; i
           <stop offset="100%" stopColor="#93381a" stopOpacity="0" />
         </radialGradient>
 
-        <filter id={ids.letterGlow} x="-10%" y="-100%" width="120%" height="300%">
+        {/* Wide regions: C's open arc has a tight bbox; Safari clips percent filter regions into rectangles. */}
+        <filter id={ids.letterGlow} x="-50%" y="-100%" width="200%" height="300%">
           <feGaussianBlur stdDeviation="8" />
         </filter>
 
-        <filter id={ids.innerShadow} x="-5%" y="-50%" width="110%" height="200%">
+        <filter id={ids.innerShadow} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="2.2" />
         </filter>
 
         {/* Outputs only the halo; the bulb cores are drawn on top unfiltered. */}
-        <filter id={ids.halo} x="-10%" y="-60%" width="120%" height="220%">
+        <filter id={ids.halo} x="-50%" y="-60%" width="200%" height="220%">
           <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="innerBlur" />
           <feFlood floodColor="#ffd9a8" floodOpacity="0.8" />
           <feComposite operator="in" in2="innerBlur" result="innerGlow" />
@@ -168,69 +187,106 @@ function MarqueeSign({ layout, idPrefix, className }: { layout: MarqueeLayout; i
           </feMerge>
         </filter>
 
-        {/* Square caps on diagonals (R, X) would poke past the letter, so each layer is clipped to letter boxes. */}
-        {layout.lines.map((line, i) => (
-          <React.Fragment key={i}>
-            <clipPath id={`${idPrefix}-letter-clip-${i}`}>
-              {line.boxes.map((box, j) => (
-                <rect key={j} {...box} />
-              ))}
-            </clipPath>
-            <clipPath id={`${idPrefix}-outline-clip-${i}`}>
-              {line.boxes.map((box, j) => (
-                <rect key={j} {...grow(box, OUTLINE)} />
-              ))}
-            </clipPath>
-            <clipPath id={`${idPrefix}-inner-clip-${i}`}>
-              {line.boxes.map((box, j) => (
-                <rect key={j} {...grow(box, -INNER_SHADOW)} />
-              ))}
-            </clipPath>
-          </React.Fragment>
-        ))}
+        {/* Blink/Gecko only: trim square-cap flare on X/R. WebKit shaves these clips — skipped there. */}
+        {USE_LETTER_CLIPS &&
+          layout.lines.map((line, i) => (
+            <React.Fragment key={i}>
+              <clipPath id={`${idPrefix}-letter-clip-${i}`}>
+                {line.boxes.map((box, j) => (
+                  <rect key={j} {...box} />
+                ))}
+              </clipPath>
+              <clipPath id={`${idPrefix}-outline-clip-${i}`}>
+                {line.boxes.map((box, j) => (
+                  <rect key={j} {...grow(box, OUTLINE)} />
+                ))}
+              </clipPath>
+              <clipPath id={`${idPrefix}-inner-clip-${i}`}>
+                {line.boxes.map((box, j) => (
+                  <rect key={j} {...grow(box, -INNER_SHADOW)} />
+                ))}
+              </clipPath>
+            </React.Fragment>
+          ))}
       </defs>
 
       {layout.lines.map((line, i) => {
-        const strokeProps = {
-          d: line.path,
-          fill: 'none',
-          strokeLinejoin: 'miter' as const,
-          strokeLinecap: 'square' as const,
-        };
-        const letterClip = `url(#${idPrefix}-letter-clip-${i})`;
-        const outlineClip = `url(#${idPrefix}-outline-clip-${i})`;
-        const innerClip = `url(#${idPrefix}-inner-clip-${i})`;
+        // C uses butt body + slightly longer outline. X/R: clipped long extends on Blink, flush on WebKit.
+        const strokeLayers: {
+          body: string;
+          outline: string;
+          linecap: 'square' | 'butt';
+        }[] = [
+          ...(line.path ? [{ body: line.path, outline: line.path, linecap: 'square' as const }] : []),
+          ...(line.buttPath
+            ? [
+                {
+                  body: line.buttPath,
+                  outline: line.buttOutlinePath || line.buttPath,
+                  linecap: 'butt' as const,
+                },
+              ]
+            : []),
+        ];
+        const letterClip = USE_LETTER_CLIPS ? `url(#${idPrefix}-letter-clip-${i})` : undefined;
+        const outlineClip = USE_LETTER_CLIPS ? `url(#${idPrefix}-outline-clip-${i})` : undefined;
+        const innerClip = USE_LETTER_CLIPS ? `url(#${idPrefix}-inner-clip-${i})` : undefined;
 
         return (
           <g key={i} transform={`translate(${line.x} ${line.y})`}>
-            <path
-              {...strokeProps}
-              className="marquee-letter-glow"
-              stroke="#ff6a2a"
-              strokeOpacity="0.44"
-              strokeWidth={STROKE + 8}
-              filter={`url(#${ids.letterGlow})`}
-            />
-            <g transform={`translate(0 ${SHADOW})`}>
-              <path
-                {...strokeProps}
-                clipPath={outlineClip}
-                stroke="#1a0802"
-                strokeOpacity="0.7"
-                strokeWidth={STROKE + 2 * OUTLINE}
-              />
-            </g>
-            <path {...strokeProps} clipPath={outlineClip} stroke="#ffb07a" strokeWidth={STROKE + 2 * OUTLINE} />
-            {/* Inner shadow: a dark letter, with the orange fill drawn narrower and blurred so its edge fades into it. */}
-            <path {...strokeProps} clipPath={letterClip} stroke="#6e1a08" strokeWidth={STROKE} />
-            <g clipPath={innerClip}>
-              <path
-                {...strokeProps}
-                stroke={`url(#${ids.fill})`}
-                strokeWidth={STROKE - 2 * INNER_SHADOW}
-                filter={`url(#${ids.innerShadow})`}
-              />
-            </g>
+            {strokeLayers.map((layer) => {
+              const base = {
+                fill: 'none' as const,
+                strokeLinejoin: 'miter' as const,
+                strokeLinecap: layer.linecap,
+              };
+              return (
+                <g key={layer.linecap}>
+                  <path
+                    {...base}
+                    d={layer.outline}
+                    className="marquee-letter-glow"
+                    stroke="#ff6a2a"
+                    strokeOpacity="0.44"
+                    strokeWidth={STROKE + 8}
+                    filter={`url(#${ids.letterGlow})`}
+                  />
+                  <g transform={`translate(0 ${SHADOW})`}>
+                    <path
+                      {...base}
+                      d={layer.outline}
+                      clipPath={outlineClip}
+                      stroke="#1a0802"
+                      strokeOpacity="0.7"
+                      strokeWidth={STROKE + 2 * OUTLINE}
+                    />
+                  </g>
+                  <path
+                    {...base}
+                    d={layer.outline}
+                    clipPath={outlineClip}
+                    stroke="#ffb07a"
+                    strokeWidth={STROKE + 2 * OUTLINE}
+                  />
+                  <path
+                    {...base}
+                    d={layer.body}
+                    clipPath={letterClip}
+                    stroke="#6e1a08"
+                    strokeWidth={STROKE}
+                  />
+                  <g clipPath={innerClip}>
+                    <path
+                      {...base}
+                      d={layer.body}
+                      stroke={`url(#${ids.fill})`}
+                      strokeWidth={STROKE - 2 * INNER_SHADOW}
+                      filter={`url(#${ids.innerShadow})`}
+                    />
+                  </g>
+                </g>
+              );
+            })}
 
             <g fill={`url(#${ids.unlitBulb})`}>
               {line.bulbs.map((b, j) => (
@@ -287,8 +343,11 @@ export default function PredictBoxOfficeButton({
 
   const label = movieTitle ? `Predict box office for ${movieTitle}` : 'Predict box office';
   const wrapperClass = 'marquee-button group relative flex w-full rounded select-none';
+  // Keep overflow visible on the panel so Safari doesn't clip SVG stroke tips; radius-clip only the fills.
   const panelClass =
-    'relative flex flex-1 min-w-0 flex-col items-center justify-center px-4 sm:px-5 py-3 bg-linear-to-b from-[#26180c] via-[#150d06] to-[#0a0603] rounded border-2 overflow-hidden transition-[box-shadow,border-color] duration-300';
+    'relative flex flex-1 min-w-0 flex-col items-center justify-center px-4 sm:px-5 py-3 rounded border-2 transition-[box-shadow,border-color] duration-300';
+  const panelFillClass =
+    'pointer-events-none absolute inset-0 overflow-hidden rounded-[0.25rem]';
 
   const content = (enabled: boolean) => (
     <>
@@ -299,9 +358,13 @@ export default function PredictBoxOfficeButton({
             : 'border-[#ff9d5c]/15'
         }`}
       >
-        <span className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-orange-500/15 via-orange-900/5 to-transparent opacity-60 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-500" />
-        <MarqueeSign layout={STACKED} idPrefix={`${id}-stacked`} className="block h-auto w-full max-w-sm sm:hidden" />
-        <MarqueeSign layout={SINGLE_LINE} idPrefix={`${id}-single`} className="hidden h-12 w-full sm:block" />
+        <span aria-hidden="true" className={`${panelFillClass} bg-linear-to-b from-[#26180c] via-[#150d06] to-[#0a0603]`} />
+        <span
+          aria-hidden="true"
+          className={`${panelFillClass} bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-orange-500/15 via-orange-900/5 to-transparent opacity-60 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-500`}
+        />
+        <MarqueeSign layout={STACKED} idPrefix={`${id}-stacked`} className="relative block h-auto w-full max-w-sm sm:hidden" />
+        <MarqueeSign layout={SINGLE_LINE} idPrefix={`${id}-single`} className="relative hidden h-12 w-full sm:block" />
       </span>
     </>
   );

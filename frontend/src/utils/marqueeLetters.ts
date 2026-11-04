@@ -15,10 +15,12 @@ interface Stroke {
   closed?: boolean;
   /**
    * Lengthens (positive) or shortens (negative) the drawn line at its [start, end] without moving its bulbs.
-   * Diagonals use this so their square caps either reach past the letter's clip box (then get cut flat)
-   * or stay hidden inside the stroke they branch from.
+   * Default values are flush (WebKit-safe without clipPath). `diagonalTips: 'clipped'` swaps in longer
+   * extends for X/R meant to pair with letter box clipPaths on Blink/Gecko.
    */
   extend?: [number, number];
+  /** Open arcs (C) use butt; outline path overshoots slightly to wrap the flat mouth. */
+  linecap?: 'butt';
 }
 
 interface Glyph {
@@ -44,7 +46,7 @@ const midBar: Stroke = { start: [0, 27], ops: [L(24, 27)] };
 // Proportions follow a geometric sans: round letters are true circles, bowls are full half-circles.
 const GLYPHS: Record<string, Glyph> = {
   P: { width: 34, strokes: [pStroke] },
-  R: { width: 34, strokes: [pStroke, { start: [16.48, 27], ops: [L(29, 54)], extend: [-6, 12] }] },
+  R: { width: 34, strokes: [pStroke, { start: [16.48, 27], ops: [L(29, 54)], extend: [-6, 1.2] }] },
   E: { width: 30, strokes: [{ start: [30, 0], ops: [L(0, 0), L(0, 54), L(30, 54)] }, midBar] },
   F: { width: 30, strokes: [{ start: [30, 0], ops: [L(0, 0), L(0, 54)] }, midBar] },
   D: {
@@ -52,9 +54,11 @@ const GLYPHS: Record<string, Glyph> = {
     strokes: [{ start: [0, 0], ops: [L(14, 0), A(14, 27, 27, -90, 90), L(0, 54)], closed: true }],
   },
   I: { width: 0, strokes: [{ start: [0, 0], ops: [L(0, 54)] }] },
+  // Open arc with butt caps; outline path is extended past the ends in layout (not square/radial plates).
+  // Width is tighter than O (54): butt mouths don't overhang like square caps, so advance matches the silhouette.
   C: {
-    width: 46,
-    strokes: [{ start: [44.36, 6.32], ops: [A(27, 27, 27, -50, -310)] }],
+    width: 38,
+    strokes: [{ start: [44.36, 6.32], ops: [A(27, 27, 27, -50, -310)], linecap: 'butt' }],
   },
   T: {
     width: 56,
@@ -77,8 +81,8 @@ const GLYPHS: Record<string, Glyph> = {
   X: {
     width: 44,
     strokes: [
-      { start: [8, 0], ops: [L(36, 54)], extend: [12, 12] },
-      { start: [36, 0], ops: [L(8, 54)], extend: [12, 12] },
+      { start: [8, 0], ops: [L(36, 54)], extend: [1.4, 1.4] },
+      { start: [36, 0], ops: [L(8, 54)], extend: [1.4, 1.4] },
     ],
   },
 };
@@ -91,7 +95,15 @@ export interface MarqueeBox {
 }
 
 interface LineLayout {
+  /** Strokes drawn with square caps (default). */
   path: string;
+  /** Open-arc strokes (C) drawn with butt caps so mouths stay clean. */
+  buttPath: string;
+  /**
+   * Butt strokes with ends extended by `openEndOutlineExtend` so the wider outline/shadow
+   * wraps the flat mouth without radial end plates (which recreate square-cap stubs).
+   */
+  buttOutlinePath: string;
   bulbs: Bulb[];
   boxes: MarqueeBox[];
   width: number;
@@ -110,11 +122,24 @@ export interface MarqueeLayout {
   height: number;
 }
 
+/** Flush = no clipPath (WebKit). Clipped = long X/R extends + letter clipPaths (Blink/Gecko). */
+export type DiagonalTips = 'flush' | 'clipped';
+
+/** Pre-clipPath diagonal overshoots — square caps reach the letter edge, then clips trim the flare. */
+const CLIPPED_DIAGONAL_EXTEND: Record<string, [number, number]> = {
+  X: [12, 12],
+  R: [-6, 12],
+};
+
 interface LineOptions {
   strokeWidth: number;
   letterGap: number;
   wordGap: number;
   bulbSpacing: number;
+  /** Centerline overshoot at open butt ends for outline/shadow paths only. */
+  openEndOutlineExtend?: number;
+  /** X/R tip treatment; default `flush`. */
+  diagonalTips?: DiagonalTips;
 }
 
 interface LayoutOptions extends LineOptions {
@@ -132,19 +157,66 @@ interface Segment {
 const round = (n: number) => Math.round(n * 100) / 100;
 const rad = (deg: number) => (deg * Math.PI) / 180;
 
-function extendedLine(stroke: Stroke, ox: number): string {
+function lineExtend(stroke: Stroke): { dx: number; dy: number; e0: number; e1: number } {
   const [op] = stroke.ops;
   if (stroke.ops.length !== 1 || op.kind !== 'line' || !stroke.extend) {
     throw new Error('Only single-line strokes can be extended');
   }
   const [sx, sy] = stroke.start;
   const length = Math.hypot(op.x - sx, op.y - sy);
-  const dx = (op.x - sx) / length;
-  const dy = (op.y - sy) / length;
-  const [extendStart, extendEnd] = stroke.extend;
+  const [e0, e1] = stroke.extend;
+  return { dx: (op.x - sx) / length, dy: (op.y - sy) / length, e0, e1 };
+}
+
+function extendedLine(stroke: Stroke, ox: number): string {
+  const [op] = stroke.ops;
+  if (op.kind !== 'line') throw new Error('Only single-line strokes can be extended');
+  const [sx, sy] = stroke.start;
+  const { dx, dy, e0, e1 } = lineExtend(stroke);
   return (
-    `M${round(ox + sx - dx * extendStart)} ${round(sy - dy * extendStart)}` +
-    `L${round(ox + op.x + dx * extendEnd)} ${round(op.y + dy * extendEnd)}`
+    `M${round(ox + sx - dx * e0)} ${round(sy - dy * e0)}` +
+    `L${round(ox + op.x + dx * e1)} ${round(op.y + dy * e1)}`
+  );
+}
+
+/** Body path plus `extra` past each open end — keeps outline/shadow wrapping flat butt tips. */
+function buttOutlinePath(
+  stroke: Stroke,
+  ox: number,
+  strokePath: string[],
+  segments: Segment[],
+  extra: number
+): string {
+  if (extra <= 0 || segments.length === 0) {
+    return stroke.extend ? extendedLine(stroke, ox) : strokePath.join('');
+  }
+  if (stroke.extend) {
+    const [op] = stroke.ops;
+    if (op.kind !== 'line') throw new Error('Only single-line strokes can be extended');
+    const [sx, sy] = stroke.start;
+    const { dx, dy, e0, e1 } = lineExtend(stroke);
+    const x0 = ox + sx - dx * (e0 + extra);
+    const y0 = sy - dy * (e0 + extra);
+    const x1 = ox + op.x + dx * (e1 + extra);
+    const y1 = op.y + dy * (e1 + extra);
+    return `M${round(x0)} ${round(y0)}L${round(x1)} ${round(y1)}`;
+  }
+  const first = segments[0];
+  const last = segments[segments.length - 1];
+  const start = first.at(0);
+  const end = last.at(last.length);
+  const tip0 = {
+    x: start.x - first.startDir.x * extra,
+    y: start.y - first.startDir.y * extra,
+  };
+  const tip1 = {
+    x: end.x + last.endDir.x * extra,
+    y: end.y + last.endDir.y * extra,
+  };
+  return (
+    `M${round(tip0.x)} ${round(tip0.y)}L${round(start.x)} ${round(start.y)}` +
+    strokePath.slice(1).join('') +
+    `L${round(tip1.x)} ${round(tip1.y)}`
   );
 }
 
@@ -173,10 +245,28 @@ export function layoutMarquee(lines: string[], { lineGap, ...options }: LayoutOp
   };
 }
 
-function layoutLine(text: string, { strokeWidth, letterGap, wordGap, bulbSpacing }: LineOptions): LineLayout {
+function strokeWithTips(char: string, stroke: Stroke, tips: DiagonalTips): Stroke {
+  if (tips !== 'clipped' || !stroke.extend) return stroke;
+  const clipped = CLIPPED_DIAGONAL_EXTEND[char];
+  return clipped ? { ...stroke, extend: clipped } : stroke;
+}
+
+function layoutLine(
+  text: string,
+  {
+    strokeWidth,
+    letterGap,
+    wordGap,
+    bulbSpacing,
+    openEndOutlineExtend = 0,
+    diagonalTips = 'flush',
+  }: LineOptions
+): LineLayout {
   const half = strokeWidth / 2;
   const minBulbDistance = bulbSpacing * 0.55;
   const pathParts: string[] = [];
+  const buttPathParts: string[] = [];
+  const buttOutlineParts: string[] = [];
   const bulbs: Bulb[] = [];
   const boxes: MarqueeBox[] = [];
   let cursor = 0;
@@ -192,7 +282,8 @@ function layoutLine(text: string, { strokeWidth, letterGap, wordGap, bulbSpacing
     const ox = cursor + half;
     const letterBulbs: Bulb[] = [];
 
-    for (const stroke of glyph.strokes) {
+    for (const rawStroke of glyph.strokes) {
+      const stroke = strokeWithTips(char, rawStroke, diagonalTips);
       let [x, y] = stroke.start;
       const strokePath = [`M${round(ox + x)} ${round(y)}`];
       const strokeBulbs: Point[] = [];
@@ -244,15 +335,34 @@ function layoutLine(text: string, { strokeWidth, letterGap, wordGap, bulbSpacing
         else runs.push([segment]);
       }
 
+      // Butt arc ends leave endpoints uncovered; inset those bulbs so they stay inside the stroke.
+      const buttOpen = stroke.linecap === 'butt' && !stroke.closed;
+      const endInset = buttOpen ? half : 0;
       for (const run of runs) {
         const total = run.reduce((sum, s) => sum + s.length, 0);
-        const count = (run.length === 1 && run[0].bulbs) || Math.max(1, Math.round(total / bulbSpacing));
-        for (let i = 0; i < count; i++) strokeBulbs.push(pointAlong(run, (total * i) / count));
+        const usable = Math.max(0, total - 2 * endInset);
+        const count = (run.length === 1 && run[0].bulbs) || Math.max(1, Math.round(usable / bulbSpacing));
+        for (let i = 0; i < count; i++) strokeBulbs.push(pointAlong(run, endInset + (usable * i) / count));
       }
 
       if (stroke.closed) strokePath.push('Z');
-      else strokeBulbs.push({ x: ox + x, y });
-      pathParts.push(stroke.extend ? extendedLine(stroke, ox) : strokePath.join(''));
+      else if (buttOpen) {
+        const lastRun = runs[runs.length - 1];
+        const lastTotal = lastRun.reduce((sum, s) => sum + s.length, 0);
+        const end = pointAlong(lastRun, Math.max(0, lastTotal - endInset));
+        strokeBulbs.push({ x: round(end.x), y: round(end.y) });
+      } else {
+        strokeBulbs.push({ x: ox + x, y });
+      }
+      const d = stroke.extend ? extendedLine(stroke, ox) : strokePath.join('');
+      if (stroke.linecap === 'butt') {
+        buttPathParts.push(d);
+        buttOutlineParts.push(
+          buttOpen
+            ? buttOutlinePath(stroke, ox, strokePath, segments, openEndOutlineExtend)
+            : d
+        );
+      } else pathParts.push(d);
 
       strokeBulbs.forEach((bulb, index) => {
         const tooClose = letterBulbs.some((b) => Math.hypot(b.x - bulb.x, b.y - bulb.y) < minBulbDistance);
@@ -261,7 +371,6 @@ function layoutLine(text: string, { strokeWidth, letterGap, wordGap, bulbSpacing
     }
 
     bulbs.push(...letterBulbs);
-    // Boxes reach into the letter gap so slanted diagonal ends are cut by the top/bottom edges, not the sides.
     boxes.push({
       x: cursor - letterGap / 2,
       y: -half,
@@ -271,5 +380,12 @@ function layoutLine(text: string, { strokeWidth, letterGap, wordGap, bulbSpacing
     cursor += glyph.width + strokeWidth + letterGap;
   }
 
-  return { path: pathParts.join(''), bulbs, boxes, width: cursor - letterGap };
+  return {
+    path: pathParts.join(''),
+    buttPath: buttPathParts.join(''),
+    buttOutlinePath: buttOutlineParts.join(''),
+    bulbs,
+    boxes,
+    width: cursor - letterGap,
+  };
 }
