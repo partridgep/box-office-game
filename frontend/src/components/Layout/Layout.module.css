@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  min-height: 3.75rem;
+  min-height: var(--layout-top-rail);
   padding: 0.6rem 1rem;
   padding-top: max(0.6rem, env(safe-area-inset-top));
   background: color-mix(in srgb, var(--color-cinema-950) 92%, transparent);
@@ -22,7 +22,6 @@
 
 @media (min-width: 768px) {
   .topRail {
-    min-height: 4.25rem;
     padding-inline: 1.5rem;
   }
 }
@@ -222,8 +221,8 @@
   width: 100%;
   max-width: 96rem;
   margin-inline: auto;
-  /* Match .topRail min-height so heroes can sit flush under the rail. */
-  padding: 3.75rem 1rem 5.75rem;
+  /* Clear fixed top rail + mobile bottom bar (see --layout-* in index.css). */
+  padding: var(--layout-top-rail) 1rem var(--layout-bottom-bar);
 }
 
 @media (min-width: 640px) {
@@ -234,7 +233,6 @@
 
 @media (min-width: 768px) {
   .main {
-    padding-top: 4.25rem;
     padding-bottom: 2rem;
   }
 }

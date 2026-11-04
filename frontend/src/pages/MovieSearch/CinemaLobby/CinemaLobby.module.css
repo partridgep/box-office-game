@@ -30,8 +30,19 @@
   position: relative;
   flex: 0 0 100%;
   width: 100%;
-  /* Mobile: tall immersive cover. Desktop height is set below from poster. */
-  min-height: min(85dvh, 40rem);
+  /*
+   * Mobile: fill the first visible band between fixed top rail + bottom tab bar.
+   * Use svh (not dvh/vh) so dots stay above Safari’s expanded URL bar on load.
+   * Desktop height is set below from poster.
+   */
+  min-height: min(
+    calc(100vh - var(--layout-top-rail) - var(--layout-bottom-bar)),
+    40rem
+  );
+  min-height: min(
+    calc(100svh - var(--layout-top-rail) - var(--layout-bottom-bar)),
+    40rem
+  );
   scroll-snap-align: start;
   scroll-snap-stop: always;
   /* Clip scaled+blurred desktop wash so the next slide can't bleed in. */
@@ -235,7 +246,8 @@
 
   /*
    * Pack meta to the CTA. Scrim hugs copy; when there's no badge, `.badgeReserve`
-   * holds the old slot height as transparent gap (not empty scrim).
+   * holds the old slot height as transparent gap (not empty scrim). Long titles
+   * reclaim that gap via flex-shrink so the column doesn't overflow.
    */
   .heroMeta {
     flex: 1 1 auto;
@@ -243,6 +255,11 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+  }
+
+  /* Prefer shrinking the reserve, not the title scrim. */
+  .heroMeta > :first-child {
+    flex-shrink: 0;
   }
 
   .heroMetaSpacer {
@@ -253,9 +270,9 @@
 
   .badgeReserve {
     display: block;
-    flex-shrink: 0;
+    flex: 0 1 4.75rem;
     margin-top: 0.75rem;
-    min-height: 4.75rem;
+    min-height: 0;
   }
 
   .heroCtaSlot {

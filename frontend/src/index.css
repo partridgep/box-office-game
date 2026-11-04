@@ -608,6 +608,18 @@ html[data-theater-nav="enter"] ::view-transition-new(root) {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Fixed Layout chrome — keep in sync with Layout.module.css */
+  --layout-top-rail: 3.75rem;
+  --layout-bottom-bar: 5.75rem;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --layout-top-rail: 4.25rem;
+    /* Bottom tab bar is mobile-only. */
+    --layout-bottom-bar: 0rem;
+  }
 }
 
 /* Block horizontal overscroll from triggering browser back/forward (trackpad/touch). */

@@ -185,8 +185,11 @@ function HeroSlideMeta({
       <div className="max-w-3xl rounded-lg bg-linear-to-r from-cinema-950/45 via-cinema-950/35 to-transparent px-3 py-3 sm:px-4 sm:py-3.5 lg:from-cinema-950/60 lg:via-cinema-950/35">
         <div className="space-y-2">
           <h2
-            className="font-marquee text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl lg:text-6xl xl:text-7xl"
+            className={`font-marquee text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl lg:text-6xl xl:text-7xl ${
+              callLines.length > 0 ? "line-clamp-2" : "line-clamp-3"
+            }`}
             id={titleId}
+            title={movie.title}
           >
             {movie.title}
           </h2>
