@@ -956,7 +956,7 @@ export default function LogMoneySlider({
             type="button"
             disabled={disabled || atAbsoluteMax}
             onClick={expandScaleManually}
-            className={`inline-flex h-5 w-19 shrink-0 items-center tabular-nums text-xs font-medium transition-colors ${
+            className={`inline-flex h-5 shrink-0 items-center tabular-nums text-xs font-medium transition-colors ${
               isTicket
                 ? "text-ticket-ink/55 font-[Outfit,sans-serif] enabled:hover:text-ticket-ink/80"
                 : "text-stone-500 enabled:hover:text-stone-300"

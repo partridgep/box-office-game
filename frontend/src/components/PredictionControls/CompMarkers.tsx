@@ -1593,9 +1593,7 @@ export default function CompMarkers({
                   ? forcedHighlight
                     ? "absolute -left-5 top-0 z-0 h-11 w-10 [@media(pointer:coarse)]:-left-6 [@media(pointer:coarse)]:h-12 [@media(pointer:coarse)]:w-12"
                     : "absolute -left-2.5 top-0 z-0 h-3.5 w-5"
-                  : forcedHighlight
-                    ? "absolute -left-5 top-0 z-0 w-10 [@media(pointer:coarse)]:-left-6 [@media(pointer:coarse)]:w-12"
-                    : "absolute top-0 left-0 z-0 w-0"
+                  : "absolute top-0 left-0 z-0 w-0"
               }
               style={
                 ticksOnlyChrome
@@ -1607,7 +1605,17 @@ export default function CompMarkers({
               aria-haspopup={isCluster ? "listbox" : undefined}
               aria-controls={isCluster && isOpen ? `${key}-list` : undefined}
             >
-              {/* Range chrome: bar + member ticks at true positions (no end caps). */}
+            {/* Hit pad stays out of the positioning origin. Stems, labels, and
+                cluster offsets are measured from this button's left edge, which
+                is the true tick; shifting the button itself slides the mark off
+                the thumb. */}
+            {forcedHighlight && !ticksOnlyChrome && (
+              <span
+                className="absolute -left-5 top-0 h-full w-10 [@media(pointer:coarse)]:-left-6 [@media(pointer:coarse)]:w-12"
+                aria-hidden
+              />
+            )}
+            {/* Range chrome: bar + member ticks at true positions (no end caps). */}
               {hasRange ? (
                 <>
                   <span

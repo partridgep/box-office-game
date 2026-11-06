@@ -728,19 +728,21 @@ function LobbySkeleton() {
                     <div className="max-w-3xl rounded-lg bg-linear-to-r from-cinema-950/45 via-cinema-950/35 to-transparent px-3 py-3 sm:px-4 sm:py-3.5 lg:from-cinema-950/60 lg:via-cinema-950/35">
                       <div className="space-y-2">
                         <div
-                          className={`h-10 w-[min(100%,28rem)] rounded-sm sm:h-12 lg:h-16 xl:h-20 xl:w-[min(100%,36rem)] ${bone}`}
+                          className={`h-9 w-[min(100%,28rem)] rounded-sm sm:h-12 lg:h-14 xl:h-[4.25rem] xl:w-[min(100%,36rem)] ${bone}`}
                         />
-                        <div className={`h-4 w-28 rounded-sm sm:w-32 ${bone}`} />
-                        <div className={`h-4 w-56 max-w-full rounded-sm sm:w-72 ${bone}`} />
-                        <div className={`h-4 w-44 rounded-sm sm:w-52 ${bone}`} />
-                        <div className={styles.badgeSlot}>
-                          <div className={`h-10 w-36 rounded-md sm:h-11 sm:w-40 ${bone}`} />
-                        </div>
+                        <div className={`h-5 w-28 rounded-sm sm:h-6 sm:w-32 ${bone}`} />
+                        <div className={`h-5 w-56 max-w-full rounded-sm sm:h-6 sm:w-72 ${bone}`} />
+                        <div className={`h-5 w-44 rounded-sm sm:h-6 sm:w-52 ${bone}`} />
                       </div>
                     </div>
+                    {/* Same empty-state gap as HeroSlideMeta: hidden below lg. */}
+                    <div className={styles.badgeReserve} />
                   </div>
                   <div className={styles.heroCtaSlot}>
-                    <div className={`h-12 w-full max-w-xs rounded-sm sm:max-w-sm ${bone}`} />
+                    <div className={`${styles.skelCta} ${bone}`}>
+                      <div className={styles.skelCtaStacked} />
+                      <div className={styles.skelCtaSingle} />
+                    </div>
                   </div>
                 </div>
               </div>
