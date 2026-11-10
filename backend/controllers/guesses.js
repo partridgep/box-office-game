@@ -49,6 +49,11 @@ const getGuessesForUser = async (req, res) => {
       return res.status(400).json({ error: 'user_id parameter is required' });
   }
 
+  // Own board only — friend boards go through GET /users/code/:code/guesses.
+  if (!req.user?.id || String(user_id) !== String(req.user.id)) {
+    return res.status(403).json({ error: 'You can only fetch your own guesses' });
+  }
+
   try {
     const guesses = await fetchGuessesForUser(user_id);
     res.status(200).json({

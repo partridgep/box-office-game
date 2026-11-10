@@ -786,7 +786,11 @@ function FriendActivityStrip({ movies }: { movies: MovieData[] }) {
         {items.map((item) => (
           <Link
             key={item.id}
-            to={`/movie/${item.tmdbID}`}
+            to={
+              item.short_id
+                ? `/friends/${item.short_id}`
+                : `/movie/${item.tmdbID}`
+            }
             className="shrink-0 rounded-md border border-cinema-800/80 bg-cinema-900/70 px-3 py-1.5 text-xs text-stone-400 transition-colors hover:border-theater-gold/35 hover:text-stone-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-theater-gold"
           >
             <span className="font-semibold text-theater-gold">{item.name}</span>

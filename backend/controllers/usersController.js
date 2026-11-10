@@ -9,8 +9,10 @@ const {
   fetchUserPreviewByCode,
   followUserByCode,
   unfollowUserByCode,
-  fetchFollowing
+  fetchFriendsLists,
+  resolveFriendBoardAccess,
 } = require('../services/userService');
+const { fetchGuessesForUser } = require('../services/guessService');
 
 const getUserByCode = async (req, res) => {
   try {
@@ -45,9 +47,35 @@ const deleteFollowByCode = async (req, res) => {
 
 const getMyFollowing = async (req, res) => {
   try {
-    res.json({ following: await fetchFollowing(req.user.id) });
+    const { following, follow_back } = await fetchFriendsLists(req.user.id);
+    res.json({ following, follow_back });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+/** Full guesses board for a friend code — self or people you follow only. */
+const getGuessesByCode = async (req, res) => {
+  try {
+    const { allowed, preview, userId } = await resolveFriendBoardAccess({
+      code: req.params.code,
+      viewerId: req.user.id,
+    });
+    if (!allowed) {
+      return res.status(403).json({
+        error: "Follow this player to see their guesses",
+        user: preview,
+      });
+    }
+    const guesses = await fetchGuessesForUser(userId);
+    res.status(200).json({
+      status: 200,
+      message: "Fetched guesses for player",
+      user: preview,
+      data: guesses,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 };
 
@@ -189,5 +217,6 @@ module.exports = {
   getUserByCode,
   postFollowByCode,
   deleteFollowByCode,
-  getMyFollowing
+  getMyFollowing,
+  getGuessesByCode,
 };

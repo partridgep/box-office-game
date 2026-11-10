@@ -33,7 +33,8 @@ const {
     getUserByCode,
     postFollowByCode,
     deleteFollowByCode,
-    getMyFollowing
+    getMyFollowing,
+    getGuessesByCode,
 } = require('../controllers/usersController');
 const {
     getCategories,
@@ -85,11 +86,12 @@ router.post('/movies/:movieId/box-office/international/refresh', refreshMovieInt
 router.post('/guess', postGuess);
 router.get('/guess/id/:guess_id', getGuessFromId);
 router.get('/guesses/movie_id/:movie_id', optionalAuth, getAllGuessesForMovie);
-router.get('/guesses', getGuessesForUser);
+router.get('/guesses', authenticateUser, getGuessesForUser);
 router.post('/users/save', saveUser);
 router.post('/users/recover', recoverAccount);
 router.get('/users/me/following', authenticateUser, getMyFollowing);
 router.get('/users/code/:code', optionalAuth, getUserByCode);
+router.get('/users/code/:code/guesses', authenticateUser, getGuessesByCode);
 router.post('/users/code/:code/follow', authenticateUser, postFollowByCode);
 router.delete('/users/code/:code/follow', authenticateUser, deleteFollowByCode);
 router.get('/users/:id', getUserProfile);

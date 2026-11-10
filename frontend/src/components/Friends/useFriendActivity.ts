@@ -6,8 +6,10 @@ import type { Guess, MovieData } from "../../types";
 export type FriendActivityItem = {
   id: string;
   name: string;
+  short_id: string | null;
   movieTitle: string;
   tmdbID: string;
+  poster: string;
   domesticOpening: number | null;
   updatedAt: string;
 };
@@ -73,8 +75,10 @@ export function useFriendActivity(
         flat.push({
           id: guess.id,
           name: guess.guess_user?.name?.trim() || "Friend",
+          short_id: guess.guess_user?.short_id?.trim() || null,
           movieTitle: movie.title,
           tmdbID: String(movie.tmdbID),
+          poster: movie.poster || "",
           domesticOpening:
             guess.domestic_opening != null &&
             Number.isFinite(Number(guess.domestic_opening))

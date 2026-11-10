@@ -45,7 +45,7 @@ function snippetAsMovie(snippet: GuessMovieSnippet): MovieData {
 }
 
 export function joinGuessRows(
-  guesses: Record<string, Guess>,
+  guesses: Record<string, Guess> | Guess[],
   movies: Record<string, MovieData> | MovieData[]
 ): GuessMovieRow[] {
   const byId = new Map<string, MovieData>();
@@ -54,8 +54,9 @@ export function joinGuessRows(
     if (movie.id) byId.set(String(movie.id), movie);
   }
 
+  const guessList = Array.isArray(guesses) ? guesses : Object.values(guesses);
   const joined: GuessMovieRow[] = [];
-  for (const guess of Object.values(guesses)) {
+  for (const guess of guessList) {
     let movie = byId.get(String(guess.movie_id));
 
     if (movie && guess.movie) {
