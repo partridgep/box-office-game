@@ -48,6 +48,11 @@ interface PredictContextSheetProps {
   /** Place one pinned-comp metric onto a prediction slider. */
   onPlaceCompMetric?: PlaceCompMetric;
   metricAvailability?: CompMetricAvailability;
+  /**
+   * Slide fully off-screen (guest signup / receipt / seal) so the ticket is the
+   * only focus. Keeps the sheet mounted for a smooth return to peek.
+   */
+  away?: boolean;
 }
 
 /** Usable height between top rail and bottom nav (sheet sits above the nav). */
@@ -155,6 +160,7 @@ export default function PredictContextSheet({
   onHeightChange,
   onPlaceCompMetric,
   metricAvailability,
+  away = false,
 }: PredictContextSheetProps) {
   const titleId = useId();
   const tabCompsId = useId();
@@ -181,6 +187,7 @@ export default function PredictContextSheet({
   const [dragHeight, setDragHeight] = useState<number | null>(null);
 
   const chromeRef = useRef<HTMLDivElement>(null);
+  const sheetSectionRef = useRef<HTMLElement>(null);
   /** Mirrors dragHeight for pointer-up (state can lag the last move). */
   const dragHeightRef = useRef<number | null>(null);
   /**
@@ -255,11 +262,12 @@ export default function PredictContextSheet({
   }, []);
 
   useLayoutEffect(() => {
-    const reported = peekAtRest ? peekH : height;
+    // Away: drop page pad so the ticket can use the space under the sheet.
+    const reported = away ? 0 : peekAtRest ? peekH : height;
     onHeightChange?.(reported, {
-      immediate: dragHeight != null || reduceMotion,
+      immediate: dragHeight != null || reduceMotion || away,
     });
-  }, [height, peekH, peekAtRest, dragHeight, onHeightChange, reduceMotion]);
+  }, [away, height, peekH, peekAtRest, dragHeight, onHeightChange, reduceMotion]);
 
   useEffect(() => {
     return () => {
@@ -268,9 +276,21 @@ export default function PredictContextSheet({
     };
   }, [onHighlightComp, onHeightChange]);
 
+  useEffect(() => {
+    if (away) setDetent("peek");
+  }, [away]);
+
+  // React 18 types omit `inert`; set it imperatively so focus can't enter a hidden sheet.
+  useEffect(() => {
+    const el = sheetSectionRef.current;
+    if (!el) return;
+    el.inert = away;
+  }, [away]);
+
   const promoteFromPeek = useCallback(() => {
+    if (away) return;
     setDetent((d) => (d === "peek" ? "half" : d));
-  }, []);
+  }, [away]);
 
   const handlePinComp = useCallback(
     (compMovieId: string | null) => {
@@ -423,10 +443,19 @@ export default function PredictContextSheet({
 
   // Keep transition on release (incl. half→peek). peekAtRest used to force
   // height:auto + transition:none, which read as a jerky snap.
-  const transition =
+  const heightTransition =
     dragHeight != null || reduceMotion
       ? "none"
       : "height 280ms var(--ease-snappy)";
+  const awayTransition = reduceMotion
+    ? "none"
+    : "transform 280ms var(--ease-snappy)";
+  const transition =
+    heightTransition === "none"
+      ? awayTransition
+      : awayTransition === "none"
+        ? heightTransition
+        : `${heightTransition}, ${awayTransition}`;
 
   // Sheet paints under the nav (z-40 < nav z-50) so subpixel seams can’t leak.
   const sheetFrameH = height + navH;
@@ -438,12 +467,17 @@ export default function PredictContextSheet({
       className="pointer-events-none fixed inset-x-0 bottom-0 z-40 lg:hidden"
     >
       <section
+        ref={sheetSectionRef}
         aria-labelledby={titleId}
-        className="pointer-events-auto flex flex-col overflow-hidden rounded-t-2xl border border-b-0 border-theater-gold/25 bg-cinema-950/96 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+        aria-hidden={away || undefined}
+        className={`flex flex-col overflow-hidden rounded-t-2xl border border-b-0 border-theater-gold/25 bg-cinema-950/96 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl ${
+          away ? "pointer-events-none" : "pointer-events-auto"
+        }`}
         style={{
           height: sheetFrameH,
           maxHeight: sheetFrameMaxH,
           paddingBottom: navH,
+          transform: away ? "translateY(100%)" : "translateY(0)",
           transition,
         }}
       >
@@ -471,6 +505,7 @@ export default function PredictContextSheet({
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
             onKeyDown={(e) => {
+              if (away) return;
               if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setDetent((d) => {

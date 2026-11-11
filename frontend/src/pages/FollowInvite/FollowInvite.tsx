@@ -114,7 +114,10 @@ export default function FollowInvite() {
   if (step === "confirmSignup") {
     return (
       <div className="mx-auto max-w-md pt-12">
-        <UserConfirmation onDone={() => setStep("invite")} />
+        <UserConfirmation
+          continueLabel="Continue"
+          onDone={() => setStep("invite")}
+        />
       </div>
     );
   }

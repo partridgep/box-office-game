@@ -501,6 +501,30 @@ html[data-theater-nav="enter"] ::view-transition-new(root) {
   opacity: 0;
 }
 
+/* Guest lock-in: name step and admission receipt settle-in. */
+@keyframes guest-step-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.guest-step-enter,
+.guest-receipt-enter {
+  animation: guest-step-enter 280ms var(--ease-snappy) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guest-step-enter,
+  .guest-receipt-enter {
+    animation: none !important;
+  }
+}
+
 /* Prediction Pool: brief fade when Opening / Final / Reception swaps. */
 @keyframes pool-segment-swap {
   from {
@@ -617,7 +641,12 @@ html[data-theater-nav="enter"] ::view-transition-new(root) {
 @media (min-width: 768px) {
   :root {
     --layout-top-rail: 4.25rem;
-    /* Bottom tab bar is mobile-only. */
+  }
+}
+
+/* Bottom tab bar stays through tablet; Layout desktop chrome starts at lg. */
+@media (min-width: 1024px) {
+  :root {
     --layout-bottom-bar: 0rem;
   }
 }

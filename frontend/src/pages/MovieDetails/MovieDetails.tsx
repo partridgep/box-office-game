@@ -18,7 +18,9 @@ import {
   type CompMetricField,
   type PlaceCompMetric,
 } from "../../components/HistoricalComps/HistoricalComps";
-import PredictionControls from "../../components/PredictionControls/PredictionControls";
+import PredictionControls, {
+  type GuestLockPhase,
+} from "../../components/PredictionControls/PredictionControls";
 import LockedPredictionSummary from "../../components/LockedPredictionSummary/LockedPredictionSummary";
 import {
   OverallPerformance,
@@ -31,6 +33,7 @@ import SocialProof from "../../components/SocialProof/SocialProof";
 import ShareLink from "../../components/ShareLink/ShareLink";
 import CountdownStrip from "../../components/Countdown/CountdownStrip";
 import TicketStub from "../../components/TicketStub/TicketStub";
+import PixelBackArrow from "../../components/TicketStub/PixelBackArrow";
 import PredictContextSheet, {
   PREDICT_SHEET_PEEK_HEIGHT,
   type SheetHeightChange,
@@ -117,12 +120,18 @@ export default function MovieDetails() {
     friendGuesses,
     compGroups,
     boxOffice,
+    refreshGuesses,
   } = useMovieDetailsData();
 
   const [showingShareDialog, setShowingShareDialog] = useState(false);
-  /** Keep PredictionControls mounted through signup confirmation even after the guess locks. */
-  const [holdPredictForSignup, setHoldPredictForSignup] = useState(false);
+  /** Guest name → receipt → seal; keep predict shell mounted and delay pool reveal. */
+  const [guestLockPhase, setGuestLockPhase] = useState<GuestLockPhase>("idle");
+  const holdPredictForGuest = guestLockPhase !== "idle";
   const [retroactiveMode, setRetroactiveMode] = useState(false);
+
+  useEffect(() => {
+    setGuestLockPhase("idle");
+  }, [id]);
   /** Linked brushing: Historical Comps row ↔ matching slider ticks. */
   const [highlightedCompId, setHighlightedCompId] = useState<string | null>(
     null,
@@ -343,7 +352,9 @@ export default function MovieDetails() {
       </div>
     );
   }
-  const revealGuesses = Boolean(loggedGuess) || hasAnyActuals(movie);
+  // Hold sealed until the guest lock stamp finishes (guess may already be saved).
+  const revealGuesses =
+    (Boolean(loggedGuess) || hasAnyActuals(movie)) && !holdPredictForGuest;
   const useTicketShell = mode !== "results";
 
   const releaseDate = movie.released
@@ -363,46 +374,7 @@ export default function MovieDetails() {
           className="shrink-0 -ml-1 mt-0.5 p-1 text-ticket-ink/80 hover:text-ticket-ink hover:bg-ticket-ink/10 transition-colors"
           aria-label="Back to upcoming"
         >
-          {/* Pixel-stepped arrow to match Ticketing’s bitmap look */}
-          <svg
-            width="56"
-            height="30"
-            viewBox="0 0 28 28"
-            fill="currentColor"
-            shapeRendering="crispEdges"
-            aria-hidden
-          >
-            <rect x="12" y="1" width="2" height="1" />
-            <rect x="11" y="2" width="3" height="1" />
-            <rect x="10" y="3" width="4" height="1" />
-            <rect x="9" y="4" width="5" height="1" />
-            <rect x="8" y="5" width="6" height="1" />
-            <rect x="7" y="6" width="7" height="1" />
-            <rect x="6" y="7" width="8" height="1" />
-            <rect x="5" y="8" width="9" height="1" />
-            <rect x="4" y="9" width="10" height="1" />
-            <rect x="3" y="10" width="11" height="1" />
-            <rect x="2" y="11" width="12" height="1" />
-            <rect x="1" y="12" width="13" height="1" />
-
-            <rect x="0" y="13" width="14" height="2" />
-
-            <rect x="1" y="15" width="13" height="1" />
-            <rect x="2" y="16" width="12" height="1" />
-            <rect x="3" y="17" width="11" height="1" />
-            <rect x="4" y="18" width="10" height="1" />
-            <rect x="5" y="19" width="9" height="1" />
-            <rect x="6" y="20" width="8" height="1" />
-            <rect x="7" y="21" width="7" height="1" />
-            <rect x="8" y="22" width="6" height="1" />
-            <rect x="9" y="23" width="5" height="1" />
-            <rect x="10" y="24" width="4" height="1" />
-            <rect x="11" y="25" width="3" height="1" />
-            <rect x="12" y="26" width="2" height="1" />
-
-            <rect x="14" y="10" width="14" height="8" />
-          </svg>
-
+          <PixelBackArrow width={56} height={30} />
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="text-left text-2xl md:text-4xl font-bold uppercase leading-none mt-1">
@@ -455,7 +427,7 @@ export default function MovieDetails() {
         </div>
       )}
 
-      {(mode === "predict" || holdPredictForSignup) && movie.id && (
+      {(mode === "predict" || holdPredictForGuest) && movie.id && (
         <PredictionControls
           movieId={movie.id}
           availability={effectiveAvailability}
@@ -463,14 +435,18 @@ export default function MovieDetails() {
           highlightedCompMovieId={highlightedCompId}
           onDismissCompHighlight={clearCompHighlight}
           inviterName={inviterName}
-          onSignupFlowChange={setHoldPredictForSignup}
+          guestLockPhase={guestLockPhase}
+          onGuestLockPhaseChange={setGuestLockPhase}
+          onGuessLocked={() => {
+            void refreshGuesses();
+          }}
           placeCompMetricRef={
             opts?.enablePlaceFromComps ? placeCompMetricRef : undefined
           }
         />
       )}
 
-      {mode === "waiting" && loggedGuess && !holdPredictForSignup && (
+      {mode === "waiting" && loggedGuess && !holdPredictForGuest && (
         <LockedPredictionSummary
           guess={loggedGuess}
           friendGuess={
@@ -506,7 +482,33 @@ export default function MovieDetails() {
     </>
   );
 
-  if (mode === "results" && loggedGuess) {
+  const renderPredictSurface = (opts?: {
+    enablePlaceFromComps?: boolean;
+    ticketClassName?: string;
+  }) => {
+    const content = renderPanelContent({
+      enablePlaceFromComps: opts?.enablePlaceFromComps,
+    });
+    if (useTicketShell) {
+      return (
+        <TicketStub
+          watermark={movie.rated || "NR"}
+          footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
+          className={opts?.ticketClassName ?? "rounded-r"}
+        >
+          {content}
+        </TicketStub>
+      );
+    }
+    return (
+      <div className="rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
+        {content}
+      </div>
+    );
+  };
+
+  // Guest seal must finish on the ticket before the results layout replaces it.
+  if (mode === "results" && loggedGuess && !holdPredictForGuest) {
     const preferredFriendGuessId =
       inviterGuess && inviterGuess.user_id !== loggedGuess.user_id
         ? inviterGuess.id
@@ -601,8 +603,7 @@ export default function MovieDetails() {
     );
   }
 
-  const mobilePredict =
-    mode === "predict" || holdPredictForSignup;
+  const mobilePredict = mode === "predict" || holdPredictForGuest;
 
   return (
     <>
@@ -628,8 +629,11 @@ export default function MovieDetails() {
         }
       >
         {renderTitleBlock()}
-        <CountdownStrip movie={movie} availability={predictionAvailability} />
-        {mobilePredict ? (
+        {/* Guest lock-in: ticket only — countdown / sealed pool compete with name+receipt. */}
+        {!holdPredictForGuest ? (
+          <CountdownStrip movie={movie} availability={predictionAvailability} />
+        ) : null}
+        {mobilePredict && !holdPredictForGuest ? (
           <SocialProof
             movie={movie}
             allMovieGuesses={allMovieGuesses}
@@ -638,19 +642,10 @@ export default function MovieDetails() {
             compact
           />
         ) : null}
-        {useTicketShell ? (
-          <TicketStub
-            watermark={movie.rated || "NR"}
-            footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
-            className="rounded-r"
-          >
-            {renderPanelContent({ enablePlaceFromComps: true })}
-          </TicketStub>
-        ) : (
-          <div className="rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
-            {renderPanelContent({ enablePlaceFromComps: true })}
-          </div>
-        )}
+        {renderPredictSurface({
+          enablePlaceFromComps: true,
+          ticketClassName: "rounded-r",
+        })}
         {!mobilePredict ? (
           <MovieContextPanel
             movie={movie}
@@ -670,6 +665,7 @@ export default function MovieDetails() {
           onHighlightComp={onHighlightComp}
           onHeightChange={onSheetHeightChange}
           onPlaceCompMetric={onPlaceCompMetric}
+          away={holdPredictForGuest}
           metricAvailability={{
             domesticOpening: effectiveAvailability.domesticOpening,
             internationalOpening: effectiveAvailability.internationalOpening,
@@ -701,7 +697,7 @@ export default function MovieDetails() {
             revealGuesses={revealGuesses}
             compGroups={compGroups}
             onHighlightComp={
-              mode === "predict" || holdPredictForSignup
+              mode === "predict" || holdPredictForGuest
                 ? setHighlightedCompId
                 : undefined
             }
@@ -717,19 +713,7 @@ export default function MovieDetails() {
       >
         <div className="max-w-full space-y-4 overflow-x-clip px-6 pt-19 pb-6 pl-4">
           <CountdownStrip movie={movie} availability={predictionAvailability} />
-          {useTicketShell ? (
-            <TicketStub
-              watermark={movie.rated || "NR"}
-              footer={`${movie.title.toUpperCase()} · ADMIT ONE · BOX OFFICE GUESSER`}
-              className="max-w-full rounded-r"
-            >
-              {renderPanelContent()}
-            </TicketStub>
-          ) : (
-            <div className="max-w-full rounded-2xl border border-theater-gold/20 bg-cinema-950/90 backdrop-blur-md p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
-              {renderPanelContent()}
-            </div>
-          )}
+          {renderPredictSurface({ ticketClassName: "max-w-full rounded-r" })}
         </div>
       </div>
 

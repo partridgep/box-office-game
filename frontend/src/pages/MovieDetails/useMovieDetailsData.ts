@@ -75,16 +75,22 @@ export function useMovieDetailsData() {
     }
   }, [movieId, isInDatabase, user?.id, friendsVersion]);
 
-  // The server can only flag the viewer's guess when their JWT is still valid; the stored guess id always can.
-  const markedGuesses = useMemo(
-    () =>
-      loggedGuess
-        ? allMovieGuesses.map((g) =>
-            g.id === loggedGuess.id ? { ...g, ...loggedGuess, is_viewer: true, is_friend: false } : g
-          )
-        : allMovieGuesses,
-    [allMovieGuesses, loggedGuess]
-  );
+  // Flag the viewer row by stored guess id (JWT may lag). If the pool was
+  // fetched before lock-in, append the new guess so "You" appears immediately.
+  const markedGuesses = useMemo(() => {
+    if (!loggedGuess) return allMovieGuesses;
+    let found = false;
+    const marked = allMovieGuesses.map((g) => {
+      if (g.id !== loggedGuess.id) return g;
+      found = true;
+      return { ...g, ...loggedGuess, is_viewer: true, is_friend: false };
+    });
+    if (found) return marked;
+    return [
+      ...marked,
+      { ...loggedGuess, is_viewer: true, is_friend: false },
+    ];
+  }, [allMovieGuesses, loggedGuess]);
 
   // The inviter counts as a friend even for a logged-out visitor; their shared guess carries the name.
   const friendGuesses = useMemo(

@@ -5,6 +5,7 @@ import { useInviteStore } from "../../store/useInviteStore";
 import { connectUsers } from "../../services/users.service";
 import UserSignup from "../UserSignup/UserSignupPrompt";
 import UserConfirmation from "../UserSignup/UserConfirmation";
+import { ArrowLeft } from "lucide-react";
 import { postGuess } from "../../services/guesses.service";
 import { getPredictionAvailability } from "../../utils/predictionWindows";
 import {
@@ -18,12 +19,16 @@ import LogMoneySlider, { type PlaceFieldRegistry } from "./LogMoneySlider";
 import RTScoreSlider from "./RTScoreSlider";
 import LifetimeGroup from "./LifetimeGroup";
 import { formatMillions } from "../../utils/formatMoney";
+import { prefersReducedMotion } from "../../utils/viewTransitions";
 import {
   CompMarkersByField,
   type CompMetricField,
   type PlaceCompMetric,
 } from "../HistoricalComps/HistoricalComps";
 import type { Guess } from "../../types";
+
+/** Guest lock-in beats after Lock In (logged-out). */
+export type GuestLockPhase = "idle" | "name" | "receipt";
 
 interface PredictionControlsProps {
   movieId: string;
@@ -34,8 +39,12 @@ interface PredictionControlsProps {
   /** Clear pinned comps highlight (e.g. tick tap while brushing). */
   onDismissCompHighlight?: () => void;
   inviterName?: string;
-  /** True while signup confirmation is showing — parent should keep this mounted. */
-  onSignupFlowChange?: (active: boolean) => void;
+  /** Controlled guest lock-in phase (shared across mobile/desktop mounts). */
+  guestLockPhase: GuestLockPhase;
+  /** Guest identity → receipt → seal; parent holds predict shell + quiets sheet. */
+  onGuestLockPhaseChange: (phase: GuestLockPhase) => void;
+  /** After a successful post — e.g. refetch the movie pool so ranks include the new guess. */
+  onGuessLocked?: () => void;
   /**
    * Parent assigns this ref; we fill it with a place handler so the mobile
    * comps sheet can set one slider at a time without lifting all guess state.
@@ -81,6 +90,89 @@ function toNumberOrNull(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function GuestPredictionSummary({
+  domesticOpening,
+  internationalOpening,
+  worldwideOpening,
+  finalDomestic,
+  finalInternational,
+  worldwideFinal,
+  rtScore,
+}: {
+  domesticOpening: number | null;
+  internationalOpening: number | null;
+  worldwideOpening: number | null;
+  finalDomestic: number | null;
+  finalInternational: number | null;
+  worldwideFinal: number | null;
+  rtScore: number | null;
+}) {
+  const rows: { label: string; value: string; emph?: boolean }[] = [];
+  if (domesticOpening != null) {
+    rows.push({ label: "Domestic Opening", value: formatMillions(domesticOpening) });
+  }
+  if (internationalOpening != null) {
+    rows.push({ label: "Intl Opening", value: formatMillions(internationalOpening) });
+  }
+  if (worldwideOpening != null) {
+    rows.push({
+      label: "WW Opening",
+      value: formatMillions(worldwideOpening),
+      emph: true,
+    });
+  }
+  if (finalDomestic != null) {
+    rows.push({ label: "Final Domestic", value: formatMillions(finalDomestic) });
+  }
+  if (finalInternational != null) {
+    rows.push({ label: "Final Intl", value: formatMillions(finalInternational) });
+  }
+  if (worldwideFinal != null) {
+    rows.push({
+      label: "WW Final",
+      value: formatMillions(worldwideFinal),
+      emph: true,
+    });
+  }
+  if (rtScore != null) {
+    rows.push({ label: "Rotten Tomatoes", value: `${Math.round(rtScore)}%` });
+  }
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="border border-ticket-ink/30 bg-ticket-ink/6 px-3 py-2.5 text-left">
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ticket-ink/70">
+        Your call
+      </p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm font-[Outfit,sans-serif]">
+        {rows.map((row) => (
+          <div key={row.label} className="contents">
+            <dt
+              className={
+                row.emph
+                  ? "font-semibold text-ticket-ink/80"
+                  : "text-ticket-ink/65"
+              }
+            >
+              {row.label}
+            </dt>
+            <dd
+              className={`text-right tabular-nums ${
+                row.emph
+                  ? "font-semibold text-ticket-ink"
+                  : "font-medium text-ticket-ink"
+              }`}
+            >
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 export default function PredictionControls({
   movieId,
   availability,
@@ -88,7 +180,9 @@ export default function PredictionControls({
   highlightedCompMovieId = null,
   onDismissCompHighlight,
   inviterName,
-  onSignupFlowChange,
+  guestLockPhase,
+  onGuestLockPhaseChange,
+  onGuessLocked,
   placeCompMetricRef,
 }: PredictionControlsProps) {
   const user = useUserStore((state) => state.user);
@@ -119,8 +213,6 @@ export default function PredictionControls({
   );
   const [rtScore, setRtScore] = useState<number | null>(initial.rtScore);
 
-  const [showSignup, setShowSignup] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const placeRegistry: PlaceFieldRegistry = useRef({});
@@ -180,9 +272,23 @@ export default function PredictionControls({
     };
   }, [placeCompMetricRef, availability, placeRegistry]);
 
+  useEffect(() => {
+    if (guestLockPhase !== "name") return;
+    const el = document.querySelector("[data-predict-controls]");
+    if (!(el instanceof HTMLElement)) return;
+    el.scrollIntoView({
+      behavior: prefersReducedMotion() ? "instant" : "smooth",
+      block: "nearest",
+    });
+  }, [guestLockPhase]);
+
   const worldwideOpening =
     domesticOpening != null && internationalOpening != null
       ? domesticOpening + internationalOpening
+      : null;
+  const worldwideFinal =
+    finalDomestic != null && finalInternational != null
+      ? finalDomestic + finalInternational
       : null;
 
   const finalDomesticFallback = Math.min(
@@ -206,20 +312,9 @@ export default function PredictionControls({
     return true;
   })();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isFormValid) return;
-
-    if (!user) {
-      setShowSignup(true);
-      return;
-    }
-
-    await submitGuess(user.id);
-  };
-
-  const submitGuess = async (userId: string) => {
+  const submitGuess = async (userId: string): Promise<boolean> => {
     setIsSubmitting(true);
+    setMessage("");
     try {
       const guessData = {
         user_id: userId,
@@ -237,42 +332,98 @@ export default function PredictionControls({
 
       if (response.status === 201) {
         addGuess(response.data);
-        setMessage("Your prediction is locked in!");
-      } else {
-        setMessage("Failed to submit. Please try again.");
+        onGuessLocked?.();
+        return true;
       }
+      setMessage("Failed to submit. Please try again.");
+      return false;
     } catch {
       setMessage("Failed to submit. Please try again.");
+      return false;
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (showSignup) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isFormValid) return;
+
+    if (!user) {
+      onGuestLockPhaseChange("name");
+      return;
+    }
+
+    await submitGuess(user.id);
+  };
+
+  const handleGuestReceiptContinue = async () => {
+    const createdUser = useUserStore.getState().user;
+    if (!createdUser) {
+      throw new Error("Missing user after signup");
+    }
+
+    // Keep the receipt mounted until submit succeeds so the stub can tear away.
+    const ok = await submitGuess(createdUser.id);
+    if (!ok) {
+      throw new Error("Guess submit failed");
+    }
+  };
+
+  const predictionSummary = (
+    <GuestPredictionSummary
+      domesticOpening={domesticOpening}
+      internationalOpening={internationalOpening}
+      worldwideOpening={worldwideOpening}
+      finalDomestic={finalDomestic}
+      finalInternational={finalInternational}
+      worldwideFinal={worldwideFinal}
+      rtScore={rtScore}
+    />
+  );
+
+  if (guestLockPhase === "receipt") {
     return (
-      <UserSignup
-        onSignup={() => {
-          const createdUser = useUserStore.getState().user;
-          onSignupFlowChange?.(true);
-          setShowSignup(false);
-          setShowConfirmation(true);
-          if (createdUser) {
-            void submitGuess(createdUser.id);
-          }
-        }}
-        onCancel={() => setShowSignup(false)}
-      />
+      <div data-predict-controls data-guest-lock="receipt">
+        <UserConfirmation
+          tearOnContinue
+          continueLabel="See your locked prediction"
+          continueBusyLabel="Locking in..."
+          onDone={handleGuestReceiptContinue}
+          onFinished={() => onGuestLockPhaseChange("idle")}
+        />
+      </div>
     );
   }
 
-  if (showConfirmation) {
+  if (guestLockPhase === "name") {
     return (
-      <UserConfirmation
-        onDone={() => {
-          setShowConfirmation(false);
-          onSignupFlowChange?.(false);
-        }}
-      />
+      <div
+        data-predict-controls
+        data-guest-lock="name"
+        className="guest-step-enter space-y-5 text-left text-ticket-ink"
+      >
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => onGuestLockPhaseChange("idle")}
+            className="inline-flex items-center gap-1.5 mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-ticket-ink/65 transition-colors hover:text-ticket-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ticket-ink"
+          >
+            <ArrowLeft size={14} strokeWidth={2.5} aria-hidden />
+            Edit Prediction
+          </button>
+          {predictionSummary}
+        </div>
+        <UserSignup
+          showBackButton={false}
+          supportingLine={
+            inviterName
+              ? `So we can show you how you stack up with ${inviterName}.`
+              : undefined
+          }
+          onSignup={() => onGuestLockPhaseChange("receipt")}
+        />
+      </div>
     );
   }
 
@@ -391,7 +542,7 @@ export default function PredictionControls({
       </div>
 
       {message && (
-        <p className="text-sm text-center font-medium border border-ticket-ink/40 py-2">
+        <p className="text-sm text-center font-medium border border-ticket-ink/40 py-2" role="alert">
           {message}
         </p>
       )}

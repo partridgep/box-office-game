@@ -27,7 +27,8 @@ interface LayoutProps {
 
 type BottomTab = "upcoming" | "guesses" | "friends" | "you";
 
-const DESKTOP_MQ = "(min-width: 768px)";
+/** Match MovieDetails / PredictContextSheet `lg` — keep bottom nav through tablet. */
+const DESKTOP_MQ = "(min-width: 1024px)";
 
 function isUpcomingPath(pathname: string) {
   return pathname === "/" || pathname.startsWith("/movie");
